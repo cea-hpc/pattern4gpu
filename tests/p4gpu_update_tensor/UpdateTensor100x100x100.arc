@@ -24,9 +24,9 @@
       <cartesian>
         <nsd>2 2 1</nsd>
         <origine>0. 0. 0.</origine>
-        <lx nx="75" prx="1.0">1.</lx>
-        <ly ny="75" pry="1.0">1.</ly>
-        <lz nz="75" pry="1.0">1.</lz>
+        <lx nx="100" prx="1.0">1.</lx>
+        <ly ny="100" pry="1.0">1.</ly>
+        <lz nz="100" pry="1.0">1.</lz>
       </cartesian>
     </meshgenerator>
   </mesh>

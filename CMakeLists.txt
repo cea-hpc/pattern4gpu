@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 set(BUILD_SHARED_LIBS TRUE)
 if (NOT Arcane_DIR)
-  include(ArcaneCompilerConfig.cmake)
+#  include(ArcaneCompilerConfig.cmake)
   message(STATUS "ArcaneRoot = ${Arcane_DIR}")
   message(STATUS "AxlstarRoot = ${Axlstar_DIR}")
   message(STATUS "ArcconRoot = ${Arccon_DIR}")

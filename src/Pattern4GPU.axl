@@ -13,19 +13,45 @@
       dim="0"
       dump="false"
       need-sync="false" />
-  <!-- 	CELL CQS	 -->
-  <!-- variable
-      field-name="cell_cqs"
-      name="CellCQS"
-      data-type="real3"
+
+  <!-- VOLUME -->
+  <variable
+      field-name="volume"
+      name="Volume"
+      data-type="real"
+      item-kind="cell"
+      dim="0"
+      dump="false"
+      need-sync="false" 
+      material="true" />
+
+  <!-- VOLUME-VISU -->
+  <variable
+      field-name="volume_visu"
+      name="VolumeVisu"
+      data-type="real"
       item-kind="cell"
       dim="1"
-      dump="true"
-      need-sync="true" / -->
+      dump="false"
+      need-sync="false" 
+      material="false" />
+
+  <!-- TENSOR -->
+  <variable
+      field-name="tensor"
+      name="Tensor"
+      data-type="real3x3"
+      item-kind="cell"
+      dim="0"
+      dump="false"
+      need-sync="false" 
+      material="true" />
+
 </variables>
 
 <entry-points>
   <entry-point method-name="geomEnvInit" name="GeomEnvInit" where="start-init" property="none" />
+  <entry-point method-name="initTensor" name="InitTensor" where="start-init" property="none" />
   <entry-point
       method-name="updateTensor"
       name="UpdateTensor"
@@ -34,8 +60,12 @@
 </entry-points>
 
 <options>
-  <!-- - - - - - deltat-min - - - - -->
-  <!-- <simple name="deltat-min" type="real"><description>Valeur minimale que peut prendre le <em>deltat</em> entre deux itérations.</description></simple> -->
+  <!-- - - - - - visu-volume - - - - -->
+  <simple name="visu-volume" type="bool" default="false"><description>Alloue et calcule <em>VolumeVisu</em> pour la visualisation multi-env du volume.</description></simple>
 
+  <!-- - - - - - geometry - - - - -->
+  <service-instance name="geometry" type="Arcane::Numerics::IGeometryMng" default="Euclidian3Geometry">
+    <description>Service Géométrie</description>
+  </service-instance>
 </options>
 </module>
