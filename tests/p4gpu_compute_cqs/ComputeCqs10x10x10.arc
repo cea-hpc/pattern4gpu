@@ -1,8 +1,8 @@
 <?xml version='1.0'?>
 <case codeversion="1.0" codename="Pattern4GPU" xml:lang="en">
   <arcane>
-    <title>Benchmark pour évaluer maj grandeurs tenseurs multi-env</title>
-    <timeloop>UpdateTensorLoop</timeloop>
+    <title>Benchmark pour évaluer le calcul des Cqs sur allCells() et la maj du vecteur sur active_cells</title>
+    <timeloop>ComputeCqsAndVectorLoop</timeloop>
   </arcane>
 
   <arcane-post-processing>
@@ -31,13 +31,6 @@
       </cartesian>
     </meshgenerator>
   </mesh>
-
-<!--   <arcane-checkpoint> -->
-<!--     <period>0</period> -->
-    <!-- Mettre '0' si on souhaite ne pas faire de protections a la fin du calcul -->
-<!--     <do-dump-at-end>0</do-dump-at-end> -->
-<!--     <checkpoint-service name="ArcaneBasic2CheckpointWriter" /> -->
-<!--   </arcane-checkpoint> -->
 
   <!-- Configuration du module Pattern4GPU -->
   <pattern4-g-p-u>

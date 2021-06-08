@@ -9,6 +9,7 @@
 #include <arcane/materials/ComponentPartItemVectorView.h>
 #include <arcane/materials/MaterialVariableBuildInfo.h>
 #include <arcane/IMesh.h>
+#include <arcane/IItemFamily.h>
 #include <arcane/utils/ArcaneGlobal.h>
 #include <arcane/utils/StringBuilder.h>
 
@@ -101,12 +102,13 @@ geomEnvInit()
   MeshBlockBuildInfo mbbi("BLOCK1",allCells());
 
   // Définition des différents objets qui vont composer la scene géométrique
-  UniqueArray<Real3> l_pts(5); // points qui délimitent les différentes couches
-  l_pts[0] = Real3(-0.5,-0.5,-0.5);
-  l_pts[1] = Real3(0.5,0.5,0.5);
-  l_pts[2] = Real3(0.7,0.7,0.7);
-  l_pts[3] = Real3(0.9,0.9,0.9);
-  l_pts[4] = Real3(4,4,4);
+  UniqueArray<Real3> l_pts; // points qui délimitent les différentes couches
+  l_pts.add(Real3(-0.5,-0.5,-0.5));
+  l_pts.add(Real3(0.5,0.5,0.5));
+  l_pts.add(Real3(0.7,0.7,0.7));
+  l_pts.add(Real3(0.9,0.9,0.9));
+  l_pts.add(Real3(1.9,1.9,1.9));
+//  l_pts.add(Real3(4,4,4));
   Integer nb_sh=l_pts.size()-1;
   UniqueArray<IShape*> l_shape(nb_sh);
   for(Integer ish(0) ; ish<nb_sh ; ++ish) {
@@ -232,9 +234,9 @@ geomEnvInit()
     ENUMERATE_CELL_ENVCELL (envcell_i, all_env_cell) {
       vol_sum += m_volume[envcell_i];
     }
-    Real vol_ref=cell_volume[icell];
-    Real ecart=math::abs(vol_sum-vol_ref)/vol_ref;
-    ARCANE_ASSERT(ecart<1.e-10, ("Ecart trop important sur volume calculé"));
+//    Real vol_ref=cell_volume[icell];
+//    Real ecart=math::abs(vol_sum-vol_ref)/vol_ref;
+//    ARCANE_ASSERT(ecart<1.e-10, ("Ecart trop important sur volume calculé"));
     m_volume[icell]=vol_sum;
   }
 
@@ -268,16 +270,28 @@ geomEnvInit()
   // nb_cell_env[1] = nb de mailles dont le nb d'env == 1
   // nb_cell_env[2] = nb de mailles dont le nb d'env >= 2
   UniqueArray<Integer> nb_cell_env(3, /*value=*/0);
+  // On en profite pour créer la liste des mailles actives
+  Int32UniqueArray lids;
   ENUMERATE_CELL(icell, allCells()) {
     AllEnvCell all_env_cell = allenvcell_converter[(*icell)];
     Integer nb_env=all_env_cell.nbEnvironment();
     Integer nb_env_bounded=std::min(nb_env,2);
     nb_cell_env[nb_env_bounded]++;
     m_nbenv[icell]=Real(nb_env);
+    if (nb_env>0) {
+      lids.add(icell.localId());
+    }
   }
   info() << "Nb de mailles vides  : " << nb_cell_env[0] << ", ratio=" << nb_cell_env[0]/Real(nb_tot_cells);
   info() << "Nb de mailles pures  : " << nb_cell_env[1] << ", ratio=" << nb_cell_env[1]/Real(nb_tot_cells);
   info() << "Nb de mailles mixtes : " << nb_cell_env[2] << ", ratio=" << nb_cell_env[2]/Real(nb_tot_cells);
+
+  // On crée le groupe des mailles actives "active_cells"
+  IItemFamily* family = allCells().itemFamily();
+  m_active_cells = family->createGroup(String("active_cells"),lids,true);
+  Integer nactiv = m_active_cells.size();
+  ARCANE_ASSERT((nactiv+nb_cell_env[0])==nb_tot_cells, ("Nbs de mailles actives + vides != nb total de mailles"));
+  info() << "Nb de mailles actives : " << nactiv;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -307,11 +321,13 @@ initTensor()
     AllEnvCell allenvcell = allenvcell_converter[*cell_i];
 
     Real3x3& tens3x3 = m_tensor[cell_i];
-    Real3x3 tens_sum(zero_r3x3);
-    ENUMERATE_CELL_ENVCELL (envcell_i, allenvcell) {
-      tens_sum += m_volume[envcell_i]*m_tensor[envcell_i]; // Real3x3 += Real * Real3x3
+    tens3x3 = zero_r3x3;
+    if (m_volume[cell_i]>0.) {
+      ENUMERATE_CELL_ENVCELL (envcell_i, allenvcell) {
+        tens3x3 += m_volume[envcell_i]*m_tensor[envcell_i]; // Real3x3 += Real * Real3x3
+      }
+      tens3x3 /= m_volume[cell_i];
     }
-    tens_sum /= m_volume[cell_i];
   }
 }
 
@@ -330,6 +346,21 @@ initNodeVector()
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
+initNodeCoordBis()
+{
+  debug() << "Dans initNodeCoordBis";
+
+  const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
+
+  ENUMERATE_NODE(node_i, allNodes()) {
+    m_node_coord_bis[node_i]=node_coord[node_i];
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
 initCqs()
 {
   debug() << "Dans initCqs";
@@ -342,6 +373,18 @@ initCqs()
       m_cell_cqs[cell_i][inode] = Real3::zero();
     }
   }
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+initCellArr12()
+{
+  debug() << "Dans initCellArr12";
+
+  m_cell_arr1.fill(0.);
+  m_cell_arr2.fill(0.);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -440,6 +483,8 @@ updateTensor()
 void Pattern4GPUModule::
 updateVectorFromTensor() {
 
+  debug() << "Dans updateVectorFromTensor";
+
   Integer nb_blocks = m_mesh_material_mng->blocks().size();
 
   for (Integer i = 0; i < nb_blocks; i++) {
@@ -457,6 +502,47 @@ updateVectorFromTensor() {
       }
     }
   }  // end iblock loop
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+computeCqsAndVector() {
+
+  debug() << "Dans computeCqsAndVector";
+
+  constexpr Real k025 = 0.25;
+
+  CellGroup active_cells = defaultMesh()->cellFamily()->findGroup("active_cells");
+
+  UniqueArray<Real3> pos(8);
+  ENUMERATE_CELL (cell_i,  allCells()) {
+    for (Integer ii = 0; ii < 8; ++ii) {
+      pos[ii] = m_node_coord_bis[cell_i->node(ii)];
+    }
+
+    m_cell_cqs[cell_i][0] = -k025*math::vecMul(pos[4]-pos[3], pos[1]-pos[3]);
+    m_cell_cqs[cell_i][1] = -k025*math::vecMul(pos[0]-pos[2], pos[5]-pos[2]);
+    m_cell_cqs[cell_i][2] = -k025*math::vecMul(pos[1]-pos[3], pos[6]-pos[3]);
+    m_cell_cqs[cell_i][3] = -k025*math::vecMul(pos[7]-pos[2], pos[0]-pos[2]);
+    m_cell_cqs[cell_i][4] = -k025*math::vecMul(pos[5]-pos[7], pos[0]-pos[7]);
+    m_cell_cqs[cell_i][5] = -k025*math::vecMul(pos[1]-pos[6], pos[4]-pos[6]);
+    m_cell_cqs[cell_i][6] = -k025*math::vecMul(pos[5]-pos[2], pos[7]-pos[2]);
+    m_cell_cqs[cell_i][7] = -k025*math::vecMul(pos[6]-pos[3], pos[4]-pos[3]);
+  }
+
+  ENUMERATE_NODE (node_i, allNodes()) {
+    m_node_vector[node_i].assign(0., 0., 0.);
+  }
+
+  // Calcul du gradient de pression
+  ENUMERATE_CELL (cell_i, active_cells) {
+    ENUMERATE_NODE (node_i, cell_i->nodes()) {
+      m_node_vector[node_i] += (m_cell_arr1[cell_i] + m_cell_arr2[cell_i]) *
+        m_cell_cqs[cell_i][node_i.index()];
+    }
+  }
 }
 
 /*---------------------------------------------------------------------------*/

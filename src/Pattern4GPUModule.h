@@ -28,10 +28,13 @@ class Pattern4GPUModule
   void geomEnvInit() override; // GeomEnvInit
   void initTensor() override; // InitTensor
   void initNodeVector() override; // InitNodeVector
+  void initNodeCoordBis() override; // InitNodeCoordBis
   void initCqs() override; // InitCqs
+  void initCellArr12() override; // InitCellArr12
 
   void updateTensor() override; // UpdateTensor
   void updateVectorFromTensor() override; // UpdateVectorFromTensor
+  void computeCqsAndVector() override; // ComputeCqsAndVector
 
  private:
 
@@ -41,6 +44,7 @@ class Pattern4GPUModule
 
   IMeshMaterialMng* m_mesh_material_mng;
   CellToAllEnvCellConverter* m_allenvcell_converter=nullptr;
+  CellGroup m_active_cells;
   MaterialVariableCellReal m_compxx;
   MaterialVariableCellReal m_compxy;
   MaterialVariableCellReal m_compyy;

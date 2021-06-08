@@ -1,15 +1,15 @@
 <?xml version='1.0'?>
 <case codeversion="1.0" codename="Pattern4GPU" xml:lang="en">
   <arcane>
-    <title>Benchmark pour évaluer maj grandeurs tenseurs multi-env</title>
-    <timeloop>UpdateTensorLoop</timeloop>
+    <title>Benchmark pour évaluer le calcul des Cqs et la maj du vecteur à partir du tenseur</title>
+    <timeloop>ComputeCqsAndUpdateVectorFromTensorLoop</timeloop>
   </arcane>
 
   <arcane-post-processing>
     <output-period>1</output-period>
     <output>
       <variable>Nbenv</variable>
-      <variable>VolumeVisu</variable>
+<!--       <variable>VolumeVisu</variable> -->
       <variable>Volume</variable>
 <!--       <variable>Tensor</variable> -->
     </output>
@@ -32,15 +32,8 @@
     </meshgenerator>
   </mesh>
 
-<!--   <arcane-checkpoint> -->
-<!--     <period>0</period> -->
-    <!-- Mettre '0' si on souhaite ne pas faire de protections a la fin du calcul -->
-<!--     <do-dump-at-end>0</do-dump-at-end> -->
-<!--     <checkpoint-service name="ArcaneBasic2CheckpointWriter" /> -->
-<!--   </arcane-checkpoint> -->
-
   <!-- Configuration du module Pattern4GPU -->
   <pattern4-g-p-u>
-    <visu-volume>true</visu-volume>
+    <visu-volume>false</visu-volume>
   </pattern4-g-p-u>
 </case>

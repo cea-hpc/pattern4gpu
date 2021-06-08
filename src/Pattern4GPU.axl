@@ -57,9 +57,27 @@
       dump="false"
       need-sync="false" />
 
+  <!-- NODE-COORD-BIS -->
+  <variable
+      field-name="node_coord_bis"
+      name="NodeCoordBis"
+      data-type="real3"
+      item-kind="node"
+      dim="0"
+      dump="false"
+      need-sync="false" />
+
   <!-- CELL-CQS -->
   <variable field-name="cell_cqs" name="CellCQS" data-type="real3" item-kind="cell"
 	    dim="1" dump="false" need-sync="false" />
+
+  <!-- CELL-ARR1 -->
+  <variable field-name="cell_arr1" name="CellArr1" data-type="real" item-kind="cell"
+	    dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- CELL-ARR2 -->
+  <variable field-name="cell_arr2" name="CellArr2" data-type="real" item-kind="cell"
+	    dim="0" dump="false" need-sync="false" material="false" />
 
 </variables>
 
@@ -68,16 +86,12 @@
   <entry-point method-name="initTensor" name="InitTensor" where="start-init" property="none" />
   <entry-point method-name="initNodeVector" name="InitNodeVector" where="start-init" property="none" />
   <entry-point method-name="initCqs" name="InitCqs" where="start-init" property="none" />
-  <entry-point
-      method-name="updateTensor"
-      name="UpdateTensor"
-      where="compute-loop"
-      property="none" />
-  <entry-point
-      method-name="updateVectorFromTensor"
-      name="UpdateVectorFromTensor"
-      where="compute-loop"
-      property="none" />
+  <entry-point method-name="initNodeCoordBis" name="InitNodeCoordBis" where="start-init" property="none" />
+  <entry-point method-name="initCellArr12" name="InitCellArr12" where="start-init" property="none" />
+
+  <entry-point method-name="updateTensor" name="UpdateTensor" where="compute-loop" property="none" />
+  <entry-point method-name="updateVectorFromTensor" name="UpdateVectorFromTensor" where="compute-loop" property="none" />
+  <entry-point method-name="computeCqsAndVector" name="ComputeCqsAndVector" where="compute-loop" property="none" />
 </entry-points>
 
 <options>
