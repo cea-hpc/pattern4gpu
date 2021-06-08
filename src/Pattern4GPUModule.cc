@@ -319,6 +319,35 @@ initTensor()
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
+initNodeVector()
+{
+  debug() << "Dans initNodeVector";
+
+  m_node_vector.fill(Real3::zero());
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+initCqs()
+{
+  debug() << "Dans initCqs";
+
+  // Valable en 3D, 8 noeuds par maille
+  m_cell_cqs.resize(8);
+
+  ENUMERATE_CELL (cell_i, allCells()) {
+    for(Integer inode(0) ; inode<8 ; ++inode) {
+      m_cell_cqs[cell_i][inode] = Real3::zero();
+    }
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
 _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal& f)
 {
   CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
@@ -403,6 +432,31 @@ updateTensor()
     }
   }  // end if (dim == 3)
   
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+updateVectorFromTensor() {
+
+  Integer nb_blocks = m_mesh_material_mng->blocks().size();
+
+  for (Integer i = 0; i < nb_blocks; i++) {
+    // on récupère le groupe de mailles associé au bloc
+    IMeshBlock* b = (m_mesh_material_mng->blocks())[i];
+    CellGroup cell_group = b->cells();
+
+    Real3x3 cell_tensor;
+    ENUMERATE_CELL (cell_i, cell_group) {
+    // boucle sur les noeuds de la maille
+      ENUMERATE_NODE (node_i, cell_i->nodes()) {
+        cell_tensor = m_tensor[cell_i];
+        m_node_vector[node_i] -= math::prodTensVec(cell_tensor,
+            m_cell_cqs[cell_i][node_i.index()]);
+      }
+    }
+  }  // end iblock loop
 }
 
 /*---------------------------------------------------------------------------*/

@@ -27,7 +27,11 @@ class Pattern4GPUModule
   //! points d'entrée
   void geomEnvInit() override; // GeomEnvInit
   void initTensor() override; // InitTensor
+  void initNodeVector() override; // InitNodeVector
+  void initCqs() override; // InitCqs
+
   void updateTensor() override; // UpdateTensor
+  void updateVectorFromTensor() override; // UpdateVectorFromTensor
 
  private:
 
