@@ -9,6 +9,7 @@
 #include <arcane/materials/ComponentPartItemVectorView.h>
 #include <arcane/materials/MaterialVariableBuildInfo.h>
 #include <arcane/IMesh.h>
+#include <arcane/IParallelMng.h>
 #include <arcane/IItemFamily.h>
 #include <arcane/utils/ArcaneGlobal.h>
 #include <arcane/utils/StringBuilder.h>
@@ -88,6 +89,60 @@ class ShapeLayer3D : public IShape {
  protected:
   Real3 m_cmin;
   Real3 m_cmax;
+};
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+template<typename T>
+class MinMaxSumRed {
+ public:
+  MinMaxSumRed(Integer nvals, IParallelMng* parallel_mng) :
+  m_parallel_mng (parallel_mng),
+  m_nvals (nvals),
+  values (nvals),
+  min_values (nvals),
+  max_values (nvals),
+  sum_values (nvals),
+  min_ranks (nvals),
+  max_ranks (nvals) {
+    m_comm_size=m_parallel_mng->commSize();
+  }
+
+  void allreduce() {
+    m_parallel_mng->computeMinMaxSum(values, min_values, max_values, sum_values, min_ranks, max_ranks);
+  }
+
+  String strMinMaxAvg(Integer idx) {
+    StringBuilder strb("[min=");
+    strb+=min_values[idx];
+    strb+=", max=";
+    strb+=max_values[idx];
+    strb+=", avg=";
+    strb+=T(sum_values[idx]/Real(m_comm_size));
+    strb+="]";
+    return strb.toString();
+  }
+
+  String strSumMinMaxAvg(Integer idx) {
+    StringBuilder strb;
+    strb+=sum_values[idx];
+    strb+=" ";
+    strb+=strMinMaxAvg(idx);
+    return strb.toString();
+  }
+
+ public:
+  UniqueArray<T> values;
+  UniqueArray<T> min_values;
+  UniqueArray<T> max_values;
+  UniqueArray<T> sum_values;
+  UniqueArray<T> min_ranks;
+  UniqueArray<T> max_ranks;
+ protected:
+  IParallelMng* m_parallel_mng;
+  Integer m_comm_size; //! Nb de processus dans le communicateur
+  Integer m_nvals;
 };
 
 /*---------------------------------------------------------------------------*/
@@ -256,42 +311,84 @@ geomEnvInit()
   }
 
   // Statistiques
-  Integer nb_tot_cells=allCells().size();
-  info() << "Nb total de mailles : " << nb_tot_cells;
+  auto str_ratio = [](Integer part, Integer tot) {
+    Integer pourmille=(1000*part)/tot;
+    StringBuilder strb("ratio=");
+    strb+=Real(pourmille)/1000.;
+    return strb.toString();
+  };
+  IParallelMng* parallel_mng = defaultMesh()->parallelMng();
+  MinMaxSumRed<Integer> ncell(2, parallel_mng);
+  ncell.values[0]=allCells().size();
+  ncell.values[1]=allCells().own().size();
+  ARCANE_ASSERT(ncell.values[1]==ownCells().size(), ("allCells().own().size() != ownCells().size()"));
+  ncell.allreduce();
+  Integer nb_tot_cells=ncell.sum_values[0];
+  Integer nb_tot_cells_inner=ncell.sum_values[1];
+  info() << "Nb total de mailles intérieures     : " << ncell.strSumMinMaxAvg(1);
+  info() << "Nb total de mailles intérieures+ftm : " << ncell.strSumMinMaxAvg(0);
+
+  MinMaxSumRed<Integer> npurmix(2*max_nb_env, parallel_mng);
   ENUMERATE_ENV(ienv, m_mesh_material_mng) {
     IMeshEnvironment* env = *ienv;
-    Integer nb_pure_in_env=env->pureEnvItems().nbItem();
-    Integer nb_impure_in_env=env->impureEnvItems().nbItem();
-    info() << "Dans environnement " << env->name() 
-      << ", nb de mailles pures et mixtes : " << nb_pure_in_env << ", " << nb_impure_in_env;
+    Integer env_id=env->id();
+    npurmix.values[2*env_id+0]=env->pureEnvItems().nbItem();
+    npurmix.values[2*env_id+1]=env->impureEnvItems().nbItem();
+  }
+  npurmix.allreduce();
+  ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+    IMeshEnvironment* env = *ienv;
+    Integer env_id=env->id();
+    info() << "Dans environnement " << env->name() << ", nb de mailles pures et mixtes : " 
+      << npurmix.strSumMinMaxAvg(2*env_id+0) << ", " << npurmix.strSumMinMaxAvg(2*env_id+1);
   }
 
   // nb_cell_env[0] = nb de mailles dont le nb d'env == 0
   // nb_cell_env[1] = nb de mailles dont le nb d'env == 1
   // nb_cell_env[2] = nb de mailles dont le nb d'env >= 2
-  UniqueArray<Integer> nb_cell_env(3, /*value=*/0);
+  MinMaxSumRed<Integer> ncell_env(6, parallel_mng);
+  ncell_env.values.fill(0);
+  
   // On en profite pour créer la liste des mailles actives
   Int32UniqueArray lids;
   ENUMERATE_CELL(icell, allCells()) {
-    AllEnvCell all_env_cell = allenvcell_converter[(*icell)];
+    Cell cell(*icell);
+    AllEnvCell all_env_cell = allenvcell_converter[cell];
     Integer nb_env=all_env_cell.nbEnvironment();
     Integer nb_env_bounded=std::min(nb_env,2);
-    nb_cell_env[nb_env_bounded]++;
+    ncell_env.values[0+nb_env_bounded]++;
+    if (cell.isOwn()) {
+      ncell_env.values[3+nb_env_bounded]++;
+    }
     m_nbenv[icell]=Real(nb_env);
+
     if (nb_env>0) {
       lids.add(icell.localId());
     }
   }
-  info() << "Nb de mailles vides  : " << nb_cell_env[0] << ", ratio=" << nb_cell_env[0]/Real(nb_tot_cells);
-  info() << "Nb de mailles pures  : " << nb_cell_env[1] << ", ratio=" << nb_cell_env[1]/Real(nb_tot_cells);
-  info() << "Nb de mailles mixtes : " << nb_cell_env[2] << ", ratio=" << nb_cell_env[2]/Real(nb_tot_cells);
+  ncell_env.allreduce();
+  ArrayView<Integer> nb_cell_env(ncell_env.sum_values.subView(0,3));
+  ArrayView<Integer> nb_cell_env_inner(ncell_env.sum_values.subView(3,3));
+  info() << "Nb de mailles vides  intérieures : " << ncell_env.strSumMinMaxAvg(3+0) << ", " << str_ratio(nb_cell_env_inner[0], nb_tot_cells_inner);
+  info() << "Nb de mailles pures  intérieures : " << ncell_env.strSumMinMaxAvg(3+1) << ", " << str_ratio(nb_cell_env_inner[1], nb_tot_cells_inner);
+  info() << "Nb de mailles mixtes intérieures : " << ncell_env.strSumMinMaxAvg(3+2) << ", " << str_ratio(nb_cell_env_inner[2], nb_tot_cells_inner);
+  info() << "Nb de mailles vides  intérieures+ftm : " << ncell_env.strSumMinMaxAvg(0+0) << ", " << str_ratio(nb_cell_env[0], nb_tot_cells);
+  info() << "Nb de mailles pures  intérieures+ftm : " << ncell_env.strSumMinMaxAvg(0+1) << ", " << str_ratio(nb_cell_env[1], nb_tot_cells);
+  info() << "Nb de mailles mixtes intérieures+ftm : " << ncell_env.strSumMinMaxAvg(0+2) << ", " << str_ratio(nb_cell_env[2], nb_tot_cells);
 
   // On crée le groupe des mailles actives "active_cells"
   IItemFamily* family = allCells().itemFamily();
-  m_active_cells = family->createGroup(String("active_cells"),lids,true);
-  Integer nactiv = m_active_cells.size();
-  ARCANE_ASSERT((nactiv+nb_cell_env[0])==nb_tot_cells, ("Nbs de mailles actives + vides != nb total de mailles"));
-  info() << "Nb de mailles actives : " << nactiv;
+  m_active_cells = family->createGroup("active_cells",lids,true);
+  MinMaxSumRed<Integer> nactiv(2, parallel_mng); // [0] = ftm comprise   ,  [1] = inner
+  nactiv.values[0]=m_active_cells.size();
+  nactiv.values[1]=m_active_cells.own().size();
+  nactiv.allreduce();
+  ARCANE_ASSERT((nactiv.sum_values[0]+nb_cell_env[0])==nb_tot_cells, ("Nbs de mailles actives + vides != nb total de mailles int+ftm"));
+  ARCANE_ASSERT((nactiv.sum_values[1]+nb_cell_env_inner[0])==nb_tot_cells_inner, ("Nbs de mailles actives + vides != nb total de mailles only int"));
+  info() << "Nb mailles actives intérieures     : " << nactiv.strSumMinMaxAvg(1)
+    << ", " << str_ratio(nactiv.sum_values[1], nb_tot_cells_inner);
+  info() << "Nb mailles actives intérieures+ftm : " << nactiv.strSumMinMaxAvg(0)
+    << ", " << str_ratio(nactiv.sum_values[0], nb_tot_cells);
 }
 
 /*---------------------------------------------------------------------------*/
