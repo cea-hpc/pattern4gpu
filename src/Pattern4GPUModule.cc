@@ -400,14 +400,21 @@ initTensor()
   debug() << "Dans initTensor";
 
   // Initialise m_tensor de telle sorte qu'il soit symétrique
+  const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
   ENUMERATE_ENV(ienv, m_mesh_material_mng) {
     IMeshEnvironment* env = *ienv;
     Integer env_id = env->id();
     const Real d=3*env_id;
     ENUMERATE_ENVCELL (envcell_i, env) {
+      EnvCell envcell=(*envcell_i);
+      Cell cell=envcell.globalCell();
+      const Node& first_node=cell.node(0);
+      const Real3& c=node_coord[first_node];
+      const Real dd=d+0.5*sin(1+c.x+c.y+c.z);
+
       Real3x3& tens3x3 = m_tensor[envcell_i];
-      tens3x3.x.x=d+1.;        tens3x3.x.y=d+1.5;       tens3x3.x.z=d+1.75;
-      tens3x3.y.x=tens3x3.x.y; tens3x3.y.y=d+2.;        tens3x3.y.z=d+2.5;
+      tens3x3.x.x=dd+1.;       tens3x3.x.y=dd+1.5;      tens3x3.x.z=dd+1.75;
+      tens3x3.y.x=tens3x3.x.y; tens3x3.y.y=dd+2.;       tens3x3.y.z=dd+2.5;
       tens3x3.z.x=tens3x3.x.z; tens3x3.z.y=tens3x3.y.z; tens3x3.z.z=-tens3x3.x.x-tens3x3.y.y;
     }
   }
@@ -436,7 +443,16 @@ initNodeVector()
 {
   debug() << "Dans initNodeVector";
 
-  m_node_vector.fill(Real3::zero());
+  // chaque noeud aura un vecteur de norme 1 mais dans des directions
+  // différentes
+  const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
+  ENUMERATE_NODE(node_i, allNodes()) {
+    const Real3& c=node_coord[node_i];
+    Real cos_th=cos(c.x+c.y+c.z); // garantit une valeur dans [-1,+1]
+    Real sin_th=math::sqrt(1-cos_th*cos_th); // garantit une valeur dans [0,+1]
+    Real phi=(c.x+1)*(c.y+1)*(c.z+1);
+    m_node_vector[node_i]=Real3(sin_th*cos(phi), sin_th*sin(phi),cos_th);
+  }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -480,8 +496,13 @@ initCellArr12()
 {
   debug() << "Dans initCellArr12";
 
-  m_cell_arr1.fill(0.);
-  m_cell_arr2.fill(0.);
+  const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
+  ENUMERATE_CELL(cell_i, allCells()) {
+    const Node& first_node=(*cell_i).node(0);
+    const Real3& c=node_coord[first_node];
+    m_cell_arr1[cell_i]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
+    m_cell_arr2[cell_i]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
+  }
 }
 
 /*---------------------------------------------------------------------------*/
