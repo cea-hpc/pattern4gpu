@@ -1,7 +1,6 @@
 #ifndef PATTERN_4_GPU_MODULE_H
 #define PATTERN_4_GPU_MODULE_H
 
-#include <arcane/geometry/IGeometryMng.h>
 #include <arcane/materials/IMeshMaterialMng.h>
 #include <arcane/materials/MeshMaterialVariableRef.h>
 #include <arcane/materials/CellToAllEnvCellConverter.h>
@@ -25,7 +24,7 @@ class Pattern4GPUModule
  public:
 
   //! points d'entrée
-  void geomEnvInit() override; // GeomEnvInit
+  void initP4GPU() override; // InitP4GPU
   void initTensor() override; // InitTensor
   void initNodeVector() override; // InitNodeVector
   void initNodeCoordBis() override; // InitNodeCoordBis

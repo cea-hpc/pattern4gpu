@@ -4,16 +4,6 @@
 <description>Patterns de boucles caractéristiques pour évaluer les GPUs</description>
 
 <variables>
-  <!-- NBENV -->
-  <variable
-      field-name="nbenv"
-      name="Nbenv"
-      data-type="real"
-      item-kind="cell"
-      dim="0"
-      dump="false"
-      need-sync="false" />
-
   <!-- VOLUME -->
   <variable
       field-name="volume"
@@ -24,17 +14,6 @@
       dump="false"
       need-sync="false" 
       material="true" />
-
-  <!-- VOLUME-VISU -->
-  <variable
-      field-name="volume_visu"
-      name="VolumeVisu"
-      data-type="real"
-      item-kind="cell"
-      dim="1"
-      dump="false"
-      need-sync="false" 
-      material="false" />
 
   <!-- TENSOR -->
   <variable
@@ -82,7 +61,7 @@
 </variables>
 
 <entry-points>
-  <entry-point method-name="geomEnvInit" name="GeomEnvInit" where="start-init" property="none" />
+  <entry-point method-name="initP4GPU" name="InitP4GPU" where="start-init" property="none" />
   <entry-point method-name="initTensor" name="InitTensor" where="start-init" property="none" />
   <entry-point method-name="initNodeVector" name="InitNodeVector" where="start-init" property="none" />
   <entry-point method-name="initCqs" name="InitCqs" where="start-init" property="none" />
@@ -95,12 +74,5 @@
 </entry-points>
 
 <options>
-  <!-- - - - - - visu-volume - - - - -->
-  <simple name="visu-volume" type="bool" default="false"><description>Alloue et calcule <em>VolumeVisu</em> pour la visualisation multi-env du volume.</description></simple>
-
-  <!-- - - - - - geometry - - - - -->
-  <service-instance name="geometry" type="Arcane::Numerics::IGeometryMng" default="Euclidian3Geometry">
-    <description>Service Géométrie</description>
-  </service-instance>
 </options>
 </module>

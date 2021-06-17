@@ -1,0 +1,54 @@
+<?xml version="1.0" ?>
+<module name="GeomEnv" version="1.0">
+
+<description>Initialisation de géométries multi-environnement</description>
+
+<variables>
+  <!-- NBENV -->
+  <variable
+      field-name="nbenv"
+      name="Nbenv"
+      data-type="real"
+      item-kind="cell"
+      dim="0"
+      dump="false"
+      need-sync="false" />
+
+  <!-- VOLUME -->
+  <variable
+      field-name="volume"
+      name="Volume"
+      data-type="real"
+      item-kind="cell"
+      dim="0"
+      dump="false"
+      need-sync="false" 
+      material="true" />
+
+  <!-- VOLUME-VISU -->
+  <variable
+      field-name="volume_visu"
+      name="VolumeVisu"
+      data-type="real"
+      item-kind="cell"
+      dim="1"
+      dump="false"
+      need-sync="false" 
+      material="false" />
+
+</variables>
+
+<entry-points>
+  <entry-point method-name="initGeomEnv" name="InitGeomEnv" where="start-init" property="none" />
+</entry-points>
+
+<options>
+  <!-- - - - - - visu-volume - - - - -->
+  <simple name="visu-volume" type="bool" default="false"><description>Alloue et calcule <em>VolumeVisu</em> pour la visualisation multi-env du volume.</description></simple>
+
+  <!-- - - - - - geometry - - - - -->
+  <service-instance name="geometry" type="Arcane::Numerics::IGeometryMng" default="Euclidian3Geometry">
+    <description>Service Géométrie</description>
+  </service-instance>
+</options>
+</module>
