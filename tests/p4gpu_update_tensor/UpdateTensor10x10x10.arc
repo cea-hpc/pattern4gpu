@@ -40,7 +40,7 @@
 <!--   </arcane-checkpoint> -->
 
   <!-- Configuration du module Pattern4GPU -->
-  <pattern4-g-p-u>
+  <geom-env>
     <visu-volume>true</visu-volume>
-  </pattern4-g-p-u>
+  </geom-env>
 </case>

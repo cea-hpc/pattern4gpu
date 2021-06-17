@@ -9,7 +9,7 @@
     <output-period>1</output-period>
     <output>
       <variable>Nbenv</variable>
-<!--       <variable>VolumeVisu</variable> -->
+      <variable>VolumeVisu</variable>
       <variable>Volume</variable>
 <!--       <variable>Tensor</variable> -->
     </output>
@@ -32,8 +32,9 @@
     </meshgenerator>
   </mesh>
 
-  <!-- Configuration du module Pattern4GPU -->
-  <pattern4-g-p-u>
-    <visu-volume>false</visu-volume>
-  </pattern4-g-p-u>
+  <!-- Configuration du module GeomEnv -->
+  <geom-env>
+    <visu-volume>true</visu-volume>
+    <geom-scene>env5m3</geom-scene>
+  </geom-env>
 </case>
