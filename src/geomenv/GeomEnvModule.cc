@@ -224,6 +224,34 @@ class GeometricSceneEnv5M3 : public IGeometricScene {
   }
 };
 
+/*!
+ * 4 environnements en tout + environ 20% de vide, des mailles à 2 environnements max
+ *
+ * Définit 4 couches (la dernière est plus épaisse) puis du vide
+ */
+class GeometricScene4Layers : public IGeometricScene {
+ public:
+  GeometricScene4Layers(IMesh* mesh) : IGeometricScene(mesh) {}
+  virtual ~GeometricScene4Layers() {}
+
+  void defineScene(UniqueArray<IShape*>& l_shape) override {
+    UniqueArray<Real3> l_pts; // points qui délimitent les différentes couches
+    l_pts.add(Real3(-0.5,-0.5,-0.5));
+    l_pts.add(Real3(0.5,0.5,0.5));
+    l_pts.add(Real3(0.7,0.7,0.7));
+    l_pts.add(Real3(0.9,0.9,0.9));
+    l_pts.add(Real3(1.9,1.9,1.9));
+    //  l_pts.add(Real3(4,4,4));
+    Integer nb_sh=l_pts.size()-1;
+    for(Integer ish(0) ; ish<nb_sh ; ++ish) {
+      StringBuilder str_build("MIL");
+      str_build+=ish;
+      l_shape.add(new ShapeLayer3D(str_build.toString(), m_mesh, l_pts[ish], l_pts[ish+1]));
+    }
+  }
+};
+
+
 /*---------------------------------------------------------------------------*/
 /*! Réductions min,max,sum sur un ensemble de valeurs et facilité d'affichage */
 /*---------------------------------------------------------------------------*/
@@ -293,7 +321,8 @@ initGeomEnv()
   // Définition des différents objets qui vont composer la scene géométrique
   IGeometricScene* geom_scene;
   switch (options()->getGeomScene()) {
-    case env5m3: geom_scene=new GeometricSceneEnv5M3(mesh()); break;
+    case GS_env5m3: geom_scene=new GeometricSceneEnv5M3(mesh()); break;
+    case GS_4layers: geom_scene=new GeometricScene4Layers(mesh()); break;
   };
   UniqueArray<IShape*> l_shape;
   geom_scene->defineScene(l_shape);

@@ -47,9 +47,10 @@
   <simple name="visu-volume" type="bool" default="false"><description>Alloue et calcule <em>VolumeVisu</em> pour la visualisation multi-env du volume.</description></simple>
 
   <!-- - - - - geom-scene - - - - -->
-  <enumeration name="geom-scene" type="eGeomScene" default="env5m3">
+  <enumeration name="geom-scene" type="eGeomScene" default="GS_env5m3">
     <description>Choix de la scène géométrique</description>
-    <enumvalue name="env5m3" genvalue="env5m3" />
+    <enumvalue name="env5m3" genvalue="GS_env5m3" />
+    <enumvalue name="4layers" genvalue="GS_4layers" />
   </enumeration>
 
   <!-- - - - - - geometry - - - - -->
