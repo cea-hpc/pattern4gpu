@@ -37,15 +37,18 @@ GeomEnvModule::
 class IShape {
  public:
   IShape(String name, IMesh* mesh) :
+  m_mesh (mesh),
   m_name (name), 
   m_node_coord(mesh->nodesCoordinates()) {
   }
   virtual ~IShape() {}
 
+  IMesh* mesh() { return m_mesh; }
   const String &name() const { return m_name; }
   virtual void isInside(VariableNodeBool &node_inside, NodeGroup node_group) = 0;
 
  protected:
+  IMesh* m_mesh;
   String m_name;
   const VariableNodeReal3& m_node_coord;
 };
@@ -85,7 +88,172 @@ class ShapeLayer3D : public IShape {
   Real3 m_cmax;
 };
 
+class ShapeSphere : public IShape {
+ protected:
+  inline bool _isInsidePt(Real x, Real y, Real z) {
+    const Real d2 = (x-m_ctr.x)*(x-m_ctr.x) + (y-m_ctr.y)*(y-m_ctr.y) + (z-m_ctr.z)*(z-m_ctr.z);
+    return (d2 <= m_rad2);
+  }
+ public:
+  ShapeSphere(String name, IMesh* mesh, Real3 pctr, Real rad) :
+  IShape (name, mesh) {
+    m_ctr=pctr;
+    m_rad2=rad*rad;
+  }
+  virtual ~ShapeSphere() {}
+
+  void isInside(VariableNodeBool &node_inside, NodeGroup node_group) override {
+    ENUMERATE_NODE(inode, node_group) {
+      const Real3& pt = m_node_coord[inode];
+      node_inside[inode] = _isInsidePt(pt.x, pt.y, pt.z);
+    }
+  }
+ protected:
+  Real3 m_ctr; //! le centre de la sphère
+  Real m_rad2; //! le rayon au carré
+};
+
+class ShapeInter : public IShape {
+ public:
+  ShapeInter(String name, IMesh* mesh, IShape* sh1, IShape* sh2) :
+  IShape (name, mesh),
+  m_sh1 (sh1), 
+  m_sh2 (sh2) {
+  }
+  virtual ~ShapeInter() {
+    delete m_sh1;
+    delete m_sh2;
+  }
+
+  void isInside(VariableNodeBool &node_inside, NodeGroup node_group) override {
+    VariableNodeBool node_inside2(VariableBuildInfo(mesh(),"TemporaryNodeInside2"));
+    m_sh1->isInside(node_inside, node_group);
+    m_sh2->isInside(node_inside2, node_group);
+    ENUMERATE_NODE(inode, node_group) {
+      node_inside[inode] = node_inside[inode] && node_inside2[inode];
+    }
+  }
+ protected:
+  IShape* m_sh1;
+  IShape* m_sh2;
+};
+
+class ShapeNot : public IShape {
+ public:
+  ShapeNot(String name, IMesh* mesh, IShape* sh1) :
+  IShape (name, mesh),
+  m_sh1 (sh1) {
+  }
+  virtual ~ShapeNot() {
+    delete m_sh1;
+  }
+
+  void isInside(VariableNodeBool &node_inside, NodeGroup node_group) override {
+    m_sh1->isInside(node_inside, node_group);
+    ENUMERATE_NODE(inode, node_group) {
+      node_inside[inode] = !node_inside[inode];
+    }
+  }
+ protected:
+  IShape* m_sh1;
+};
+
 /*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+class IGeometricScene {
+ public:
+  IGeometricScene(IMesh* mesh) : m_mesh(mesh) {
+  }
+  virtual ~IGeometricScene() {}
+
+  //! Remplit le tableau l_shape, définissant ainsi la scène géométrique
+  // Le nb de shape va définir le nb d'environnements
+  virtual void defineScene(UniqueArray<IShape*>& l_shape) = 0;
+ protected:
+  IMesh* m_mesh;
+};
+
+/*!
+ * 5 environnements en tout + environ 20% de vide, des mailles à 3 environnements max
+ *
+ * Définit 3 couches, une 4me couche plus épaisse est coupée en 2 selon une sphère
+ * puis du vide
+ */
+class GeometricSceneEnv5M3 : public IGeometricScene {
+ public:
+  GeometricSceneEnv5M3(IMesh* mesh) : IGeometricScene(mesh) {}
+  virtual ~GeometricSceneEnv5M3() {}
+
+  void defineScene(UniqueArray<IShape*>& l_shape) override {
+    UniqueArray<Real3> l_pts; // points qui délimitent les différentes couches
+    l_pts.add(Real3(-0.5,-0.5,-0.5));
+    l_pts.add(Real3(0.5,0.5,0.5));
+    l_pts.add(Real3(0.7,0.7,0.7));
+    l_pts.add(Real3(0.9,0.9,0.9));
+    //  l_pts.add(Real3(1.9,1.9,1.9));
+    //  l_pts.add(Real3(4,4,4));
+    Integer nb_sh=l_pts.size()-1;
+    for(Integer ish(0) ; ish<nb_sh ; ++ish) {
+      StringBuilder str_build("MIL");
+      str_build+=ish;
+      l_shape.add(new ShapeLayer3D(str_build.toString(), m_mesh, l_pts[ish], l_pts[ish+1]));
+    }
+
+    {
+      StringBuilder str_build("MIL");
+      str_build+=(nb_sh+0);
+      l_shape.add(
+          new ShapeInter(str_build.toString(), m_mesh,
+            new ShapeLayer3D(str_build.toString(), m_mesh, Real3(0.9,0.9,0.9), Real3(1.9,1.9,1.9)),
+            new ShapeSphere(str_build.toString(), m_mesh, Real3(1.,0.5,0.), 1.0))
+          );
+    }
+    {
+      StringBuilder str_build("MIL");
+      str_build+=(nb_sh+1);
+      l_shape.add(
+          new ShapeInter(str_build.toString(), m_mesh,
+            new ShapeLayer3D(str_build.toString(), m_mesh, Real3(0.9,0.9,0.9), Real3(1.9,1.9,1.9)),
+            new ShapeNot(str_build.toString(), m_mesh,
+              new ShapeSphere(str_build.toString(), m_mesh, Real3(1.,0.5,0.), 1.0)
+              )
+            )
+          );
+    }
+  }
+};
+
+/*!
+ * 4 environnements en tout + environ 20% de vide, des mailles à 2 environnements max
+ *
+ * Définit 4 couches (la dernière est plus épaisse) puis du vide
+ */
+class GeometricScene4Layers : public IGeometricScene {
+ public:
+  GeometricScene4Layers(IMesh* mesh) : IGeometricScene(mesh) {}
+  virtual ~GeometricScene4Layers() {}
+
+  void defineScene(UniqueArray<IShape*>& l_shape) override {
+    UniqueArray<Real3> l_pts; // points qui délimitent les différentes couches
+    l_pts.add(Real3(-0.5,-0.5,-0.5));
+    l_pts.add(Real3(0.5,0.5,0.5));
+    l_pts.add(Real3(0.7,0.7,0.7));
+    l_pts.add(Real3(0.9,0.9,0.9));
+    l_pts.add(Real3(1.9,1.9,1.9));
+    //  l_pts.add(Real3(4,4,4));
+    Integer nb_sh=l_pts.size()-1;
+    for(Integer ish(0) ; ish<nb_sh ; ++ish) {
+      StringBuilder str_build("MIL");
+      str_build+=ish;
+      l_shape.add(new ShapeLayer3D(str_build.toString(), m_mesh, l_pts[ish], l_pts[ish+1]));
+    }
+  }
+};
+
+
+/*---------------------------------------------------------------------------*/
+/*! Réductions min,max,sum sur un ensemble de valeurs et facilité d'affichage */
 /*---------------------------------------------------------------------------*/
 
 template<typename T>
@@ -151,35 +319,29 @@ initGeomEnv()
   MeshBlockBuildInfo mbbi("BLOCK1",allCells());
 
   // Définition des différents objets qui vont composer la scene géométrique
-  UniqueArray<Real3> l_pts; // points qui délimitent les différentes couches
-  l_pts.add(Real3(-0.5,-0.5,-0.5));
-  l_pts.add(Real3(0.5,0.5,0.5));
-  l_pts.add(Real3(0.7,0.7,0.7));
-  l_pts.add(Real3(0.9,0.9,0.9));
-  l_pts.add(Real3(1.9,1.9,1.9));
-//  l_pts.add(Real3(4,4,4));
-  Integer nb_sh=l_pts.size()-1;
-  UniqueArray<IShape*> l_shape(nb_sh);
-  for(Integer ish(0) ; ish<nb_sh ; ++ish) {
-    StringBuilder str_build("MIL");
-    str_build+=ish;
-    l_shape[ish] = new ShapeLayer3D(str_build.toString(), mesh(), l_pts[ish], l_pts[ish+1]);
-  }
-  // Fin défintion scene géométrique
+  IGeometricScene* geom_scene;
+  switch (options()->getGeomScene()) {
+    case GS_env5m3: geom_scene=new GeometricSceneEnv5M3(mesh()); break;
+    case GS_4layers: geom_scene=new GeometricScene4Layers(mesh()); break;
+  };
+  UniqueArray<IShape*> l_shape;
+  geom_scene->defineScene(l_shape);
+  delete geom_scene;
+  // Fin définition scene géométrique
 
   // On a un seul matériau par environnement
   for( Integer i=0,n=l_shape.size(); i<n; ++i ){
     String mat_name = l_shape[i]->name()+String("_mat");
-    debug() << "Add material name=" << mat_name;
+    //debug() << "Add material name=" << mat_name;
     m_mesh_material_mng->registerMaterialInfo(mat_name);
     const String &env_name = l_shape[i]->name();
     MeshEnvironmentBuildInfo env_build(env_name);
-    debug() << "Add material=" << mat_name << " in environment=" << env_name;
+    //debug() << "Add material=" << mat_name << " in environment=" << env_name;
     env_build.addMaterial(mat_name);
-    debug() << "Materiau cree";
+    //debug() << "Materiau cree";
     IMeshEnvironment* env = m_mesh_material_mng->createEnvironment(env_build);
-    debug() << "Environment cree";
-    debug() << "Add environment " << env_name << " to BLOCK1";
+    //debug() << "Environment cree";
+    //debug() << "Add environment " << env_name << " to BLOCK1";
     mbbi.addEnvironment(env);
   }
 
@@ -282,9 +444,11 @@ initGeomEnv()
     ENUMERATE_CELL_ENVCELL (envcell_i, all_env_cell) {
       vol_sum += m_volume[envcell_i];
     }
-//    Real vol_ref=cell_volume[icell];
-//    Real ecart=math::abs(vol_sum-vol_ref)/vol_ref;
-//    ARCANE_ASSERT(ecart<1.e-10, ("Ecart trop important sur volume calculé"));
+    Real vol_ref=cell_volume[icell];
+    // On vérifie à un epsilon pres que la somme des volumes des environnements
+    //  ne dépasse pas le volume de maille, d'où l'absence de math:abs sur le calcul de l'écart
+    Real ecart_sup=(vol_sum-vol_ref)/vol_ref;
+    ARCANE_ASSERT(ecart_sup<1.e-10, ("La somme des volumes des env dépasse le volume de maille"));
     m_volume[icell]=vol_sum;
   }
 

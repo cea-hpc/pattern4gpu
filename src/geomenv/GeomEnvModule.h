@@ -5,6 +5,13 @@
 #include <arcane/materials/IMeshMaterialMng.h>
 #include <arcane/materials/MeshMaterialVariableRef.h>
 
+/*! \brief Définit les configurations géométriques pré-définies
+ */
+enum eGeomScene {
+  GS_env5m3 = 0, //! 5 environnements dont des mailles avec 3 environnements, + 20% de vide
+  GS_4layers //! 4 environnements en couche en diagonale + 20% de vide
+};
+
 #include "geomenv/GeomEnv_axl.h"
 
 using namespace Arcane;
