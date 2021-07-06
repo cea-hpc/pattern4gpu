@@ -2,13 +2,24 @@ set(EXAMPLE_NAME Pattern4GPU)
 project(Pattern4GPU LANGUAGES C CXX)
 include(../samples.common.cmake)
 
-add_executable(Pattern4GPU Pattern4GPUModule.cc main Pattern4GPU_axl.h)
+add_executable(Pattern4GPU Pattern4GPUModule.cc Pattern4GPUCartesian.cc main Pattern4GPU_axl.h)
 
+# Module GeomEnv
 add_library(geomenv geomenv/GeomEnvModule.cc)
 target_include_directories(geomenv PUBLIC .)
 target_link_libraries(geomenv PUBLIC arcane_core)
 
-target_link_libraries(Pattern4GPU PRIVATE geomenv)
+# Cartesian
+add_library(cartesian cartesian/CartesianConnectivity.cc
+                      cartesian/CartesianMesh.cc
+                      cartesian/CellDirectionMng.cc
+                      cartesian/FaceDirectionMng.cc
+                      cartesian/NodeDirectionMng.cc
+                      cartesian/CartesianItemSorter.cc)
+target_include_directories(cartesian PUBLIC .)
+target_link_libraries(cartesian PUBLIC arcane_core)
+
+target_link_libraries(Pattern4GPU PRIVATE geomenv cartesian)
 
 # Les axl
 arcane_generate_axl(Pattern4GPU)

@@ -58,6 +58,14 @@
   <variable field-name="cell_arr2" name="CellArr2" data-type="real" item-kind="cell"
 	    dim="0" dump="false" need-sync="false" material="false" />
 
+  <!-- NODE-ARR1 -->
+  <variable field-name="node_arr1" name="NodeArr1" data-type="real" item-kind="node"
+	    dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- FACE-ARR1 -->
+  <variable field-name="face_arr1" name="FaceArr1" data-type="real" item-kind="face"
+	    dim="0" dump="false" need-sync="false" material="false" />
+
 </variables>
 
 <entry-points>
@@ -67,10 +75,12 @@
   <entry-point method-name="initCqs" name="InitCqs" where="start-init" property="none" />
   <entry-point method-name="initNodeCoordBis" name="InitNodeCoordBis" where="start-init" property="none" />
   <entry-point method-name="initCellArr12" name="InitCellArr12" where="start-init" property="none" />
+  <entry-point method-name="initCartesian" name="InitCartesian" where="start-init" property="none" />
 
   <entry-point method-name="updateTensor" name="UpdateTensor" where="compute-loop" property="none" />
   <entry-point method-name="updateVectorFromTensor" name="UpdateVectorFromTensor" where="compute-loop" property="none" />
   <entry-point method-name="computeCqsAndVector" name="ComputeCqsAndVector" where="compute-loop" property="none" />
+  <entry-point method-name="benchCartesian" name="BenchCartesian" where="compute-loop" property="none" />
 </entry-points>
 
 <options>
