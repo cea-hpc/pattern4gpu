@@ -1,5 +1,4 @@
 #include "Pattern4GPUModule.h"
-
 #include <arcane/materials/MeshBlockBuildInfo.h>
 #include <arcane/materials/MeshEnvironmentBuildInfo.h>
 #include <arcane/materials/IMeshBlock.h>

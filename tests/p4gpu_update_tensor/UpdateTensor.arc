@@ -38,8 +38,9 @@
 <!--     <checkpoint-service name="ArcaneBasic2CheckpointWriter" /> -->
 <!--   </arcane-checkpoint> -->
 
-  <!-- Configuration du module Pattern4GPU -->
+  <!-- Configuration du module GeomEnv -->
   <geom-env>
     <visu-volume>false</visu-volume>
+    <geom-scene>env5m3</geom-scene>
   </geom-env>
 </case>
