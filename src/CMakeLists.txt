@@ -2,7 +2,11 @@ set(EXAMPLE_NAME Pattern4GPU)
 project(Pattern4GPU LANGUAGES C CXX)
 include(../samples.common.cmake)
 
-add_executable(Pattern4GPU Pattern4GPUModule.cc Pattern4GPUCartesian.cc main Pattern4GPU_axl.h)
+add_executable(Pattern4GPU Pattern4GPUModule.cc
+                           Pattern4GPUBenchCartesian.cc 
+                           Pattern4GPUCartesian.cc 
+                           main 
+                           Pattern4GPU_axl.h)
 
 # Module GeomEnv
 add_library(geomenv geomenv/GeomEnvModule.cc)
