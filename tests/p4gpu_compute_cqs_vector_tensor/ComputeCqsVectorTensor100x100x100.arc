@@ -32,8 +32,9 @@
     </meshgenerator>
   </mesh>
 
-  <!-- Configuration du module Pattern4GPU -->
+  <!-- Configuration du module GeomEnv -->
   <geom-env>
     <visu-volume>false</visu-volume>
+    <geom-scene>env5m3</geom-scene>
   </geom-env>
 </case>

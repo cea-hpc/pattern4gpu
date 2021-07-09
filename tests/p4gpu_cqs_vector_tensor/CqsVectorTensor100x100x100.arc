@@ -35,5 +35,6 @@
   <!-- Configuration du module Pattern4GPU -->
   <geom-env>
     <visu-volume>false</visu-volume>
+    <geom-scene>env5m3</geom-scene>
   </geom-env>
 </case>
