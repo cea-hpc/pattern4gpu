@@ -71,6 +71,15 @@ class CartNodeDirectionMng {
     }
   }
 
+  //! Création d'une instance de Node à partir de son local_id
+  Node toNode(LocalIdType node_id) const {
+    if (ItemId::null(node_id)) {
+      return Node();
+    } else {
+      return Node(m_internals, node_id);
+    }
+  }
+
   //! Retourne le groupe de toutes les noeuds cartésiens
   CartNodeGroup allNodes() const {
     return CartNodeGroup(m_internals, m_dir, m_cart_grid, m_cart_numb_node, {0, 0, 0}, m_nnodes_dir);

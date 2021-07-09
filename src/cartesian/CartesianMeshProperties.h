@@ -37,9 +37,9 @@ class CartesianMeshProperties {
       // sont dans [own_offset_dir[d], own_offset_dir[d]+own_ncells_dir[d][
       LocalIdType own_ncells_dir = mesh_properties->getInt32WithDefault(String("OwnNbCell")+str_dir[d],-1);
       UniqueIdType own_offset_dir = mesh_properties->getInt64WithDefault(String("OwnCellOffset")+str_dir[d],-1);
-      UniqueIdType glob_ncells_dir = mesh_properties->getInt64WithDefault(String("GlobalNbCell")+str_dir[d],-1);
+      m_glob_ncells_dir[d] = mesh_properties->getInt64WithDefault(String("GlobalNbCell")+str_dir[d],-1);
 
-      _computeDir(own_ncells_dir, own_offset_dir, glob_ncells_dir, nghost_layer, m_ncells_dir[d], m_is_pure_cartesian_mesh);
+      _computeDir(own_ncells_dir, own_offset_dir, m_glob_ncells_dir[d], nghost_layer, m_ncells_dir[d], m_is_pure_cartesian_mesh);
     }
   }
 
@@ -62,6 +62,12 @@ class CartesianMeshProperties {
   // A appeler que si isPureCartesianMesh() est vrai
   const LocalIdType3& nbCell3() {
     return m_ncells_dir;
+  }
+
+  //! Retourne le nombre de mailles pour toutes les directions du domaine global, et 1 pour les directions >= dimension().
+  // A appeler que si isPureCartesianMesh() est vrai
+  const UniqueIdType3& globalNbCell3() {
+    return m_glob_ncells_dir;
   }
 
  private:
@@ -87,6 +93,7 @@ class CartesianMeshProperties {
   Integer m_dimension = 0; //! Dimension du maillage cartésien
   bool m_is_pure_cartesian_mesh = false; //! vrai s'il s'agit réellement d'un maillage cartésien, faux sinon
   LocalIdType3 m_ncells_dir = {1, 1, 1}; //! Nb de mailles cartésiennes dans chaque direction, mailles fantomes comprises
+  UniqueIdType3 m_glob_ncells_dir = {1, 1, 1}; //! Nb de mailles cartésiennes dans chaque direction pour le domaine global
 };
   
 }
