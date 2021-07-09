@@ -6,6 +6,7 @@
 #include <arcane/materials/CellToAllEnvCellConverter.h>
 #include <arcane/cea/ICartesianMesh.h>
 #include "cartesian/ICartesianMesh.h"
+#include "cartesian/interface/ICartesianMesh.h"
 
 #include "Pattern4GPU_axl.h"
 
@@ -25,19 +26,27 @@ class Pattern4GPUModule
   
  public:
 
-  //! points d'entrée
+  //! points d'entrée "init"
   void initP4GPU() override; // InitP4GPU
   void initTensor() override; // InitTensor
   void initNodeVector() override; // InitNodeVector
   void initNodeCoordBis() override; // InitNodeCoordBis
   void initCqs() override; // InitCqs
   void initCellArr12() override; // InitCellArr12
-  void initCartesian() override; // InitCartesian
 
+  void initBenchCartesian() override; // InitBenchCartesian
+
+  void initCartMesh() override; // InitCartMesh
+  void initForVol() override; // InitForVol
+
+  //! points d'entrée "compute-loop"
   void updateTensor() override; // UpdateTensor
   void updateVectorFromTensor() override; // UpdateVectorFromTensor
   void computeCqsAndVector() override; // ComputeCqsAndVector
-  void benchCartesian() override; // benchCartesian
+
+  void benchCartesian() override; // BenchCartesian
+
+  void computeVol() override; // ComputeVol
 
  private:
 
@@ -45,6 +54,9 @@ class Pattern4GPUModule
 
   template<Integer DIM>
   void _benchCartesianDim();
+
+  template<typename CartesianMeshT, template<class> class ViewInDirReal>
+  void _computeVolDir(const Integer dir, const Real dt);
 
  private:
 
@@ -54,6 +66,9 @@ class Pattern4GPUModule
   MaterialVariableCellReal m_compxx;
   MaterialVariableCellReal m_compxy;
   MaterialVariableCellReal m_compyy;
+
+  // CartesianInterface:: = Arcane:: ou Cartesian::
+  CartesianInterface::ICartesianMesh* m_cartesian_mesh = nullptr;
 
   // Pour comparer 2 implémentations cartésiennes
   Cartesian::ICartesianMesh* m_cart_cartesian_mesh = nullptr;

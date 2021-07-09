@@ -66,6 +66,75 @@
   <variable field-name="face_arr1" name="FaceArr1" data-type="real" item-kind="face"
 	    dim="0" dump="false" need-sync="false" material="false" />
 
+
+  <!-- DIR-TRANS-AREA-LEFT -->
+  <variable field-name="dir_trans_area_left" name="DirTransAreaLeft" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- DIR-TRANS-AREA-RIGHT -->
+  <variable field-name="dir_trans_area_right" name="DirTransAreaRight" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- FACE-VELOCITY-LEFT -->
+  <variable field-name="face_velocity_left" name="FaceVelocityLeft" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- FACE-VELOCITY-RIGHT -->
+  <variable field-name="face_velocity_right" name="FaceVelocityRight" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- DIR-DEF-COORD-LEFT -->
+  <variable field-name="dir_def_coord_left" name="DirDefCoordLeft" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- DIR-CAR-COORD-LEFT -->
+  <variable field-name="dir_car_coord_left" name="DirCarCoordLeft" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- DIR-DEF-COORD-RIGHT -->
+  <variable field-name="dir_def_coord_right" name="DirDefCoordRight" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- DIR-CAR-COORD-RIGHT -->
+  <variable field-name="dir_car_coord_right" name="DirCarCoordRight" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- DIR-VOL1-LEFT -->
+  <variable field-name="dir_vol1_left" name="DirVol1Left" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- DIR-VOL2-LEFT -->
+  <variable field-name="dir_vol2_left" name="DirVol2Left" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- DIR-VOL1-RIGHT -->
+  <variable field-name="dir_vol1_right" name="DirVol1Right" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- DIR-VOL2-RIGHT -->
+  <variable field-name="dir_vol2_right" name="DirVol2Right" data-type="real" item-kind="cell" 
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- CART-SPACE-STEP -->
+  <variable
+      field-name="cart_space_step" name="CartSpaceStep" data-type="real3" item-kind="cell"
+      dim="0" dump="false" need-sync="false" material="false" />
+
+  <!-- NODE-VELOCITY -->
+  <variable
+      field-name="node_velocity" name="NodeVelocity" data-type="real3" item-kind="node"
+      dim="0" dump="false" need-sync="false" />
+
+  <!-- DEF-NODE-COORD -->
+  <variable
+      field-name="def_node_coord" name="DefNodeCoord" data-type="real3" item-kind="node"
+      dim="0" dump="false" need-sync="false" />
+
+  <!-- CAR-NODE-COORD -->
+  <variable
+      field-name="car_node_coord" name="CarNodeCoord" data-type="real3" item-kind="node"
+      dim="0" dump="false" need-sync="false" />
+
 </variables>
 
 <entry-points>
@@ -75,12 +144,15 @@
   <entry-point method-name="initCqs" name="InitCqs" where="start-init" property="none" />
   <entry-point method-name="initNodeCoordBis" name="InitNodeCoordBis" where="start-init" property="none" />
   <entry-point method-name="initCellArr12" name="InitCellArr12" where="start-init" property="none" />
-  <entry-point method-name="initCartesian" name="InitCartesian" where="start-init" property="none" />
+  <entry-point method-name="initBenchCartesian" name="InitBenchCartesian" where="start-init" property="none" />
+  <entry-point method-name="initCartMesh" name="InitCartMesh" where="start-init" property="none" />
+  <entry-point method-name="initForVol" name="InitForVol" where="start-init" property="none" />
 
   <entry-point method-name="updateTensor" name="UpdateTensor" where="compute-loop" property="none" />
   <entry-point method-name="updateVectorFromTensor" name="UpdateVectorFromTensor" where="compute-loop" property="none" />
   <entry-point method-name="computeCqsAndVector" name="ComputeCqsAndVector" where="compute-loop" property="none" />
   <entry-point method-name="benchCartesian" name="BenchCartesian" where="compute-loop" property="none" />
+  <entry-point method-name="computeVol" name="ComputeVol" where="compute-loop" property="none" />
 </entry-points>
 
 <options>
