@@ -5,7 +5,7 @@ using namespace Arcane;
 int
 main(int argc,char* argv[])
 {
-#define DEPRECATED
+//#define DEPRECATED
 #ifdef DEPRECATED
   auto& app_info = ArcaneLauncher::applicationInfo();
   app_info.setCommandLineArguments(CommandLineArguments(&argc,&argv));
