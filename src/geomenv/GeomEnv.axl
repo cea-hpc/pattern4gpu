@@ -36,6 +36,28 @@
       need-sync="false" 
       material="false" />
 
+  <!-- FRAC-VOL -->
+  <variable
+      field-name="frac_vol"
+      name="FracVol"
+      data-type="real"
+      item-kind="cell"
+      dim="0"
+      dump="false"
+      need-sync="false" 
+      material="true" />
+
+  <!-- FRAC-VOL-VISU -->
+  <variable
+      field-name="frac_vol_visu"
+      name="FracVolVisu"
+      data-type="real"
+      item-kind="cell"
+      dim="1"
+      dump="false"
+      need-sync="false" 
+      material="false" />
+
 </variables>
 
 <entry-points>
@@ -44,14 +66,21 @@
 
 <options>
   <!-- - - - - - visu-volume - - - - -->
-  <simple name="visu-volume" type="bool" default="false"><description>Alloue et calcule <em>VolumeVisu</em> pour la visualisation multi-env du volume.</description></simple>
+  <simple name="visu-volume" type="bool" default="false"><description>Alloue et calcule <em>VolumeVisu</em> pour la visualisation multi-env du volume (variable Volume).</description></simple>
+
+  <!-- - - - - - visu-frac-vol - - - - -->
+  <simple name="visu-frac-vol" type="bool" default="false"><description>Alloue et calcule <em>FracVolVisu</em> pour la visualisation multi-env de la fraction volumique (variable FracVolVisu).</description></simple>
 
   <!-- - - - - geom-scene - - - - -->
   <enumeration name="geom-scene" type="eGeomScene" default="env5m3">
     <description>Choix de la scène géométrique</description>
     <enumvalue name="env5m3" genvalue="GS_env5m3" />
     <enumvalue name="4layers" genvalue="GS_4layers" />
+    <enumvalue name="nestNdiams" genvalue="GS_nestNdiams" />
   </enumeration>
+
+  <!-- - - - - - nested-ndiams - - - - -->
+  <simple name="nested-ndiams" type="integer" default="5"><description>Nombre de diamants imbriqués quand <em>nestNdiams</em> est choisi.</description></simple>
 
   <!-- - - - - - geometry - - - - -->
   <service-instance name="geometry" type="Arcane::Numerics::IGeometryMng" default="Euclidian3Geometry">

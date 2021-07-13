@@ -39,6 +39,8 @@ class Pattern4GPUModule
   void initCartMesh() override; // InitCartMesh
   void initForVol() override; // InitForVol
 
+  void initEnvOrder() override; // InitEnvOrder
+
   //! points d'entrée "compute-loop"
   void updateTensor() override; // UpdateTensor
   void updateVectorFromTensor() override; // UpdateVectorFromTensor
@@ -47,6 +49,8 @@ class Pattern4GPUModule
   void benchCartesian() override; // BenchCartesian
 
   void computeVol() override; // ComputeVol
+
+  void detEnvOrder() override; // DetEnvOrder
 
  private:
 
@@ -57,6 +61,9 @@ class Pattern4GPUModule
 
   template<typename CartesianMeshT, template<class> class ViewInDirReal>
   void _computeVolDir(const Integer dir, const Real dt);
+
+  template<typename CartesianMeshT>
+  void _detEnvOrder();
 
  private:
 

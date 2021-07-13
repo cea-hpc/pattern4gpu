@@ -113,6 +113,36 @@ class ShapeSphere : public IShape {
   Real m_rad2; //! le rayon au carré
 };
 
+/*!
+ * rmin <= |x-x0|+|y-y0|+|z-z0| < rmax
+ */
+class ShapeDiamond3D : public IShape {
+ protected:
+  inline bool _isInsidePt(Real x, Real y, Real z) {
+    const Real d = math::abs(x-m_ctr.x) + math::abs(y-m_ctr.y) + math::abs(z-m_ctr.z);
+    return (m_rmin<=d && d<m_rmax);
+  }
+ public:
+  ShapeDiamond3D(String name, IMesh* mesh, Real3 pctr, Real rmin, Real rmax) :
+  IShape (name, mesh) {
+    m_ctr=pctr;
+    m_rmin=rmin;
+    m_rmax=rmax;
+  }
+  virtual ~ShapeDiamond3D() {}
+
+  void isInside(VariableNodeBool &node_inside, NodeGroup node_group) override {
+    ENUMERATE_NODE(inode, node_group) {
+      const Real3& pt = m_node_coord[inode];
+      node_inside[inode] = _isInsidePt(pt.x, pt.y, pt.z);
+    }
+  }
+ protected:
+  Real3 m_ctr; //! le centre du "diamant creux"
+  Real m_rmin; //! le "rayon" intérieur inclus du "diamant"
+  Real m_rmax; //! le "rayon" extérieur exclu du "diamant"
+};
+
 class ShapeInter : public IShape {
  public:
   ShapeInter(String name, IMesh* mesh, IShape* sh1, IShape* sh2) :
@@ -252,6 +282,45 @@ class GeometricScene4Layers : public IGeometricScene {
 };
 
 
+/*!
+ * N+1 environnements en tout 
+ *
+ * N "diamants creux" emboîtés + le reste du domaine
+ */
+class GeometricSceneNestNDiams : public IGeometricScene {
+ public:
+  GeometricSceneNestNDiams(IMesh* mesh, Integer ndiam) : IGeometricScene(mesh), m_ndiam(ndiam) {}
+  virtual ~GeometricSceneNestNDiams() {}
+
+  void defineScene(UniqueArray<IShape*>& l_shape) override {
+    UniqueArray<Real> l_pts; // points qui délimitent les différentes couches
+    Real rmin=0., rmax=1.;
+    Real delta=(rmax-rmin)/m_ndiam;
+    l_pts.add(rmin);
+    for(Integer i=1; i<m_ndiam ; ++i) {
+      l_pts.add(rmin+i*delta);
+    }
+    l_pts.add(rmax);
+    for(Integer ish(0) ; ish<m_ndiam ; ++ish) {
+      StringBuilder str_build("MIL");
+      str_build+=ish;
+      l_shape.add(new ShapeDiamond3D(str_build.toString(), m_mesh, Real3(0.5,0.5,0.5), l_pts[ish], l_pts[ish+1]));
+    }
+    {
+      StringBuilder str_build("MIL");
+      str_build+=m_ndiam;
+      l_shape.add(
+          new ShapeNot(str_build.toString(), m_mesh,
+            new ShapeDiamond3D(str_build.toString(), m_mesh, Real3(0.5,0.5,0.5), rmin, rmax)
+            )
+          );
+    }
+  }
+ private:
+  Integer m_ndiam; //! Nombre de diamants
+};
+
+
 /*---------------------------------------------------------------------------*/
 /*! Réductions min,max,sum sur un ensemble de valeurs et facilité d'affichage */
 /*---------------------------------------------------------------------------*/
@@ -323,6 +392,9 @@ initGeomEnv()
   switch (options()->getGeomScene()) {
     case GS_env5m3: geom_scene=new GeometricSceneEnv5M3(mesh()); break;
     case GS_4layers: geom_scene=new GeometricScene4Layers(mesh()); break;
+    case GS_nestNdiams: 
+                     geom_scene=new GeometricSceneNestNDiams(mesh(), options()->nestedNdiams()); 
+                     break;
   };
   UniqueArray<IShape*> l_shape;
   geom_scene->defineScene(l_shape);
@@ -440,16 +512,22 @@ initGeomEnv()
   ENUMERATE_CELL(icell, allCells()) {
     Cell cell=(*icell);
     AllEnvCell all_env_cell = allenvcell_converter[cell];
-    Real vol_sum = 0.;
+    Real vol_ref=cell_volume[icell];
+    Real vol_sum=0., frac_sum=0.;
     ENUMERATE_CELL_ENVCELL (envcell_i, all_env_cell) {
       vol_sum += m_volume[envcell_i];
+      m_frac_vol[envcell_i] = m_volume[envcell_i]/vol_ref;
+      frac_sum += m_frac_vol[envcell_i];
     }
-    Real vol_ref=cell_volume[icell];
     // On vérifie à un epsilon pres que la somme des volumes des environnements
     //  ne dépasse pas le volume de maille, d'où l'absence de math:abs sur le calcul de l'écart
     Real ecart_sup=(vol_sum-vol_ref)/vol_ref;
     ARCANE_ASSERT(ecart_sup<1.e-10, ("La somme des volumes des env dépasse le volume de maille"));
     m_volume[icell]=vol_sum;
+    // Pour la fraction de présence, elle ne doit pas dépasser 1.
+    Real fecart_sup=(frac_sum-1.);
+    ARCANE_ASSERT(fecart_sup<1.e-10, ("La somme des fractions volumuiques des env dépasse 1."));
+    m_frac_vol[icell]=frac_sum;
   }
 
   // Sortie du volume pour la visu
@@ -463,6 +541,20 @@ initGeomEnv()
       ENUMERATE_ENVCELL (envcell_i, env) {
         Cell cell = (*envcell_i).globalCell();
         m_volume_visu[cell][env_id] = m_volume[envcell_i];
+      }
+    }
+  }
+  // Sortie de la fraction volumique pour la visu
+  if (options()->visuFracVol()) {
+    m_frac_vol_visu.resize(max_nb_env);
+    m_frac_vol_visu.fill(0.);
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+      Integer env_id = env->id();
+
+      ENUMERATE_ENVCELL (envcell_i, env) {
+        Cell cell = (*envcell_i).globalCell();
+        m_frac_vol_visu[cell][env_id] = m_frac_vol[envcell_i];
       }
     }
   }

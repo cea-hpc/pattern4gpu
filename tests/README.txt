@@ -3,5 +3,6 @@ p4gpu_cart_vol                   :  calculs par direction de volumes par face en
 p4gpu_compute_cqs                :  calcul de la cqs et du vecteur à partir de la cqs (1 seul pt d'entrée)
 p4gpu_compute_cqs_vector_tensor  :  calcul de la cqs et vecteur + utilisation du tenseur pour maj vecteur (2 pts d'entrée)
 p4gpu_cqs_vector_tensor          :  calcul cqs et vecteur + maj vecteur par tenseur + maj tenseur en multi-env (3 pts d'entrée)
+p4gpu_env_order                  :  détermination de l'ordre des environnements sur les mailles mixtes (1 seul pt d'entrée)
 p4gpu_update_tensor              :  maj tenseur en multi-env (1 seul pt d'entrée)
 p4gpu_update_vector_from_tensor  :  utilisation du tenseur pour maj vecteur (1 seul pt d'entrée)
