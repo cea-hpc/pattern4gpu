@@ -9,7 +9,8 @@
  */
 enum eGeomScene {
   GS_env5m3 = 0, //! 5 environnements dont des mailles avec 3 environnements, + 20% de vide
-  GS_4layers //! 4 environnements en couche en diagonale + 20% de vide
+  GS_4layers, //! 4 environnements en couche en diagonale + 20% de vide
+  GS_nestNdiams //! N+1 environnements, N "diamants" enclavés et le reste du domaine
 };
 
 #include "geomenv/GeomEnv_axl.h"

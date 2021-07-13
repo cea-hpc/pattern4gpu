@@ -157,18 +157,18 @@ _computeVolDir(const Integer dir, const Real dt) {
   ViewInDirReal<Node> in_car_node_coord_dir(m_car_node_coord, dir);
 
   // Vues "a la C" de tableaux bien ordonnes
-  auto v_dir_trans_area_left      = viewOut(m_dir_trans_area_left);
-  auto v_dir_trans_area_right     = viewOut(m_dir_trans_area_right);
-  auto v_face_velocity_left       = viewOut(m_face_velocity_left);
-  auto v_face_velocity_right      = viewOut(m_face_velocity_right);
-  auto v_dir_def_coord_left       = viewOut(m_dir_def_coord_left);
-  auto v_dir_car_coord_left       = viewOut(m_dir_car_coord_left);
-  auto v_dir_def_coord_right      = viewOut(m_dir_def_coord_right);
-  auto v_dir_car_coord_right      = viewOut(m_dir_car_coord_right);
-  auto out_dir_vol1_left          = viewOut(m_dir_vol1_left);
-  auto out_dir_vol1_right         = viewOut(m_dir_vol1_right);
-  auto out_dir_vol2_left          = viewOut(m_dir_vol2_left);
-  auto out_dir_vol2_right         = viewOut(m_dir_vol2_right);
+  auto v_dir_trans_area_left      = viewInOut(m_dir_trans_area_left);
+  auto v_dir_trans_area_right     = viewInOut(m_dir_trans_area_right);
+  auto v_face_velocity_left       = viewInOut(m_face_velocity_left);
+  auto v_face_velocity_right      = viewInOut(m_face_velocity_right);
+  auto v_dir_def_coord_left       = viewInOut(m_dir_def_coord_left);
+  auto v_dir_car_coord_left       = viewInOut(m_dir_car_coord_left);
+  auto v_dir_def_coord_right      = viewInOut(m_dir_def_coord_right);
+  auto v_dir_car_coord_right      = viewInOut(m_dir_car_coord_right);
+  auto v_dir_vol1_left            = viewInOut(m_dir_vol1_left);
+  auto v_dir_vol1_right           = viewInOut(m_dir_vol1_right);
+  auto v_dir_vol2_left            = viewInOut(m_dir_vol2_left);
+  auto v_dir_vol2_right           = viewInOut(m_dir_vol2_right);
 
   const Integer nb_node_on_face = cart_conn_cfn.nbNode();
   const Real nb_node_inverse = 1.0 / nb_node_on_face;
@@ -235,8 +235,8 @@ _computeVolDir(const Integer dir, const Real dt) {
         v_face_velocity_left,
         v_dir_def_coord_left,
         v_dir_car_coord_left,
-        out_dir_vol1_left,
-        out_dir_vol2_left
+        v_dir_vol1_left,
+        v_dir_vol2_left
         );
 
   }  // Fin ENUMERATE_CELL
@@ -258,8 +258,8 @@ _computeVolDir(const Integer dir, const Real dt) {
       v_face_velocity_right[cell_id] = v_face_velocity_left[next_cell_id];
       v_dir_def_coord_right[cell_id] = v_dir_def_coord_left[next_cell_id];
       v_dir_car_coord_right[cell_id] = v_dir_car_coord_left[next_cell_id];
-      out_dir_vol1_right[cell_id] = out_dir_vol1_left[next_cell_id];
-      out_dir_vol2_right[cell_id] = out_dir_vol2_left[next_cell_id];
+      v_dir_vol1_right[cell_id] = v_dir_vol1_left[next_cell_id];
+      v_dir_vol2_right[cell_id] = v_dir_vol2_left[next_cell_id];
 
     } else {
       // Je suis sur la derniere rangee, je calcule
@@ -269,8 +269,8 @@ _computeVolDir(const Integer dir, const Real dt) {
           v_face_velocity_right,
           v_dir_def_coord_right,
           v_dir_car_coord_right,
-          out_dir_vol1_right,
-          out_dir_vol2_right
+          v_dir_vol1_right,
+          v_dir_vol2_right
           );
     }
 

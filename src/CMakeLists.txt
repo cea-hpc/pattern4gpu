@@ -5,6 +5,7 @@ include(../samples.common.cmake)
 add_executable(Pattern4GPU Pattern4GPUModule.cc
                            Pattern4GPUBenchCartesian.cc 
                            Pattern4GPUCartesian.cc 
+                           Pattern4GPUEnvOrder.cc 
                            main 
                            Pattern4GPU_axl.h)
 

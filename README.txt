@@ -25,10 +25,3 @@ cd tests/
 cd p4gpu_compute_cqs_vector_tensor/
 ccc_mprun -n1 ../../build/src/Pattern4GPU -arcane_opt max_iteration 100 ComputeCqsVectorTensor10x10x10.arc
 
-Organistaion des sources :
-src/Pattern4GPUModule.cc         : les points d'entrée sur les tenseurs multi-env, vecteur, cqs ...
-src/geomenv                      : le module d'initialisation des géométries multi-env
-src/Pattern4GPUCartesian.cc      : les points d'entrée pour calculs de volumes par face en cartésien
-src/Pattern4GPUBenchCartesian.cc : plein de boucles élémentaires sur grille cartésienne
-src/cartesian/                   : les classes "à la" Arcane pour proposer des services cartésiens
-
