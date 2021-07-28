@@ -382,6 +382,7 @@ class MinMaxSumRed {
 void GeomEnvModule::
 initGeomEnv()
 {
+  PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans InitGeomEnv";
   // On va d'abord créer les environnements en les lisant dans le JDD
 
@@ -638,6 +639,7 @@ initGeomEnv()
     << ", " << str_ratio(nactiv.sum_values[1], nb_tot_cells_inner);
   info() << "Nb mailles actives intérieures+ftm : " << nactiv.strSumMinMaxAvg(0)
     << ", " << str_ratio(nactiv.sum_values[0], nb_tot_cells);
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/

@@ -12,6 +12,8 @@
 #include <arcane/utils/ArcaneGlobal.h>
 #include <arcane/utils/StringBuilder.h>
 
+#include <arcane/AcceleratorRuntimeInitialisationInfo.h>
+
 using namespace Arcane;
 using namespace Arcane::Materials;
 
@@ -39,13 +41,30 @@ Pattern4GPUModule::
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
+accBuild()
+{
+  PROF_ACC_BEGIN(__FUNCTION__);
+
+  info() << "Using Pattern4GPU with accelerator";
+  IApplication* app = subDomain()->application();
+  initializeRunner(m_runner,traceMng(),app->acceleratorRuntimeInitialisationInfo());
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
 initP4GPU()
 {
+  PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans initP4GPU";
 
   // On peut créer maintenant l'objet car la composition des environnements
   // est connue car le le pt d'entree GeomEnv.InitGeomEnv a été appelé
   m_allenvcell_converter=new CellToAllEnvCellConverter(m_mesh_material_mng);
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -54,6 +73,7 @@ initP4GPU()
 void Pattern4GPUModule::
 initTensor()
 {
+  PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans initTensor";
 
   // Initialise m_tensor de telle sorte qu'il soit symétrique
@@ -90,6 +110,7 @@ initTensor()
       tens3x3 /= m_volume[cell_i];
     }
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -98,6 +119,7 @@ initTensor()
 void Pattern4GPUModule::
 initNodeVector()
 {
+  PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans initNodeVector";
 
   // chaque noeud aura un vecteur de norme 1 mais dans des directions
@@ -110,6 +132,7 @@ initNodeVector()
     Real phi=(c.x+1)*(c.y+1)*(c.z+1);
     m_node_vector[node_i]=Real3(sin_th*cos(phi), sin_th*sin(phi),cos_th);
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -118,6 +141,7 @@ initNodeVector()
 void Pattern4GPUModule::
 initNodeCoordBis()
 {
+  PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans initNodeCoordBis";
 
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
@@ -125,6 +149,7 @@ initNodeCoordBis()
   ENUMERATE_NODE(node_i, allNodes()) {
     m_node_coord_bis[node_i]=node_coord[node_i];
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -133,6 +158,7 @@ initNodeCoordBis()
 void Pattern4GPUModule::
 initCqs()
 {
+  PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans initCqs";
 
   // Valable en 3D, 8 noeuds par maille
@@ -143,6 +169,7 @@ initCqs()
       m_cell_cqs[cell_i][inode] = Real3::zero();
     }
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -151,6 +178,7 @@ initCqs()
 void Pattern4GPUModule::
 initCellArr12()
 {
+  PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans initCellArr12";
 
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
@@ -160,6 +188,7 @@ initCellArr12()
     m_cell_arr1[cell_i]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
     m_cell_arr2[cell_i]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -168,6 +197,7 @@ initCellArr12()
 void Pattern4GPUModule::
 _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal& f)
 {
+  PROF_ACC_BEGIN(__FUNCTION__);
   CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
   ENUMERATE_CELL (cell_i, allCells()) {
     AllEnvCell allenvcell = allenvcell_converter[*cell_i];
@@ -186,6 +216,7 @@ _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal
       f[envcell_i] /= volume[envcell_i];
     }
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -194,6 +225,7 @@ _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal
 void Pattern4GPUModule::
 updateTensor()
 {
+  PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans updateTensor";
 
   // Remplir les variables composantes
@@ -250,6 +282,7 @@ updateTensor()
     }
   }  // end if (dim == 3)
   
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -258,6 +291,7 @@ updateTensor()
 void Pattern4GPUModule::
 updateVectorFromTensor() {
 
+  PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans updateVectorFromTensor";
 
   Integer nb_blocks = m_mesh_material_mng->blocks().size();
@@ -277,6 +311,7 @@ updateVectorFromTensor() {
       }
     }
   }  // end iblock loop
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -285,6 +320,7 @@ updateVectorFromTensor() {
 void Pattern4GPUModule::
 computeCqsAndVector() {
 
+  PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans computeCqsAndVector";
 
   constexpr Real k025 = 0.25;
@@ -318,6 +354,7 @@ computeCqsAndVector() {
         m_cell_cqs[cell_i][node_i.index()];
     }
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/

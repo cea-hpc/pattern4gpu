@@ -8,6 +8,11 @@
 #include "cartesian/ICartesianMesh.h"
 #include "cartesian/interface/ICartesianMesh.h"
 
+// Ajout pour accélérateur
+#include "arcane/UnstructuredMeshConnectivity.h"
+#include "AcceleratorUtils.h"
+//
+
 #include "Pattern4GPU_axl.h"
 
 using namespace Arcane;
@@ -25,6 +30,9 @@ class Pattern4GPUModule
   ~Pattern4GPUModule();
   
  public:
+
+  //! points d'entrée "build"
+  void accBuild() override; // AccBuild
 
   //! points d'entrée "init"
   void initP4GPU() override; // InitP4GPU
@@ -80,6 +88,11 @@ class Pattern4GPUModule
   // Pour comparer 2 implémentations cartésiennes
   Cartesian::ICartesianMesh* m_cart_cartesian_mesh = nullptr;
   Arcane::ICartesianMesh* m_arc_cartesian_mesh = nullptr;
+
+  // Pour l'utilisation des accélérateurs
+  ax::Runner m_runner;
+
+  UnstructuredMeshConnectivityView m_connectivity_view;
 };
 
 #endif

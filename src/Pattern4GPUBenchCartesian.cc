@@ -26,6 +26,7 @@
 /*---------------------------------------------------------------------------*/
 void Pattern4GPUModule::
 initBenchCartesian() {
+  PROF_ACC_BEGIN(__FUNCTION__);
 
   // Construction des maillages Cartésiens Cartesian:: et Arcane::
   Cartesian::CartesianMeshProperties cart_mesh_prop(mesh());
@@ -57,6 +58,7 @@ initBenchCartesian() {
   ENUMERATE_NODE (node_i, allNodes()) {
     m_node_arr1[node_i] = (dis(gen)>0 ? +1 : -1);
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -773,11 +775,13 @@ benchCartesian() {
   info() << "Comparaison des implementations Cartesian:: et";
   info() << "                                   Arcane:: ";
   info() << "------------------------------------------------";
+  PROF_ACC_BEGIN(__FUNCTION__);
   if (mesh()->dimension() == 2) {
     _benchCartesianDim<2>();
   } else if (mesh()->dimension() == 3) {
     _benchCartesianDim<3>();
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/

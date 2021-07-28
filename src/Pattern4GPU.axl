@@ -153,6 +153,8 @@
 </variables>
 
 <entry-points>
+  <entry-point method-name="accBuild" name="AccBuild" where="build" property="none" />
+
   <entry-point method-name="initP4GPU" name="InitP4GPU" where="start-init" property="none" />
   <entry-point method-name="initTensor" name="InitTensor" where="start-init" property="none" />
   <entry-point method-name="initNodeVector" name="InitNodeVector" where="start-init" property="none" />
