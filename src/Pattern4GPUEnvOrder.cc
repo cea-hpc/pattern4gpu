@@ -289,6 +289,7 @@ _detEnvOrder()
 
 void Pattern4GPUModule::
 detEnvOrder() {
+  PROF_ACC_BEGIN(__FUNCTION__);
   ARCANE_ASSERT(subDomain()->defaultMesh()->dimension()==3, ("Seul le 3D est supporté"));
 
   Cartesian::CartesianMeshProperties cart_mesh_prop(mesh());
@@ -300,6 +301,7 @@ detEnvOrder() {
   } else {
     _detEnvOrder<UnstructCartesianMeshT>();
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/

@@ -41,6 +41,7 @@ class CartNeighCellsTraits {
 // Spécialisation 2D
 template<>
 class CartNeighCellsTraits<2> {
+ public:
   //! Positions relatives des mailles adjacentes par rapport à une maille centrale
   enum eCellPos2D {
     SW = 0,

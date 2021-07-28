@@ -24,6 +24,7 @@
 /*---------------------------------------------------------------------------*/
 void Pattern4GPUModule::
 initCartMesh() {
+  PROF_ACC_BEGIN(__FUNCTION__);
   Cartesian::CartesianMeshProperties cart_mesh_prop(mesh());
   if (cart_mesh_prop.isPureCartesianMesh()) {
     info() << "Maillage cartésien détecté, tri cartésien des faces";
@@ -36,6 +37,7 @@ initCartMesh() {
   } else {
     info() << "Maillage non cartésien";
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -45,6 +47,7 @@ initCartMesh() {
 /*---------------------------------------------------------------------------*/
 void Pattern4GPUModule::
 initForVol() {
+  PROF_ACC_BEGIN(__FUNCTION__);
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
 
   Cartesian::CartesianMeshProperties cart_mesh_prop(mesh());
@@ -122,6 +125,7 @@ initForVol() {
   m_dir_car_coord_right.fill(-2.);
   m_dir_vol1_right.fill(-2.);
   m_dir_vol2_right.fill(-2.);
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -284,6 +288,7 @@ _computeVolDir(const Integer dir, const Real dt) {
 /*---------------------------------------------------------------------------*/
 void Pattern4GPUModule::
 computeVol() {
+  PROF_ACC_BEGIN(__FUNCTION__);
   Real dt=globalDeltaT();
 
 //#define SOA
@@ -305,6 +310,7 @@ computeVol() {
       _computeVolDir<UnstructCartesianMeshT, VIEW_IN_DIR_REAL>(dir, dt);
     }
   }
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/

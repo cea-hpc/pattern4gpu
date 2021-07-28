@@ -26,6 +26,36 @@ target_link_libraries(cartesian PUBLIC arcane_core)
 
 target_link_libraries(Pattern4GPU PRIVATE geomenv cartesian)
 
+# Pour la gestion des accélérateurs et des sources à compiler avec le
+# compilateur pour accélérateur
+if(WANT_CUDA)
+  enable_language(CUDA)
+  find_package(CUDAToolkit REQUIRED)
+  set_source_files_properties(Pattern4GPUModule.cc 
+      Pattern4GPUBenchCartesian.cc 
+      Pattern4GPUCartesian.cc 
+      Pattern4GPUEnvOrder.cc 
+      geomenv/GeomEnvModule.cc
+      cartesian/CartesianConnectivity.cc
+      cartesian/CartesianMesh.cc
+      cartesian/CellDirectionMng.cc
+      cartesian/FaceDirectionMng.cc
+      cartesian/NodeDirectionMng.cc
+      cartesian/CartesianItemSorter.cc
+      PROPERTIES LANGUAGE CUDA)
+  target_link_libraries(Pattern4GPU PUBLIC arcane_accelerator_cuda_runtime)
+  target_link_libraries(geomenv PUBLIC arcane_accelerator_cuda_runtime)
+  target_link_libraries(cartesian PUBLIC arcane_accelerator_cuda_runtime)
+endif()
+
+# Pour la gestion du profiling sur accélérateur
+option(WANT_PROF_ACC "Active le profiling des points d'entrées pour accélérateur" FALSE)
+if (WANT_PROF_ACC)
+  target_compile_definitions(Pattern4GPU PRIVATE PROF_ACC)
+  target_compile_definitions(geomenv PRIVATE PROF_ACC)
+  target_compile_definitions(cartesian PRIVATE PROF_ACC)
+endif()
+
 # Les axl
 arcane_generate_axl(Pattern4GPU)
 arcane_target_add_axl(geomenv geomenv/GeomEnv)

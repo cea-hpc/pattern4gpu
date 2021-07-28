@@ -5,6 +5,10 @@
 #include <arcane/materials/IMeshMaterialMng.h>
 #include <arcane/materials/MeshMaterialVariableRef.h>
 
+// Ajout pour accélérateur
+#include "AcceleratorUtils.h"
+//
+
 /*! \brief Définit les configurations géométriques pré-définies
  */
 enum eGeomScene {
