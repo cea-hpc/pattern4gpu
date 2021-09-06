@@ -57,6 +57,7 @@ class Pattern4GPUModule
   void updateVectorFromTensor() override; // UpdateVectorFromTensor
   void computeCqsAndVector() override; // ComputeCqsAndVector
 
+  void testCartesian() override; // TestCartesian
   void benchCartesian() override; // BenchCartesian
 
   void computeVol() override; // ComputeVol
@@ -73,6 +74,12 @@ class Pattern4GPUModule
   // impossible car toute méthode déportée sur GPU doit être publique !
   void _computeCqsAndVector_Vori();
   void _computeCqsAndVector_Varcgpu_v1();
+
+  void _testCell2Cell();
+  void _testNode2Node();
+  void _testFace2Cell();
+  void _testCell2Face();
+  void _stencilCartesian();
 
  private:
 
