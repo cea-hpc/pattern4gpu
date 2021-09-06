@@ -134,6 +134,7 @@ initForVol() {
 template<typename CartesianMeshT, template<class> class ViewInDirReal >
 void Pattern4GPUModule::
 _computeVolDir(const Integer dir, const Real dt) {
+  PROF_ACC_BEGIN(__FUNCTION__);
 
   Integer dir_perp_0=(dir+1)%3;
   Integer dir_perp_1=(dir+2)%3;
@@ -281,6 +282,7 @@ _computeVolDir(const Integer dir, const Real dt) {
   }  // Fin ENUMERATE_CELL
 
   P4GPU_STOP_TIMER(Loop_Cell1);
+  PROF_ACC_END;
 }
 
 /*---------------------------------------------------------------------------*/
