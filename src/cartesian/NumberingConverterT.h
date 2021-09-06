@@ -90,6 +90,14 @@ class NumberingConverterT<Face, Cell> {
     }
   }
 
+  ARCCORE_HOST_DEVICE NumberingConverterT(const NumberingConverterT<Face,Cell>& rhs)
+  : m_dir (rhs.m_dir),
+  m_first_delta (rhs.m_first_delta),
+  m_delta (rhs.m_delta),
+  m_nitems (rhs.m_nitems)
+  {
+  }
+
   void initDelta() {
     m_delta = m_first_delta;
   }
@@ -100,12 +108,91 @@ class NumberingConverterT<Face, Cell> {
   }
 
   //! Calcul du delta de conversion à partir de (j,k)
-  LocalIdType computeDelta(LocalIdType j, LocalIdType k) const {
+  ARCCORE_HOST_DEVICE LocalIdType computeDelta(LocalIdType j, LocalIdType k) const {
     LocalIdType delta;
     if (m_dir == MD_DirX) {
       delta = m_first_delta - (j+k*m_nitems);  // Nj
     } else if (m_dir == MD_DirY) {
       delta = m_first_delta - k*m_nitems;  // Ni
+    } else {
+      delta = m_first_delta;
+    }
+    return delta;
+  }
+
+  //! Calcul et mise à jour du delta de conversion à partir de (j,k)
+  void updateDelta(LocalIdType j, LocalIdType k) {
+    m_delta=computeDelta(j,k);
+  }
+
+ private:
+  Integer m_dir; //! Direction dans laquelle on veut passer de Face à Cell
+
+  LocalIdType m_first_delta;
+  LocalIdType m_delta = 0;
+  LocalIdType m_nitems = 0; 
+};
+
+/*---------------------------------------------------------------------------*/
+/*!
+ * \brief
+ * Spécialisation conversion Cell => Face
+ * Le but est de calculer delta_d tq : face_id(d, i,j,k) = cell_id(i,j,k) + delta_d
+ * Pour dir = x : delta_x = FF_x - FC + (j+k*Nj)
+ * Pour dir = y : delta_y = FF_y - FC +    k*Ni
+ * Pour dir = z : delta_z = FF_z - FC
+ * avec FC   = first ID Cell
+ *      FF_d = first ID Face dans la direction d
+ *      Ni (resp. Nj) = Nb de mailles selon i (resp. j)
+ */
+/*---------------------------------------------------------------------------*/
+template<>
+class NumberingConverterT<Cell, Face> {
+ public:
+  //! Type de grille cartésienne sur des ids locaux
+  using CartesianGrid = CartesianGridT<LocalIdType>;
+
+ public:
+  NumberingConverterT(Integer dir, const CartesianGrid &cart_grid) 
+  : m_dir(dir) {
+    const auto& cart_numb_cell = cart_grid.cartNumCell();
+    const auto& cart_numb_face = cart_grid.cartNumFace(m_dir);
+
+    m_first_delta = cart_numb_face.firstId() - cart_numb_cell.firstId();  // FF_d - FC
+
+    if (m_dir == MD_DirX) {
+      m_nitems = cart_numb_cell.nbItemDir(MD_DirY); // Nj
+    } else if (m_dir == MD_DirY) {
+      m_nitems = cart_numb_cell.nbItemDir(MD_DirX); // Ni
+    } else {
+      m_nitems = 0; // ne servira pas
+    }
+  }
+
+  ARCCORE_HOST_DEVICE NumberingConverterT(const NumberingConverterT<Cell,Face>& rhs)
+  : m_dir (rhs.m_dir),
+  m_first_delta (rhs.m_first_delta),
+  m_delta (rhs.m_delta),
+  m_nitems (rhs.m_nitems)
+  {
+  }
+
+  void initDelta() {
+    m_delta = m_first_delta;
+  }
+
+  //! Retourne le delta à ajouter au local id de la face courante pour obtenir le local id de la maille next()
+  LocalIdType delta() const {
+    return m_delta;
+  }
+
+  //! Calcul du delta de conversion à partir de (j,k)
+  ARCCORE_HOST_DEVICE LocalIdType computeDelta(LocalIdType j, LocalIdType k) const {
+    LocalIdType delta;
+    if (m_dir == MD_DirX) {
+      delta = m_first_delta + (j+k*m_nitems);  // Nj
+    } else if (m_dir == MD_DirY) {
+      delta = m_first_delta + k*m_nitems;  // Ni
     } else {
       delta = m_first_delta;
     }

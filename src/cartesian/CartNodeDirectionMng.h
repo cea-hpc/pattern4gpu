@@ -4,9 +4,56 @@
 #include "cartesian/CartTypes.h"
 #include "cartesian/CartItemGroup.h"
 #include "cartesian/CartesianGridT.h"
+#include "cartesian/CartStencilDirItemT.h"
+#include "cartesian/CartLocalIdNumberingT.h"
 
 namespace Cartesian {
   
+/*---------------------------------------------------------------------------*/
+/*!
+ * \brief
+ * Permet les accès aux noeuds adjacents au noeud dans une direction
+ */
+/*---------------------------------------------------------------------------*/
+class CartNode2NodeIdStencil : public CartLocalIdNumberingT<NodeLocalId> {
+ public:
+  //! Type d'une numérotation cartésienne sur les identifiants locaux
+  using CartesianNumbering = CartesianNumberingT<LocalIdType>;
+
+  CartNode2NodeIdStencil(Integer dir, const CartesianNumbering& cart_numb)
+  : CartLocalIdNumberingT<NodeLocalId>(cart_numb),
+  m_dir (dir),
+  m_nnodesm1_dir (cart_numb.nbItemDir(dir)-1),
+  m_delta_dir (cart_numb.deltaDir(dir))
+  {
+  }
+
+  //! Constructeur de recopie, potentiellement sur accélérateur
+  ARCCORE_HOST_DEVICE CartNode2NodeIdStencil(const CartNode2NodeIdStencil& rhs)
+  : CartLocalIdNumberingT<NodeLocalId>(rhs),
+  m_dir (rhs.m_dir),
+  m_nnodesm1_dir (rhs.m_nnodesm1_dir),
+  m_delta_dir (rhs.m_delta_dir)
+  {
+  }
+
+  //! Encapsulation d'un noeud central avec NLayer noeuds autour dans la direction
+  /*
+   *              + ----- + ----- + ----- + ----- + ----- + ----- +     ---> dir
+   * NodeLocalId -1      nm2     nm1    [nid]    np1     np2     np3
+   * ilayer      -3      -2      -1       0      +1      +2      +3
+   */
+  template<Integer NLayer>
+  ARCCORE_HOST_DEVICE auto stencilNode(NodeLocalId nid, IdxType idx) const {
+    return CartStencilDirItemT<NodeLocalId,NLayer>(nid, idx[m_dir], m_nnodesm1_dir, m_delta_dir);
+  }
+
+ private:
+  Integer m_dir;  //! Direction privilegiee
+  LocalIdType m_nnodesm1_dir;  //! Nb de noeuds-1 dans la direction m_dir
+  LocalIdType m_delta_dir;  //! -+delta pour passer d'un noeud à son voisin précédent/suivant dans la direction m_dir
+};
+
 /*---------------------------------------------------------------------------*/
 /*!
  * \brief
@@ -78,6 +125,11 @@ class CartNodeDirectionMng {
     } else {
       return Node(m_internals, node_id);
     }
+  }
+
+  //! Pour passer d'un noeuds à ces noeuds voisins dans la direction
+  auto node2NodeIdStencil() const {
+    return CartNode2NodeIdStencil(m_dir, m_cart_numb_node);
   }
 
   //! Retourne le groupe de toutes les noeuds cartésiens

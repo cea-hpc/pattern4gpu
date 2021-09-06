@@ -2,6 +2,7 @@
 #define CARTESIAN_CARTESIAN_NUMBERING_T_H
 
 #include "arcane/utils/ArcaneGlobal.h"
+#include "cartesian/CartTypes.h"
 
 using namespace Arcane;
 namespace Cartesian {
@@ -34,6 +35,16 @@ class CartesianNumberingT
  public:
 
   CartesianNumberingT() {}
+
+  ARCCORE_HOST_DEVICE CartesianNumberingT(const CartesianNumberingT<IdType>& rhs) {
+    m_dimension = rhs.m_dimension;
+    for(Integer d(0) ; d < 3 ; ++d) {
+      m_nitems_dir[d] = rhs.m_nitems_dir[d];
+      m_coef[d] = rhs.m_coef[d];
+    }
+    m_nitems = rhs.m_nitems;
+    m_first_item_id = rhs.m_first_item_id;
+  }
 
   void initNumbering(const IdType3 &nitems_dir, Integer dimension, IdType first_item_id = 0)
   {
@@ -98,16 +109,27 @@ class CartesianNumberingT
   }
 
   //! Passage (i,j,k) => numero
-  IdType id(const IdType3 &item_ijk) const {
+  ARCCORE_HOST_DEVICE inline IdType id(IdType i, IdType j, IdType k) const {
     // m_coef[0] vaut 1
     // TODO : specialisation via template
-    Integer item_id;
+    IdType item_id;
     if (m_dimension < 3) {
-      item_id = m_first_item_id + item_ijk[0]/*m_coef[0]*/ + item_ijk[1]*m_coef[1];
+      item_id = m_first_item_id + i/*m_coef[0]*/ + j*m_coef[1];
     } else {
-      item_id = m_first_item_id + item_ijk[0]/*m_coef[0]*/ + item_ijk[1]*m_coef[1] + item_ijk[2]*m_coef[2];
+      item_id = m_first_item_id + i/*m_coef[0]*/ + j*m_coef[1] + k*m_coef[2];
     }
     return item_id;
+  }
+
+  //! Passage (i,j,k) => numero
+  inline IdType id(const IdType3 &item_ijk) const {
+    return id(item_ijk[0], item_ijk[1], item_ijk[2]);
+  }
+
+  //! Passage (i,j,k) => numero
+  // NOTE : IdxType est un triplet de Int64 alors qu'IdType peut-être un Int32 ou un Int64
+  ARCCORE_HOST_DEVICE inline IdType id(IdxType idx) const {
+    return id(idx[0], idx[1], idx[2]);
   }
 
   //! Passage de numero => (i,j,k)
@@ -120,10 +142,28 @@ class CartesianNumberingT
       item_ijk[0] = item_id % m_coef[1];
     } else {
       item_ijk[2] = item_id / m_coef[2];
-      Integer tmp = item_id % m_coef[2];
+      IdType tmp = item_id % m_coef[2];
       item_ijk[1] = tmp / m_coef[1];
       item_ijk[0] = tmp % m_coef[1];
     }
+  }
+
+  //! Passage de numero => (i,j,k)
+  ARCCORE_HOST_DEVICE IdxType ijk(IdType item_id) const {
+    item_id -= m_first_item_id;
+    Int64 i,j,k;
+    // TODO : specialisation via template
+    if (m_dimension < 3) {
+      k = 0;
+      j = item_id / m_coef[1];
+      i = item_id % m_coef[1];
+    } else {
+      k = item_id / m_coef[2];
+      IdType tmp = item_id % m_coef[2];
+      j = tmp / m_coef[1];
+      i = tmp % m_coef[1];
+    }
+    return {i,j,k};
   }
 
   // TODO : utiliser template spécialisée
