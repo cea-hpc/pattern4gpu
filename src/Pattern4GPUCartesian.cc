@@ -205,7 +205,7 @@ _computeVolDir(const Integer dir, const Real dt) {
     Real def_coord = 0.;
     Real car_coord = 0.;
     for(Integer inode = 0 ; inode < nb_node_on_face ; inode++) {
-      const auto node_id(cart_conn_cfn.node(inode));
+      const auto node_id{cart_conn_cfn.node(inode)};
 
       face_velocity += in_node_velocity_dir[node_id];
       def_coord += in_def_node_coord_dir[node_id];

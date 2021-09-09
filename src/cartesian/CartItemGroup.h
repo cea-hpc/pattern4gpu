@@ -99,7 +99,7 @@ using CartCellGroup = CartItemGoupT<Cell>;
 // Macro generique pour parcourir avec un ItemEnumeratorT<Cell> (iterateur standard Arcane) ou un CartItemEnumeratorT<Cell>
 // TODO : changer de nom ? la meme implementation peut servir pour n'importe quel item
 #ifndef ENUMERATE_AUTO_CELL
-#define ENUMERATE_AUTO_CELL(iname, group) for(auto iname((group).enumerator()) ; iname.hasNext() ; ++iname)
+#define ENUMERATE_AUTO_CELL(iname, group) for(auto iname{(group).enumerator()} ; iname.hasNext() ; ++iname)
 #endif
 
 //! Type définissant un groupe de faces cartésiennes
@@ -108,7 +108,7 @@ using CartFaceGroup = CartItemGoupT<Face>;
 // Macro generique pour parcourir avec un ItemEnumeratorT<Face> (iterateur standard Arcane) ou un CartItemEnumeratorT<Face>
 // TODO : changer de nom ? la meme implementation peut servir pour n'importe quel item
 #ifndef ENUMERATE_AUTO_FACE
-#define ENUMERATE_AUTO_FACE(iname, group) for(auto iname((group).enumerator()) ; iname.hasNext() ; ++iname)
+#define ENUMERATE_AUTO_FACE(iname, group) for(auto iname{(group).enumerator()} ; iname.hasNext() ; ++iname)
 #endif
 
 //! Type définissant un groupe de noeuds cartésiens
@@ -117,7 +117,7 @@ using CartNodeGroup = CartItemGoupT<Node>;
 // Macro generique pour parcourir avec un ItemEnumeratorT<Node> (iterateur standard Arcane) ou un CartItemEnumeratorT<Node>
 // TODO : changer de nom ? la meme implementation peut servir pour n'importe quel item
 #ifndef ENUMERATE_AUTO_NODE
-#define ENUMERATE_AUTO_NODE(iname, group) for(auto iname((group).enumerator()) ; iname.hasNext() ; ++iname)
+#define ENUMERATE_AUTO_NODE(iname, group) for(auto iname{(group).enumerator()} ; iname.hasNext() ; ++iname)
 #endif
 
 }
