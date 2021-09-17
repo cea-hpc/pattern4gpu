@@ -242,11 +242,33 @@ initCellArr12()
   debug() << "Dans initCellArr12";
 
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
-  ENUMERATE_CELL(cell_i, allCells()) {
-    const Node& first_node=(*cell_i).node(0);
-    const Real3& c=node_coord[first_node];
-    m_cell_arr1[cell_i]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
-    m_cell_arr2[cell_i]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
+  if (options()->getInitCellArr12Version() == IA12V_ori) 
+  {
+    ENUMERATE_CELL(cell_i, allCells()) {
+      const Node& first_node=(*cell_i).node(0);
+      const Real3& c=node_coord[first_node];
+      m_cell_arr1[cell_i]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
+      m_cell_arr2[cell_i]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
+    }
+  }
+  else if (options()->getInitCellArr12Version() == IA12V_arcgpu_v1)
+  {
+    auto queue = makeQueue(m_runner);
+    auto command = makeCommand(queue);
+
+    auto in_node_coord = ax::viewIn(command, node_coord);
+
+    auto out_cell_arr1 = ax::viewOut(command, m_cell_arr1);
+    auto out_cell_arr2 = ax::viewOut(command, m_cell_arr2);
+
+    auto cnc = m_connectivity_view.cellNode();
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      NodeLocalId first_nid(cnc.nodes(cid)[0]);
+      Real3 c=in_node_coord[first_nid];
+      out_cell_arr1[cid]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
+      out_cell_arr2[cid]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
+    };
   }
   PROF_ACC_END;
 }

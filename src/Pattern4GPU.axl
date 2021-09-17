@@ -182,6 +182,13 @@
   <!-- - - - - - acc-mem-advise - - - - -->
   <simple name="acc-mem-advise" type="bool" default="true"><description>Active/désactive tous les conseils mémoire (ie tous les appels à cudaMemAdvise).</description></simple>
 
+  <!-- - - - - init-cell-arr12-version - - - - -->
+  <enumeration name="init-cell-arr12-version" type="eInitCellArr12Version" default="ori">
+    <description>Choix version implémentation initCellArr12 </description>
+    <enumvalue name="ori" genvalue="IA12V_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="IA12V_arcgpu_v1" />
+  </enumeration>
+
   <!-- - - - - compute-cqs-vector-version - - - - -->
   <enumeration name="compute-cqs-vector-version" type="eComputeCqsVectorVersion" default="ori">
     <description>Choix version implémentation ComputeCqsAndVector </description>

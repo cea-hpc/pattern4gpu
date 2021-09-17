@@ -13,6 +13,13 @@
 #include "AcceleratorUtils.h"
 //
 
+/*! \brief Définit les implémentations de InitCellArr12
+ */
+enum eInitCellArr12Version {
+  IA12V_ori = 0, //! Version CPU d'origine
+  IA12V_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+};
+
 /*! \brief Définit les implémentations de ComputeCqsAndVector
  */
 enum eComputeCqsVectorVersion {

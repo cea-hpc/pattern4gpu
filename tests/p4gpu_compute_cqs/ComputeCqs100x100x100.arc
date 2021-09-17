@@ -41,6 +41,7 @@
   <pattern4-g-p-u>
     <acc-mem-advise>true</acc-mem-advise>
 
+    <init-cell-arr12-version>arcgpu_v1</init-cell-arr12-version>
     <!-- <compute-cqs-vector-version>ori</compute-cqs-vector-version> -->
     <compute-cqs-vector-version>arcgpu_v1</compute-cqs-vector-version>
   </pattern4-g-p-u>
