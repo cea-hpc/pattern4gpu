@@ -40,7 +40,9 @@
 
   <!-- Configuration du module Pattern4GPU -->
   <pattern4-g-p-u>
-    <compute-cqs-vector-version>ori</compute-cqs-vector-version>
-    <!-- <compute-cqs-vector-version>arcgpu_v1</compute-cqs-vector-version> -->
+    <acc-mem-advise>true</acc-mem-advise>
+
+    <!-- <compute-cqs-vector-version>ori</compute-cqs-vector-version> -->
+    <compute-cqs-vector-version>arcgpu_v1</compute-cqs-vector-version>
   </pattern4-g-p-u>
 </case>

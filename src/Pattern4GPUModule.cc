@@ -28,7 +28,8 @@ Pattern4GPUModule(const ModuleBuildInfo& mbi)
   m_compxy(MaterialVariableBuildInfo(
         m_mesh_material_mng, "Compxy", IVariable::PTemporary | IVariable::PExecutionDepend)),
   m_compyy(MaterialVariableBuildInfo(
-        m_mesh_material_mng, "Compyy", IVariable::PTemporary | IVariable::PExecutionDepend))
+        m_mesh_material_mng, "Compyy", IVariable::PTemporary | IVariable::PExecutionDepend)),
+  m_node_index_in_cells(platform::getAcceleratorHostMemoryAllocator())
 {
 }
 
@@ -54,6 +55,42 @@ accBuild()
 }
 
 /*---------------------------------------------------------------------------*/
+/* m_node_index_in_cells[nid*N + ième-maille-du-noeud] =                     */
+/*                                     indice du noeud nid dans la maille    */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+_computeNodeIndexInCells() {
+  debug() << "_computeNodeIndexInCells";
+  // Un noeud est connecté au maximum à MAX_NODE_CELL mailles
+  // Calcul pour chaque noeud son index dans chacune des
+  // mailles à laquelle il est connecté.
+  NodeGroup nodes = allNodes();
+  Integer nb_node = nodes.size();
+  m_node_index_in_cells.resize(MAX_NODE_CELL*nb_node);
+  m_node_index_in_cells.fill(-1);
+  auto node_cell_cty = m_connectivity_view.nodeCell();
+  auto cell_node_cty = m_connectivity_view.cellNode();
+  ENUMERATE_NODE(inode,nodes){
+    NodeLocalId node = *inode;
+    Int32 index = 0; 
+    Int32 first_pos = node.localId() * MAX_NODE_CELL;
+    for( CellLocalId cell : node_cell_cty.cells(node) ){
+      Int16 node_index_in_cell = 0; 
+      for( NodeLocalId cell_node : cell_node_cty.nodes(cell) ){
+        if (cell_node==node)
+          break;
+        ++node_index_in_cell;
+      }    
+      m_node_index_in_cells[first_pos + index] = node_index_in_cell;
+      ++index;
+    }    
+  }
+
+  // Tableau préferentiellement lu sur le device
+  m_acc_mem_adv->setReadMostly(m_node_index_in_cells.view());
+}
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
@@ -65,7 +102,28 @@ initP4GPU()
   // On peut créer maintenant l'objet car la composition des environnements
   // est connue car le le pt d'entree GeomEnv.InitGeomEnv a été appelé
   m_allenvcell_converter=new CellToAllEnvCellConverter(m_mesh_material_mng);
+
+  // On impose un pas de temps (pour l'instant, non paramétrable)
+  m_global_deltat = 1.e-3;
+
+  // Pour accélérateur
   m_acc_mem_adv = new AccMemAdviser(options()->getAccMemAdvise());
+  m_connectivity_view.setMesh(this->mesh());
+  _computeNodeIndexInCells();
+
+  // "Conseils" mémoire
+  // CellLocalId
+  m_acc_mem_adv->setReadMostly(allCells().view().localIds());
+  m_acc_mem_adv->setReadMostly(ownCells().view().localIds());
+
+  // NodeLocalId
+  m_acc_mem_adv->setReadMostly(allNodes().view().localIds());
+  m_acc_mem_adv->setReadMostly(ownNodes().view().localIds());
+
+  // FaceLocalId
+  m_acc_mem_adv->setReadMostly(allFaces().view().localIds());
+  m_acc_mem_adv->setReadMostly(ownFaces().view().localIds());
+
   PROF_ACC_END;
 }
 
@@ -365,11 +423,92 @@ _computeCqsAndVector_Vori() {
 /* Implémentation API GPU Arcane version 1                                   */
 /*---------------------------------------------------------------------------*/
 
+ARCCORE_HOST_DEVICE inline void computeCQs(Real3 pos[8], Span<Real3> out_cqs) {
+  constexpr Real k025 = 0.25;
+  Real3 p0 = pos[0];
+  Real3 p1 = pos[1];
+  Real3 p2 = pos[2];
+  Real3 p3 = pos[3];
+  Real3 p4 = pos[4];
+  Real3 p5 = pos[5];
+  Real3 p6 = pos[6];
+  Real3 p7 = pos[7];
+
+  out_cqs[0] = -k025*math::vecMul(p4-p3, p1-p3);
+  out_cqs[1] = -k025*math::vecMul(p0-p2, p5-p2);
+  out_cqs[2] = -k025*math::vecMul(p1-p3, p6-p3);
+  out_cqs[3] = -k025*math::vecMul(p7-p2, p0-p2);
+  out_cqs[4] = -k025*math::vecMul(p5-p7, p0-p7);
+  out_cqs[5] = -k025*math::vecMul(p1-p6, p4-p6);
+  out_cqs[6] = -k025*math::vecMul(p5-p2, p7-p2);
+  out_cqs[7] = -k025*math::vecMul(p6-p3, p4-p3);
+}
+
 void Pattern4GPUModule::
 _computeCqsAndVector_Varcgpu_v1() {
 
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans _computeCqsAndVector_Varcgpu_v1";
+
+  {
+    auto queue = makeQueue(m_runner);
+    auto command = makeCommand(queue);
+
+    auto in_node_coord_bis = ax::viewIn(command,m_node_coord_bis);
+    auto out_cell_cqs = ax::viewInOut(command,m_cell_cqs);
+
+    auto cnc = m_connectivity_view.cellNode();
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()){
+      // Recopie les coordonnées locales (pour le cache)
+      Real3 pos[8];
+      Int32 index=0;
+      for( NodeLocalId nid : cnc.nodes(cid) ){
+        pos[index]=in_node_coord_bis[nid];
+        ++index;
+      }
+      // Calcule les résultantes aux sommets
+      computeCQs(pos, out_cell_cqs[cid]);
+    };
+  }
+  {
+    // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
+    // Du coup, on boucle sur les Node
+    // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
+    // Mais ici, on a pré-construit un tableau global au mailles qui indique si une maille fait partie
+    // du groupe active_cells ou pas (m_is_active_cell)
+    // Rem : en décomp. de dom., pour la plupart des sous-dom. on aura : active_cells = allCells
+    // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
+    //   1- on initialise le vecteur à 0
+    //   2- on calcule les constributions des mailles connectées au noeud uniquement si elles sont actives
+    auto queue = makeQueue(m_runner);
+    auto command = makeCommand(queue);
+
+    auto in_cell_arr1 = ax::viewIn(command, m_cell_arr1);
+    auto in_cell_arr2 = ax::viewIn(command, m_cell_arr2);
+    auto in_cell_cqs  = ax::viewIn(command, m_cell_cqs);
+    auto in_is_active_cell = ax::viewIn(command, m_is_active_cell);
+
+    auto out_node_vector = ax::viewOut(command, m_node_vector);
+
+    auto node_index_in_cells = m_node_index_in_cells.constSpan();
+    auto nc_cty = m_connectivity_view.nodeCell();
+
+    command << RUNCOMMAND_ENUMERATE(Node,nid,allNodes()) {
+      Int32 first_pos = nid.localId() * MAX_NODE_CELL;
+      Integer index = 0;
+      Real3 node_vec = Real3::zero();
+      for( CellLocalId cid : nc_cty.cells(nid) ){
+        if (in_is_active_cell[cid]) { // la maille ne contribue que si elle est active
+          Int16 node_index = node_index_in_cells[first_pos + index];
+          node_vec += (in_cell_arr1[cid]+in_cell_arr2[cid]) 
+            * in_cell_cqs[cid][node_index];
+        }
+        ++index;
+      }
+      out_node_vector[nid] = node_vec;
+    };
+  }
 
   PROF_ACC_END;
 }
