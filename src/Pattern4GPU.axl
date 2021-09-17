@@ -189,6 +189,13 @@
     <enumvalue name="arcgpu_v1" genvalue="INVV_arcgpu_v1" />
   </enumeration>
 
+  <!-- - - - - init-cqs-version - - - - -->
+  <enumeration name="init-cqs-version" type="eInitCqsVersion" default="ori">
+    <description>Choix version implémentation InitCqs </description>
+    <enumvalue name="ori" genvalue="ICQV_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="ICQV_arcgpu_v1" />
+  </enumeration>
+
   <!-- - - - - init-cell-arr12-version - - - - -->
   <enumeration name="init-cell-arr12-version" type="eInitCellArr12Version" default="ori">
     <description>Choix version implémentation InitCellArr12 </description>

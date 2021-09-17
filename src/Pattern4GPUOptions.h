@@ -8,6 +8,13 @@ enum eInitNodeVectorVersion {
   INVV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
 };
 
+/*! \brief Définit les implémentations de InitCqs
+ */
+enum eInitCqsVersion {
+  ICQV_ori = 0, //! Version CPU d'origine
+  ICQV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+};
+
 /*! \brief Définit les implémentations de InitCellArr12
  */
 enum eInitCellArr12Version {

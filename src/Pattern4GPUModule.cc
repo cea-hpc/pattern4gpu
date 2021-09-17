@@ -244,11 +244,28 @@ initCqs()
   // Valable en 3D, 8 noeuds par maille
   m_cell_cqs.resize(8);
 
-  ENUMERATE_CELL (cell_i, allCells()) {
-    for(Integer inode(0) ; inode<8 ; ++inode) {
-      m_cell_cqs[cell_i][inode] = Real3::zero();
+  if (options()->getInitCqsVersion() == ICQV_ori)
+  { 
+    ENUMERATE_CELL (cell_i, allCells()) {
+      for(Integer inode(0) ; inode<8 ; ++inode) {
+        m_cell_cqs[cell_i][inode] = Real3::zero();
+      }
     }
   }
+  else if (options()->getInitCqsVersion() == ICQV_arcgpu_v1)
+  {
+    auto queue = makeQueue(m_runner);
+    auto command = makeCommand(queue);
+
+    auto out_cell_cqs = ax::viewOut(command, m_cell_cqs);
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      for(Integer inode(0) ; inode<8 ; ++inode) {
+        out_cell_cqs[cid][inode] = Real3::zero();
+      }
+    };
+  }
+
   PROF_ACC_END;
 }
 
