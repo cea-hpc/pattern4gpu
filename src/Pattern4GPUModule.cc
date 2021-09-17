@@ -226,9 +226,25 @@ initNodeCoordBis()
 
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
 
-  ENUMERATE_NODE(node_i, allNodes()) {
-    m_node_coord_bis[node_i]=node_coord[node_i];
+  if (options()->getInitNodeCoordBisVersion() == INCBV_ori)
+  {
+    ENUMERATE_NODE(node_i, allNodes()) {
+      m_node_coord_bis[node_i]=node_coord[node_i];
+    }
   }
+  else if (options()->getInitNodeCoordBisVersion() == INCBV_arcgpu_v1)
+  {
+    auto queue = makeQueue(m_runner);
+    auto command = makeCommand(queue);
+
+    auto in_node_coord = ax::viewIn(command, node_coord);
+    auto out_node_coord_bis = ax::viewOut(command, m_node_coord_bis);
+
+    command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()) {
+      out_node_coord_bis[nid]=in_node_coord[nid];
+    };
+  }
+
   PROF_ACC_END;
 }
 

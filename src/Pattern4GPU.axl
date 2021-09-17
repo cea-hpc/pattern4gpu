@@ -189,6 +189,13 @@
     <enumvalue name="arcgpu_v1" genvalue="INVV_arcgpu_v1" />
   </enumeration>
 
+  <!-- - - - - init-node-coord-bis-version - - - - -->
+  <enumeration name="init-node-coord-bis-version" type="eInitNodeCoordBisVersion" default="ori">
+    <description>Choix version implémentation InitNodeCoordBis </description>
+    <enumvalue name="ori" genvalue="INCBV_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="INCBV_arcgpu_v1" />
+  </enumeration>
+
   <!-- - - - - init-cqs-version - - - - -->
   <enumeration name="init-cqs-version" type="eInitCqsVersion" default="ori">
     <description>Choix version implémentation InitCqs </description>

@@ -8,6 +8,13 @@ enum eInitNodeVectorVersion {
   INVV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
 };
 
+/*! \brief Définit les implémentations de InitNodeCoordBis
+ */
+enum eInitNodeCoordBisVersion {
+  INCBV_ori = 0, //! Version CPU d'origine
+  INCBV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+};
+
 /*! \brief Définit les implémentations de InitCqs
  */
 enum eInitCqsVersion {
