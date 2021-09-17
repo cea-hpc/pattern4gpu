@@ -614,6 +614,9 @@ initGeomEnv()
 
     if (nb_env>0) {
       lids.add(icell.localId());
+      m_is_active_cell[icell]=true;
+    } else {
+      m_is_active_cell[icell]=false;
     }
   }
   ncell_env.allreduce();

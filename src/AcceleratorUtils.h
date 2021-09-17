@@ -6,50 +6,14 @@
 #include "arcane/accelerator/Runner.h"
 #include "arcane/accelerator/Views.h"
 #include "arcane/accelerator/Accelerator.h"
+#include "arcane/accelerator/RunCommandLoop.h"
+#include "arcane/accelerator/RunCommandEnumerate.h"
 
 /*---------------------------------------------------------------------------*/
 /* Pour les accélérateurs                                                    */
 /*---------------------------------------------------------------------------*/
 
 namespace ax = Arcane::Accelerator;
-
-template<typename ItemType>
-class ItemRunCommand
-{
- public:
-  ItemRunCommand(ax::RunCommand& command,const ItemVectorViewT<ItemType>& items)
-  : m_command(command), m_items(items)
-  {
-  }
-  ax::RunCommand& m_command;
-  ItemVectorViewT<ItemType> m_items;
-};
-
-template<typename ItemType> ItemRunCommand<ItemType>
-operator<<(ax::RunCommand& command,const ItemGroupT<ItemType>& items)
-{
-  return ItemRunCommand<ItemType>(command,items.view());
-}
-
-template<typename ItemType> ItemRunCommand<ItemType>
-operator<<(ax::RunCommand& command,const ItemVectorViewT<ItemType>& items)
-{
-  return ItemRunCommand<ItemType>(command,items);
-}
-
-template<typename ItemType,typename Lambda>
-void operator<<(ItemRunCommand<ItemType>&& nr,Lambda f)
-{
-  run(nr.m_command,nr.m_items,std::forward<Lambda>(f));
-}
-template<typename ItemType,typename Lambda>
-void operator<<(ItemRunCommand<ItemType>& nr,Lambda f)
-{
-  run(nr.m_command,nr.m_items,std::forward<Lambda>(f));
-}
-
-#define RUNCOMMAND_ENUMERATE(ItemNameType,iter_name,item_group)  \
-  item_group << [=] ARCCORE_HOST_DEVICE (ItemNameType##LocalId iter_name)
 
 /*---------------------------------------------------------------------------*/
 /* Pour le profiling sur accélérateur                                        */
@@ -86,7 +50,36 @@ void operator<<(ItemRunCommand<ItemType>& nr,Lambda f)
 #endif
 
 /*---------------------------------------------------------------------------*/
+/* "Conseiller" mémoire, permet de caractériser des accès mémoire            */
 /*---------------------------------------------------------------------------*/
+class AccMemAdviser {
+ public:
+  AccMemAdviser(bool enable=true) : 
+    m_enable(enable) {
+#ifdef ARCANE_HAS_CUDA
+    if (m_enable) {
+      cudaGetDevice(&m_device);
+    }
+#endif
+  }
+  ~AccMemAdviser() {}
 
+  bool enable() const { return m_enable; }
+
+  template<typename ViewType>
+  void setReadMostly(ViewType view) {
+#ifdef ARCANE_HAS_CUDA
+    if (m_enable && view.size()) {
+      cudaMemAdvise (view.data(), view.size(), cudaMemAdviseSetReadMostly,m_device);
+    }
+#endif
+  }
+ private:
+  bool m_enable=true;
+  int m_device=-1;
+};
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 
 #endif
