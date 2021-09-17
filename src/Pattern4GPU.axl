@@ -175,6 +175,9 @@
 </entry-points>
 
 <options>
+  <!-- - - - - - acc-mem-advise - - - - -->
+  <simple name="acc-mem-advise" type="bool" default="true"><description>Active/désactive tous les conseils mémoire (ie tous les appels à cudaMemAdvise).</description></simple>
+
   <!-- - - - - compute-cqs-vector-version - - - - -->
   <enumeration name="compute-cqs-vector-version" type="eComputeCqsVectorVersion" default="ori">
     <description>Choix version implémentation ComputeCqsAndVector </description>

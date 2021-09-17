@@ -104,6 +104,7 @@ class Pattern4GPUModule
 
   // Pour l'utilisation des accélérateurs
   ax::Runner m_runner;
+  AccMemAdviser* m_acc_mem_adv=nullptr;
 
   UnstructuredMeshConnectivityView m_connectivity_view;
 };

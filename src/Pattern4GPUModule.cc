@@ -35,6 +35,7 @@ Pattern4GPUModule(const ModuleBuildInfo& mbi)
 Pattern4GPUModule::
 ~Pattern4GPUModule() {
   delete m_allenvcell_converter;
+  delete m_acc_mem_adv;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -64,6 +65,7 @@ initP4GPU()
   // On peut créer maintenant l'objet car la composition des environnements
   // est connue car le le pt d'entree GeomEnv.InitGeomEnv a été appelé
   m_allenvcell_converter=new CellToAllEnvCellConverter(m_mesh_material_mng);
+  m_acc_mem_adv = new AccMemAdviser(options()->getAccMemAdvise());
   PROF_ACC_END;
 }
 

@@ -50,7 +50,36 @@ namespace ax = Arcane::Accelerator;
 #endif
 
 /*---------------------------------------------------------------------------*/
+/* "Conseiller" mémoire, permet de caractériser des accès mémoire            */
 /*---------------------------------------------------------------------------*/
+class AccMemAdviser {
+ public:
+  AccMemAdviser(bool enable=true) : 
+    m_enable(enable) {
+#ifdef ARCANE_HAS_CUDA
+    if (m_enable) {
+      cudaGetDevice(&m_device);
+    }
+#endif
+  }
+  ~AccMemAdviser() {}
 
+  bool enable() const { return m_enable; }
+
+  template<typename ViewType>
+  void setReadMostly(ViewType view) {
+#ifdef ARCANE_HAS_CUDA
+    if (m_enable && view.size()) {
+      cudaMemAdvise (view.data(), view.size(), cudaMemAdviseSetReadMostly,m_device);
+    }
+#endif
+  }
+ private:
+  bool m_enable=true;
+  int m_device=-1;
+};
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 
 #endif
