@@ -315,13 +315,14 @@ updateVectorFromTensor() {
 }
 
 /*---------------------------------------------------------------------------*/
+/* Implémentation d'origine de computeCqsAndVector()                         */
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
-computeCqsAndVector() {
+_computeCqsAndVector_Vori() {
 
   PROF_ACC_BEGIN(__FUNCTION__);
-  debug() << "Dans computeCqsAndVector";
+  debug() << "Dans _computeCqsAndVector_Vori";
 
   constexpr Real k025 = 0.25;
 
@@ -354,6 +355,36 @@ computeCqsAndVector() {
         m_cell_cqs[cell_i][node_i.index()];
     }
   }
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Implémentation API GPU Arcane version 1                                   */
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+_computeCqsAndVector_Varcgpu_v1() {
+
+  PROF_ACC_BEGIN(__FUNCTION__);
+  debug() << "Dans _computeCqsAndVector_Varcgpu_v1";
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+computeCqsAndVector() {
+
+  PROF_ACC_BEGIN(__FUNCTION__);
+
+  switch (options()->getComputeCqsVectorVersion()) {
+    case CCVV_ori: _computeCqsAndVector_Vori(); break;
+    case CCVV_arcgpu_v1: _computeCqsAndVector_Varcgpu_v1(); break;
+  };
+
   PROF_ACC_END;
 }
 

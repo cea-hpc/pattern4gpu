@@ -37,4 +37,10 @@
     <visu-volume>true</visu-volume>
     <geom-scene>env5m3</geom-scene>
   </geom-env>
+
+  <!-- Configuration du module Pattern4GPU -->
+  <pattern4-g-p-u>
+    <compute-cqs-vector-version>ori</compute-cqs-vector-version>
+    <!-- <compute-cqs-vector-version>arcgpu_v1</compute-cqs-vector-version> -->
+  </pattern4-g-p-u>
 </case>

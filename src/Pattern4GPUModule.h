@@ -13,6 +13,13 @@
 #include "AcceleratorUtils.h"
 //
 
+/*! \brief Définit les implémentations de ComputeCqsAndVector
+ */
+enum eComputeCqsVectorVersion {
+  CCVV_ori = 0, //! Version CPU d'origine
+  CCVV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+};
+
 #include "Pattern4GPU_axl.h"
 
 using namespace Arcane;
@@ -59,6 +66,12 @@ class Pattern4GPUModule
   void computeVol() override; // ComputeVol
 
   void detEnvOrder() override; // DetEnvOrder
+
+ public:
+  // Implémentations des points d'entrées, devrait être private mais 
+  // impossible car toute méthode déportée sur GPU doit être publique !
+  void _computeCqsAndVector_Vori();
+  void _computeCqsAndVector_Varcgpu_v1();
 
  private:
 

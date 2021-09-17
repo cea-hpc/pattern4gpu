@@ -175,5 +175,11 @@
 </entry-points>
 
 <options>
+  <!-- - - - - compute-cqs-vector-version - - - - -->
+  <enumeration name="compute-cqs-vector-version" type="eComputeCqsVectorVersion" default="ori">
+    <description>Choix version implémentation ComputeCqsAndVector </description>
+    <enumvalue name="ori" genvalue="CCVV_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="CCVV_arcgpu_v1" />
+  </enumeration>
 </options>
 </module>
