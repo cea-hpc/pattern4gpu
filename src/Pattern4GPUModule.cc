@@ -185,13 +185,33 @@ initNodeVector()
   // chaque noeud aura un vecteur de norme 1 mais dans des directions
   // différentes
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
-  ENUMERATE_NODE(node_i, allNodes()) {
-    const Real3& c=node_coord[node_i];
-    Real cos_th=cos(c.x+c.y+c.z); // garantit une valeur dans [-1,+1]
-    Real sin_th=math::sqrt(1-cos_th*cos_th); // garantit une valeur dans [0,+1]
-    Real phi=(c.x+1)*(c.y+1)*(c.z+1);
-    m_node_vector[node_i]=Real3(sin_th*cos(phi), sin_th*sin(phi),cos_th);
+  if (options()->getInitNodeVectorVersion() == INVV_ori) 
+  {
+    ENUMERATE_NODE(node_i, allNodes()) {
+      const Real3& c=node_coord[node_i];
+      Real cos_th=cos(c.x+c.y+c.z); // garantit une valeur dans [-1,+1]
+      Real sin_th=math::sqrt(1-cos_th*cos_th); // garantit une valeur dans [0,+1]
+      Real phi=(c.x+1)*(c.y+1)*(c.z+1);
+      m_node_vector[node_i]=Real3(sin_th*cos(phi), sin_th*sin(phi),cos_th);
+    }
   }
+  else if (options()->getInitNodeVectorVersion() == INVV_arcgpu_v1)
+  {
+    auto queue = makeQueue(m_runner);
+    auto command = makeCommand(queue);
+
+    auto in_node_coord = ax::viewIn(command, node_coord);
+    auto out_node_vector = ax::viewOut(command, m_node_vector);
+
+    command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()) {
+      const Real3 c=in_node_coord[nid];
+      Real cos_th=cos(c.x+c.y+c.z); // garantit une valeur dans [-1,+1]
+      Real sin_th=math::sqrt(1-cos_th*cos_th); // garantit une valeur dans [0,+1]
+      Real phi=(c.x+1)*(c.y+1)*(c.z+1);
+      out_node_vector[nid]=Real3(sin_th*cos(phi), sin_th*sin(phi),cos_th);
+    };
+  }
+
   PROF_ACC_END;
 }
 
