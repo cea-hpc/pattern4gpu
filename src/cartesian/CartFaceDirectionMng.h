@@ -4,6 +4,7 @@
 #include "cartesian/CartTypes.h"
 #include "cartesian/CartItemGroup.h"
 #include "cartesian/CartesianGridT.h"
+#include "cartesian/CartLocalIdNumberingT.h"
 
 namespace Cartesian {
   
@@ -19,11 +20,8 @@ class CartDirFace {
  public:
   using CellType = CellLocalId;
 
-  //! Type pour la numérotation cartésienne locale aux mailles
-  using CartesianNumbering = CartesianNumberingT<LocalIdType>;
-
  public:
-  CartDirFace(LocalIdType face_idx_dir, LocalIdType nfacesm1_dir, LocalIdType next_cell_id, LocalIdType delta_prev_cell)
+  ARCCORE_HOST_DEVICE CartDirFace(LocalIdType face_idx_dir, LocalIdType nfacesm1_dir, LocalIdType next_cell_id, LocalIdType delta_prev_cell)
   : m_face_idx_dir (face_idx_dir),
   m_nfacesm1_dir (nfacesm1_dir),
   m_next_cell_id (next_cell_id),
@@ -31,12 +29,12 @@ class CartDirFace {
   }
 
   //! Identifiant de la maille adjacente à la face et juste avant cette face selon la direction
-  CellType previousCell() const {
+  ARCCORE_HOST_DEVICE CellType previousCell() const {
     return CellType(m_face_idx_dir == 0 ? -1 : /*m_face_id + m_delta_conv*/m_next_cell_id - m_delta_prev_cell);
   }
 
   //! Identifiant de la maille adjacente à la face et juste après cette face selon la direction
-  CellType nextCell() const {
+  ARCCORE_HOST_DEVICE CellType nextCell() const {
     // La maille suivante se repère par les mêmes indices que la face
     return CellType(m_face_idx_dir == m_nfacesm1_dir ? -1 : m_next_cell_id /*m_face_id + m_delta_conv*/);
   }
@@ -47,6 +45,75 @@ class CartDirFace {
   LocalIdType m_nfacesm1_dir; //! Nb de faces -1 dans la direction m_dir
   LocalIdType m_next_cell_id; //! L'identifiant de la maille qui suit la face
   LocalIdType m_delta_prev_cell; //! Delta à retirer pour passer de la maille suivante à précédente
+};
+
+/*---------------------------------------------------------------------------*/
+/*!
+ * \brief
+ * Permet d'accéder aux mailles dans un stencil autour d'une face
+ * Pour passer des faces aux mailles dans un voisinage directionnel
+ */
+/*---------------------------------------------------------------------------*/
+class CartFace2CellIdStencil : public CartLocalIdNumberingT<FaceLocalId> {
+ public:
+  //! Type d'une numérotation cartésienne sur les identifiants locaux
+  using CartesianNumbering = CartesianNumberingT<LocalIdType>;
+
+  CartFace2CellIdStencil(Integer dir, const CartesianNumbering& cart_numb_face,
+      const CartesianNumbering& cart_numb_cell)
+  : CartLocalIdNumberingT<FaceLocalId>(cart_numb_face),
+  m_cart_numb_cell_id (cart_numb_cell),
+  m_dir (dir),
+  m_ncellsm1_dir (cart_numb_cell.nbItemDir(dir)-1),
+  m_delta_dir (cart_numb_cell.deltaDir(dir))
+  {
+  }
+
+  //! Constructeur de recopie, potentiellement sur accélérateur
+  ARCCORE_HOST_DEVICE CartFace2CellIdStencil(const CartFace2CellIdStencil& rhs)
+  : CartLocalIdNumberingT<FaceLocalId>(rhs),
+  m_cart_numb_cell_id (rhs.m_cart_numb_cell_id),
+  m_dir (rhs.m_dir),
+  m_ncellsm1_dir (rhs.m_ncellsm1_dir),
+  m_delta_dir (rhs.m_delta_dir)
+  {
+  }
+
+  //! Items adjacents à la face de local id fid et d'indices cartésiens fidx
+  /*
+   *               ------- ------- 
+   *              |       |       | 
+   * CellLocalId  | prev[fid]next |   ---> dir
+   *              |       |       |
+   *               ------- ------- 
+   */
+  ARCCORE_HOST_DEVICE CartDirFace face(FaceLocalId fid, IdxType fidx) const {
+    LocalIdType next_cid = m_cart_numb_cell_id.id(fidx[0], fidx[1], fidx[2]);
+    return CartDirFace(fidx[m_dir], m_ncellsm1_dir+1, next_cid, m_delta_dir);
+  }
+
+  //! Encapsulation d'une face centrale avec NLayer mailles autour dans la direction
+  /*
+   *               ------- ------- ------- ------- ------- ------- 
+   *              |       |       |       |       |       |       | 
+   * CellLocalId  |  -1   |  cm2  | cm1 [fid] cp1 |  cp2  |  cp3  |   ---> dir
+   *              |       |       |       |       |       |       |
+   *               ------- ------- ------- ------- ------- ------- 
+   * ilayer          -3      -2      -1       +1      +2      +3
+   */
+  template<Integer NLayer>
+  ARCCORE_HOST_DEVICE auto stencilFace2Cell(FaceLocalId fid, IdxType fidx) const {
+    // A partir d'une face (i,j,k) on détermine l'id de la maille avec le même (i,j,k)
+    // Cette maille se trouve juste apres la face d'où NEXT_cid
+    LocalIdType next_cid = m_cart_numb_cell_id.id(fidx[0], fidx[1], fidx[2]);
+    return PosAsymStencilDirItemT<CellLocalId,NLayer>(next_cid, fidx[m_dir], m_ncellsm1_dir, m_delta_dir);
+  }
+
+ private:
+  CartLocalIdNumberingT<CellLocalId> m_cart_numb_cell_id;  //! Numérotation allégée aux mailles
+  Integer m_dir;  //! Direction privilegiee
+  LocalIdType m_ncellsm1_dir;  //! Nb de mailles-1 dans la direction m_dir
+  LocalIdType m_delta_dir;  //! -+delta pour passer d'une maille à sa voisine précédente/suivante dans la direction m_dir
 };
 
 /*---------------------------------------------------------------------------*/
@@ -119,6 +186,11 @@ class CartFaceDirectionMng {
       m_prev_outer_faces_end[d] = rhs.m_prev_outer_faces_end[d];
       m_next_outer_faces_beg[d] = rhs.m_next_outer_faces_beg[d];
     }
+  }
+  
+  //! Pour passer des faces aux mailles dans un voisinage directionnel
+  auto face2CellIdStencil() const {
+    return CartFace2CellIdStencil(m_dir, m_cart_face_numbering, m_cart_cell_numbering);
   }
 
   //! Items adjacents à la face f

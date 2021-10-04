@@ -47,8 +47,8 @@ ccc_mprun -n1 ../../build/src/Pattern4GPU -arcane_opt max_iteration 100 ComputeC
 /chemin/vers/build/src/Pattern4GPU -A,AcceleratorRuntime=cuda Test.arc
 ```
 
-#### Execution avec instrumentation nsys [si projet configuré avec
-`-DWANT_PROF_ACC=TRUE`, prise en compte des points d'entrée] :
+#### Execution avec instrumentation nsys 
+[si projet configuré avec `-DWANT_PROF_ACC=TRUE`, prise en compte des points d'entrée] :
 ```
 nsys profile --stats=true --force-overwrite true -o p4gpu /chemin/vers/build/src/Pattern4GPU -A,AcceleratorRuntime=cuda Test.arc
 ```
@@ -56,6 +56,6 @@ nsys profile --stats=true --force-overwrite true -o p4gpu /chemin/vers/build/src
 #### Exécution avec instrumentation nvprof (sortie ASCII dans `p4gpu.lognvprof`) 
 [si projet configuré avec `-DWANT_PROF_ACC=TRUE`, prise en compte des points d'entrée] :
 ```
-nvprof --print-api-trace --print-gpu-trace --log-file p4gpu.lognvprof /chemin/vers/build/src/Pattern4GPU -A,AcceleratorRuntime=cuda Test.arc
+nvprof --print-api-trace --print-gpu-trace --normalized-time-unit col --log-file p4gpu.lognvprof /chemin/vers/build/src/Pattern4GPU -A,AcceleratorRuntime=cuda Test.arc
 ```
 

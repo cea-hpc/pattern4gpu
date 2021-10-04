@@ -16,6 +16,8 @@ using UniqueIdType3 = Arcane::UniqueIdType[3];
 
 using LocalIdType4 = Arcane::LocalIdType[4];
 
+using IdxType = std::array<Arcane::Int64, 3>;
+
 /*---------------------------------------------------------------------------*/
 /*!
  * \brief

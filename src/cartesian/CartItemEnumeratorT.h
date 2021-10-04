@@ -12,7 +12,7 @@
  */
 class ItemId {
  public:
-  static bool null(LocalIdType local_id) {
+  ARCCORE_HOST_DEVICE static bool null(LocalIdType local_id) {
     return local_id == -1; // NULL_ITEM_ID
   }
 };

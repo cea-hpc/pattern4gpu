@@ -3,6 +3,8 @@
 
 #include "cartesian/CartTypes.h"
 #include "cartesian/CartItemEnumeratorT.h"
+#include "cartesian/Interval3T.h"
+#include "arcane/utils/LoopRanges.h"
 
 namespace Cartesian {
   
@@ -27,6 +29,9 @@ class CartItemGoupT {
 
   //! Type tableau sur pointeurs d'ItemInternal (implémentation d'un Item)
   using ItemInternalPtr = typename CartItemEnumerator::ItemInternalPtr;
+
+  //! Type décrivant un ensemble 3D d'identifiants locaux
+  using Interval3Type = Interval3T<LocalIdType>;
 
  public:
   CartItemGoupT(const ItemInternalPtr* internals, 
@@ -77,6 +82,19 @@ class CartItemGoupT {
   //! Construction d'un iterateur sur le groupe de mailles cartesiennes
   CartItemEnumerator enumerator() const {
     return CartItemEnumerator(m_internals, m_dir, m_cart_grid, m_cart_item_numb, m_beg, m_end);
+  }
+
+  //! Retourne l'intervalle 3D [m_beg[0], m_end[0][ x [m_beg[1], m_end[1][ x [m_beg[2], m_end[2][
+  Interval3Type interval3() const {
+    return Interval3Type(m_beg, m_end);
+  }
+
+  //! Construit {m_beg[2],size[2]} x {m_beg[1],size[1]} x {m_beg[0],size[0]} pour parcours RUNCOMMAND_LOOP
+  auto loopRanges() const {
+    // Attention, on donne un intervalle dans l'ordre k,j,i pour avoir un parcours cartésien
+    return makeLoopRanges({m_beg[2],m_end[2]-m_beg[2]}, 
+        {m_beg[1],m_end[1]-m_beg[1]}, 
+        {m_beg[0],m_end[0]-m_beg[0]});
   }
 
  private:

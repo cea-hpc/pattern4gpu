@@ -1,4 +1,5 @@
 #include "Pattern4GPUModule.h"
+
 #include "cartesian/CartesianMeshProperties.h"
 #include "cartesian/CartesianItemSorter.h"
 
@@ -49,7 +50,8 @@ initBenchCartesian() {
   // Initialisation des variables aux items
   ENUMERATE_CELL (cell_i, allCells()) {
     m_cell_arr1[cell_i] = 0;
-    m_cell_arr2[cell_i] = 0;
+//    m_cell_arr2[cell_i] = 0;
+    m_cell_arr2[cell_i] = Real(cell_i.localId());
   }
 
   std::minstd_rand0 gen(0); 
@@ -57,8 +59,26 @@ initBenchCartesian() {
 
   ENUMERATE_NODE (node_i, allNodes()) {
     m_node_arr1[node_i] = (dis(gen)>0 ? +1 : -1);
+    m_node_arr2[node_i] = 0;
+  }
+
+  ENUMERATE_FACE (face_i, allFaces()) {
+    m_face_arr1[face_i] = Real(face_i.localId());
   }
   PROF_ACC_END;
+
+  // "Conseils" accés mémoire
+  if (!m_acc_mem_adv) {
+    m_acc_mem_adv = new AccMemAdviser(options()->getAccMemAdvise());
+  }
+
+  for(Integer dir(0) ; dir < mesh()->dimension() ; ++dir) {
+    auto cell_dm = m_arc_cartesian_mesh->cellDirection(dir);
+
+    m_acc_mem_adv->setReadMostly(cell_dm.innerCells().view().localIds());
+    m_acc_mem_adv->setReadMostly(cell_dm.outerCells().view().localIds());
+    m_acc_mem_adv->setReadMostly(cell_dm.allCells().view().localIds());
+  }
 }
 
 /*---------------------------------------------------------------------------*/

@@ -73,6 +73,10 @@
   <variable field-name="node_arr1" name="NodeArr1" data-type="real" item-kind="node"
 	    dim="0" dump="false" need-sync="false" material="false" />
 
+  <!-- NODE-ARR2 -->
+  <variable field-name="node_arr2" name="NodeArr2" data-type="real" item-kind="node"
+	    dim="0" dump="false" need-sync="false" material="false" />
+
   <!-- FACE-ARR1 -->
   <variable field-name="face_arr1" name="FaceArr1" data-type="real" item-kind="face"
 	    dim="0" dump="false" need-sync="false" material="false" />
@@ -173,6 +177,7 @@
   <entry-point method-name="updateTensor" name="UpdateTensor" where="compute-loop" property="none" />
   <entry-point method-name="updateVectorFromTensor" name="UpdateVectorFromTensor" where="compute-loop" property="none" />
   <entry-point method-name="computeCqsAndVector" name="ComputeCqsAndVector" where="compute-loop" property="none" />
+  <entry-point method-name="testCartesian" name="TestCartesian" where="compute-loop" property="none" />
   <entry-point method-name="benchCartesian" name="BenchCartesian" where="compute-loop" property="none" />
   <entry-point method-name="computeVol" name="ComputeVol" where="compute-loop" property="none" />
   <entry-point method-name="detEnvOrder" name="DetEnvOrder" where="compute-loop" property="none" />
