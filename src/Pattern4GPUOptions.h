@@ -36,4 +36,18 @@ enum eComputeCqsVectorVersion {
   CCVV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
 };
 
+/*! \brief Définit les implémentations de InitMEnvVar1
+ */
+enum eInitMEnvVar1 {
+  IMV1V_ori = 0, //! Version CPU d'origine
+  IMV1V_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+};
+
+/*! \brief Définit les implémentations de PartialImpureOnly
+ */
+enum ePartialImpureOnlyVersion {
+  PIOV_ori = 0, //! Version CPU d'origine
+  PIOV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+};
+
 #endif
