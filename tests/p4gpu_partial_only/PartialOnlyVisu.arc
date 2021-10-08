@@ -5,6 +5,24 @@
     <timeloop>PartialImpureOnlyLoop</timeloop>
   </arcane>
 
+  <arcane-post-processing>
+    <output-period>1</output-period>
+    <output>
+      <variable>Nbenv</variable>
+      <variable>FracVolVisu</variable>
+      <variable>FracVol</variable>
+      <variable>MEnvVar1Visu</variable>
+      <variable>MEnvVar1</variable>
+      <variable>MEnvVar2Visu</variable>
+      <variable>MEnvVar2</variable>
+      <variable>MEnvVar3Visu</variable>
+      <variable>MEnvVar3</variable>
+    </output>
+    <format>
+      <binary-file>false</binary-file>
+    </format>
+  </arcane-post-processing>
+
   <!-- ***************************************************************** -->
   <!--Definition du maillage cartesien -->
   <mesh nb-ghostlayer="3" ghostlayer-builder-version="3">
@@ -29,10 +47,8 @@
   <pattern4-g-p-u>
     <acc-mem-advise>true</acc-mem-advise>
 
-    <visu-m-env-var>false</visu-m-env-var>
-    <!-- <init-menv-var-version>ori</init-menv-var-version> -->
-    <init-menv-var-version>arcgpu_v1</init-menv-var-version>
-    <!-- <partial-impure-only-version>ori</partial-impure-only-version> -->
-    <partial-impure-only-version>arcgpu_v1</partial-impure-only-version>
+    <visu-m-env-var>true</visu-m-env-var>
+    <init-menv-var-version>ori</init-menv-var-version>
+    <partial-only-version>ori</partial-only-version>
   </pattern4-g-p-u>
 </case>

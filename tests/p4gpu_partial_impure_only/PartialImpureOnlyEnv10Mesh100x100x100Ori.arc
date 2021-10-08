@@ -32,8 +32,8 @@
     <acc-mem-advise>true</acc-mem-advise>
 
     <visu-m-env-var>false</visu-m-env-var>
-    <init-menv-var1-version>ori</init-menv-var1-version>
-    <!-- <init-menv-var1-version>arcgpu_v1</init-menv-var1-version> -->
+    <init-menv-var-version>ori</init-menv-var-version>
+    <!-- <init-menv-var-version>arcgpu_v1</init-menv-var-version> -->
     <partial-impure-only-version>ori</partial-impure-only-version>
     <!-- <partial-impure-only-version>arcgpu_v1</partial-impure-only-version> -->
   </pattern4-g-p-u>
