@@ -52,7 +52,7 @@ class Pattern4GPUModule
 
   void initEnvOrder() override; // InitEnvOrder
 
-  void initMEnvVar() override; // InitMEnvVar1
+  void initMEnvVar() override; // InitMEnvVar
 
 
   //! points d'entrée "compute-loop"
@@ -69,6 +69,7 @@ class Pattern4GPUModule
 
   void partialImpureOnly() override; // PartialImpureOnly
   void partialOnly() override; // PartialOnly
+  void partialAndMean() override; // PartialAndMean
 
  public:
   // Note: il faut mettre ce champs statique si on veut que sa valeur

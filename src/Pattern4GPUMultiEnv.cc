@@ -449,4 +449,134 @@ partialOnly() {
 
 
 /*---------------------------------------------------------------------------*/
+/*                               PATTERN 3                                   */
+/*---------------------------------------------------------------------------*/
+
+/*---------------------------------------------------------------------------*/
+/* On calcule les grandeurs partielles sur les mailles de chaque environnement
+ * (mailles pures et mixtes) et on moyennise sur les mailles mixtes
+ *
+ *  for(env : ) {
+ *    for(ev : env) { // Mailles pures et mixtes  
+ *      gpart[ev] = calcpart(ev, ev.globalCell());
+ *    } 
+ *  }
+ *  for(cell : mixtes) {
+ *    gmoy[cell] = 0
+ *    for(ev : cell.allEnvCell()) {
+ *      gmoy[cell] += pond(ev) * gpart[ev];
+ *    }
+ *  }
+ *                                                                           */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+partialAndMean() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+
+  if (options()->getPartialAndMeanVersion() == PMV_ori)
+  {
+    // On calcule les grandeurs partielles env par env
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+      ENUMERATE_ENVCELL(iev,env)
+      {
+        m_menv_var1[iev] = math::sqrt(m_menv_var2[iev]/m_menv_var3[iev]);
+      }
+    }
+
+    // Puis on effectue la moyenne sur chacune des mailles mixtes
+    CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
+    ENUMERATE_CELL(icell, allCells()){
+      Cell cell = * icell;
+      AllEnvCell all_env_cell = allenvcell_converter[cell];
+      if (all_env_cell.nbEnvironment() !=1) { // uniquement mailles mixtes
+        m_menv_var1[icell] = 0.;
+        ENUMERATE_CELL_ENVCELL(ienvcell,all_env_cell) {
+          m_menv_var1[icell] += m_frac_vol[ienvcell] * m_menv_var1[ienvcell];
+        }
+      }
+    }
+  }
+  else if (options()->getPartialAndMeanVersion() == PMV_ori_v2)
+  {
+    CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
+    ENUMERATE_CELL(icell, allCells()){
+      Cell cell = * icell;
+      AllEnvCell all_env_cell = allenvcell_converter[cell];
+      // Calcul des valeurs partielles
+      ENUMERATE_CELL_ENVCELL(ienvcell,all_env_cell) {
+        m_menv_var1[ienvcell] = math::sqrt(m_menv_var2[ienvcell]/m_menv_var3[ienvcell]);
+      }
+      // Puis on moyennise uniquement sur les mailles mixtes
+      if (all_env_cell.nbEnvironment() !=1) { // uniquement mailles mixtes
+        m_menv_var1[icell] = 0.;
+        ENUMERATE_CELL_ENVCELL(ienvcell,all_env_cell) {
+          m_menv_var1[icell] += m_frac_vol[ienvcell] * m_menv_var1[ienvcell];
+        }
+      }
+    }
+  }
+  else if (options()->getPartialAndMeanVersion() == PMV_arcgpu_v1)
+  {
+    // On boucle sur l'intégralité du maillage pour faire 2 choses :
+    //  - init à 0 de la grandeur globale (moyenne) pour toutes les mailles
+    //  - puis calcul de la valeur partielle pour les mailles pures
+    auto queue = makeQueue(m_runner);
+    {
+      auto command = makeCommand(queue);
+
+      auto in_env_id         = ax::viewIn(command, m_env_id);
+      auto in_menv_var2_g    = ax::viewIn(command, m_menv_var2.globalVariable());
+      auto in_menv_var3_g    = ax::viewIn(command, m_menv_var3.globalVariable());
+      auto out_menv_var1_g   = ax::viewOut(command, m_menv_var1.globalVariable());
+
+      command << RUNCOMMAND_ENUMERATE(Cell,cid,allCells()) {
+
+        out_menv_var1_g[cid] = 0.; // pour préparer la moyenne
+
+        if (in_env_id[cid]>=0) { // Uniquement maille pure
+          out_menv_var1_g[cid] = math::sqrt(in_menv_var2_g[cid]/in_menv_var3_g[cid]);
+        }
+      };
+    }
+
+    // Puis, environnement par environnement, 
+    //  - calcul de la valeur partielle sur chaque maille mixte
+    //  - contribution de la maille mixte dans la maille globale
+    ENUMERATE_ENV(ienv,m_mesh_material_mng){
+      IMeshEnvironment* env = *ienv;
+
+      // Les kernels sont lancés environnement par environnement les uns après les autres
+      auto command = makeCommand(queue);
+
+      Span<const Integer> in_global_cell    (envView(m_global_cell, env));
+      Span<const Real>    in_frac_vol       (envView(m_frac_vol,    env)); 
+      Span<const Real>    in_menv_var2      (envView(m_menv_var2,   env)); 
+      Span<const Real>    in_menv_var3      (envView(m_menv_var3,   env)); 
+      Span<Real>          inout_menv_var1   (envView(m_menv_var1,   env)); 
+
+      auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
+
+      // Nombre de mailles impures (mixtes) de l'environnement
+      Integer nb_imp = env->impureEnvItems().nbItem();
+
+      command << RUNCOMMAND_LOOP1(iter, nb_imp) {
+        auto [imix] = iter(); // imix \in [0,nb_imp[
+        CellLocalId cid(in_global_cell[imix]); // on récupère l'identifiant de la maille globale
+
+        // Calcul de la valeur partielle
+        inout_menv_var1[imix] = math::sqrt(in_menv_var2[imix]/in_menv_var3[imix]);
+
+        // Contribution à la moyenne (globale)
+        out_menv_var1_g[cid] += in_frac_vol[imix] * inout_menv_var1[imix];
+      };
+    }
+  }
+
+  _dumpVisuMEnvVar();
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
