@@ -158,6 +158,38 @@
   <variable field-name="is_active_cell" name="IsActiveCell" data-type="bool" item-kind="cell"
       dim="0" dump="false" need-sync="false" />
 
+  <!-- GLOBAL CELL	 -->
+  <variable field-name="global_cell" name="GlobalCell" data-type="integer" item-kind="cell"
+	    dim="0" material="true" dump="false" need-sync="false" />
+
+  <!-- ENV ID -->
+  <variable field-name="env_id" name="EnvId" data-type="integer" item-kind="cell"
+	    dim="0" dump="false" need-sync="false" />
+
+  <!-- MENV-VAR1 -->
+  <variable field-name="menv_var1" name="MEnvVar1" data-type="real" item-kind="cell"
+      dim="0" dump="false" need-sync="false" material="true" />
+
+  <!-- MENV-VAR2 -->
+  <variable field-name="menv_var2" name="MEnvVar2" data-type="real" item-kind="cell"
+      dim="0" dump="false" need-sync="false" material="true" />
+
+  <!-- MENV-VAR3 -->
+  <variable field-name="menv_var3" name="MEnvVar3" data-type="real" item-kind="cell"
+      dim="0" dump="false" need-sync="false" material="true" />
+
+  <!-- MENV-VAR1-VISU -->
+  <variable field-name="menv_var1_visu" name="MEnvVar1Visu" data-type="real" item-kind="cell"
+      dim="1" dump="false" need-sync="false" material="false" />
+
+  <!-- MENV-VAR2-VISU -->
+  <variable field-name="menv_var2_visu" name="MEnvVar2Visu" data-type="real" item-kind="cell"
+      dim="1" dump="false" need-sync="false" material="false" />
+
+  <!-- MENV-VAR3-VISU -->
+  <variable field-name="menv_var3_visu" name="MEnvVar3Visu" data-type="real" item-kind="cell"
+      dim="1" dump="false" need-sync="false" material="false" />
+
 </variables>
 
 <entry-points>
@@ -173,6 +205,7 @@
   <entry-point method-name="initCartMesh" name="InitCartMesh" where="start-init" property="none" />
   <entry-point method-name="initForVol" name="InitForVol" where="start-init" property="none" />
   <entry-point method-name="initEnvOrder" name="InitEnvOrder" where="start-init" property="none" />
+  <entry-point method-name="initMEnvVar" name="InitMEnvVar" where="start-init" property="none" />
 
   <entry-point method-name="updateTensor" name="UpdateTensor" where="compute-loop" property="none" />
   <entry-point method-name="updateVectorFromTensor" name="UpdateVectorFromTensor" where="compute-loop" property="none" />
@@ -181,11 +214,17 @@
   <entry-point method-name="benchCartesian" name="BenchCartesian" where="compute-loop" property="none" />
   <entry-point method-name="computeVol" name="ComputeVol" where="compute-loop" property="none" />
   <entry-point method-name="detEnvOrder" name="DetEnvOrder" where="compute-loop" property="none" />
+  <entry-point method-name="partialImpureOnly" name="PartialImpureOnly" where="compute-loop" property="none" />
+  <entry-point method-name="partialOnly" name="PartialOnly" where="compute-loop" property="none" />
+  <entry-point method-name="partialAndMean" name="PartialAndMean" where="compute-loop" property="none" />
 </entry-points>
 
 <options>
   <!-- - - - - - acc-mem-advise - - - - -->
   <simple name="acc-mem-advise" type="bool" default="true"><description>Active/désactive tous les conseils mémoire (ie tous les appels à cudaMemAdvise).</description></simple>
+
+  <!-- - - - - - visu-m-env-var - - - - -->
+  <simple name="visu-m-env-var" type="bool" default="false"><description>Alloue et calcule <em>MEnvVar*Visu</em> pour la visualisation multi-env des variables MEnvVar{1|2|3}.</description></simple>
 
   <!-- - - - - init-node-vector-version - - - - -->
   <enumeration name="init-node-vector-version" type="eInitNodeVectorVersion" default="ori">
@@ -220,6 +259,36 @@
     <description>Choix version implémentation ComputeCqsAndVector </description>
     <enumvalue name="ori" genvalue="CCVV_ori" />
     <enumvalue name="arcgpu_v1" genvalue="CCVV_arcgpu_v1" />
+  </enumeration>
+
+  <!-- - - - - init-menv-var-version - - - - -->
+  <enumeration name="init-menv-var-version" type="eInitMEnvVar" default="ori">
+    <description>Choix version implémentation InitMEnvVar </description>
+    <enumvalue name="ori" genvalue="IMVV_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="IMVV_arcgpu_v1" />
+  </enumeration>
+
+  <!-- - - - - partial-impure-only-version - - - - -->
+  <enumeration name="partial-impure-only-version" type="ePartialImpureOnlyVersion" default="ori">
+    <description>Choix version implémentation PartialImpureOnly </description>
+    <enumvalue name="ori" genvalue="PIOV_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="PIOV_arcgpu_v1" />
+  </enumeration>
+
+  <!-- - - - - partial-only-version - - - - -->
+  <enumeration name="partial-only-version" type="ePartialOnlyVersion" default="ori">
+    <description>Choix version implémentation PartialOnly </description>
+    <enumvalue name="ori" genvalue="POV_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="POV_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2" genvalue="POV_arcgpu_v2" />
+  </enumeration>
+
+  <!-- - - - - partial-and-mean-version - - - - -->
+  <enumeration name="partial-and-mean-version" type="ePartialAndMeanVersion" default="ori">
+    <description>Choix version implémentation PartialAndMean </description>
+    <enumvalue name="ori" genvalue="PMV_ori" />
+    <enumvalue name="ori_v2" genvalue="PMV_ori_v2" />
+    <enumvalue name="arcgpu_v1" genvalue="PMV_arcgpu_v1" />
   </enumeration>
 </options>
 </module>

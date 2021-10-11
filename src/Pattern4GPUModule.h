@@ -52,6 +52,9 @@ class Pattern4GPUModule
 
   void initEnvOrder() override; // InitEnvOrder
 
+  void initMEnvVar() override; // InitMEnvVar
+
+
   //! points d'entrée "compute-loop"
   void updateTensor() override; // UpdateTensor
   void updateVectorFromTensor() override; // UpdateVectorFromTensor
@@ -63,6 +66,10 @@ class Pattern4GPUModule
   void computeVol() override; // ComputeVol
 
   void detEnvOrder() override; // DetEnvOrder
+
+  void partialImpureOnly() override; // PartialImpureOnly
+  void partialOnly() override; // PartialOnly
+  void partialAndMean() override; // PartialAndMean
 
  public:
   // Note: il faut mettre ce champs statique si on veut que sa valeur
@@ -97,6 +104,15 @@ class Pattern4GPUModule
   // Construit le tableau m_node_index_in_cells
   void _computeNodeIndexInCells();
 
+  // Ecriture m_menv_var1 dans m_menv_var1_visu pour visualisation
+  void _dumpVisuMEnvVar();
+
+  // UTILITAIRES POUR PREPARER LES CALCULS MULTI-ENVIRONNEMENT SUR GPU
+  void _computeMultiEnvGlobalCellId();
+  void _checkMultiEnvGlobalCellId();
+  void _initEnvForAcc();
+  void _updateEnvForAcc();
+
  private:
 
   IMeshMaterialMng* m_mesh_material_mng;
@@ -121,6 +137,9 @@ class Pattern4GPUModule
 
   //! Indice de chaque noeud dans la maille
   UniqueArray<Int16> m_node_index_in_cells;
+
+  // Les queues asynchrones d'exéution
+  MultiAsyncRunQueue* m_menv_queue=nullptr; //!< les queues pour traiter les environnements de façon asynchrone
 };
 
 #endif

@@ -37,6 +37,7 @@ Pattern4GPUModule::
 ~Pattern4GPUModule() {
   delete m_allenvcell_converter;
   delete m_acc_mem_adv;
+  delete m_menv_queue;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -107,7 +108,9 @@ initP4GPU()
   m_global_deltat = 1.e-3;
 
   // Pour accélérateur
-  m_acc_mem_adv = new AccMemAdviser(options()->getAccMemAdvise());
+  if (!m_acc_mem_adv) {
+    m_acc_mem_adv = new AccMemAdviser(options()->getAccMemAdvise());
+  }
   m_connectivity_view.setMesh(this->mesh());
   _computeNodeIndexInCells();
 

@@ -7,6 +7,7 @@ add_executable(Pattern4GPU Pattern4GPUModule.cc
                            Pattern4GPUBenchCartesian.cc 
                            Pattern4GPUCartesian.cc 
                            Pattern4GPUEnvOrder.cc 
+                           Pattern4GPUMultiEnv.cc 
                            main 
                            Pattern4GPU_axl.h)
 
@@ -37,6 +38,7 @@ if(WANT_CUDA)
       Pattern4GPUBenchCartesian.cc 
       Pattern4GPUCartesian.cc 
       Pattern4GPUEnvOrder.cc 
+      Pattern4GPUMultiEnv.cc 
       geomenv/GeomEnvModule.cc
       cartesian/CartesianConnectivity.cc
       cartesian/CartesianMesh.cc
