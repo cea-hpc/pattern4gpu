@@ -234,6 +234,8 @@ initCqs()
 }
 
 /*---------------------------------------------------------------------------*/
+/* Initialisation à 0 de la CQS
+ */
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
@@ -299,6 +301,72 @@ _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal
       f[envcell_i] /= volume[envcell_i];
     }
   }
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Initialisation de la CQS avec des valeurs non nulles
+ */
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+initCqs1()
+{
+  PROF_ACC_BEGIN(__FUNCTION__);
+  debug() << "Dans initCqs1";
+
+  // Valable en 3D, 8 noeuds par maille
+  m_cell_cqs.resize(8);
+
+  if (options()->getInitCqs1Version() == ICQ1V_ori)
+  { 
+    Real cos_inode[8], sin_inode[8];
+    for(Integer inode(0) ; inode<8 ; ++inode) {
+      cos_inode[inode] = cos(1+inode);
+      sin_inode[inode] = sin(1+inode);
+    }
+    ENUMERATE_CELL (cell_i, allCells()) {
+      Integer cid = cell_i.localId();
+      Real sin_cid = sin(1+cid);
+      Real cos_cid = cos(1+cid);
+      for(Integer inode(0) ; inode<8 ; ++inode) {
+        Real cx = 1e-3*(1+math::abs(sin_cid*cos_inode[inode]));
+        Real cy = 1e-3*(1+math::abs(sin_cid*sin_inode[inode]));
+        Real cz = 1e-3*(1+math::abs(cos_cid*sin_inode[inode]));
+        m_cell_cqs[cell_i][inode] = Real3(cx,cy,cz);
+      }
+    }
+  }
+  else if (options()->getInitCqs1Version() == ICQ1V_arcgpu_v1)
+  {
+    auto queue = makeQueue(m_runner);
+    auto command = makeCommand(queue);
+
+    NumArray<Real,1> cos_inode(8);
+    NumArray<Real,1> sin_inode(8);
+    Span<Real> out_cos_inode(cos_inode.to1DSpan());
+    Span<Real> out_sin_inode(sin_inode.to1DSpan());
+    for(Integer inode(0) ; inode<8 ; ++inode) {
+      out_cos_inode[inode] = cos(1+inode);
+      out_sin_inode[inode] = sin(1+inode);
+    }
+
+    auto in_cos_inode = ax::viewIn(command, cos_inode);
+    auto in_sin_inode = ax::viewIn(command, sin_inode);
+    auto out_cell_cqs = ax::viewOut(command, m_cell_cqs);
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      Real sin_cid = sin(1+cid.localId());
+      Real cos_cid = cos(1+cid.localId());
+      for(Integer inode(0) ; inode<8 ; ++inode) {
+        Real cx = 1e-3*(1+math::abs(sin_cid*in_cos_inode(inode)));
+        Real cy = 1e-3*(1+math::abs(sin_cid*in_sin_inode(inode)));
+        Real cz = 1e-3*(1+math::abs(cos_cid*in_sin_inode(inode)));
+        out_cell_cqs[cid][inode] = Real3(cx,cy,cz);
+      }
+    };
+  }
+
   PROF_ACC_END;
 }
 

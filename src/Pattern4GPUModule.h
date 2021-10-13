@@ -43,6 +43,7 @@ class Pattern4GPUModule
   void initNodeVector() override; // InitNodeVector
   void initNodeCoordBis() override; // InitNodeCoordBis
   void initCqs() override; // InitCqs
+  void initCqs1() override; // InitCqs1
   void initCellArr12() override; // InitCellArr12
 
   void initBenchCartesian() override; // InitBenchCartesian

@@ -22,6 +22,13 @@ enum eInitCqsVersion {
   ICQV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
 };
 
+/*! \brief Définit les implémentations de InitCqs1
+ */
+enum eInitCqs1Version {
+  ICQ1V_ori = 0, //! Version CPU d'origine
+  ICQ1V_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+};
+
 /*! \brief Définit les implémentations de InitCellArr12
  */
 enum eInitCellArr12Version {

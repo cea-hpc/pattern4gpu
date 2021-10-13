@@ -199,6 +199,7 @@
   <entry-point method-name="initTensor" name="InitTensor" where="start-init" property="none" />
   <entry-point method-name="initNodeVector" name="InitNodeVector" where="start-init" property="none" />
   <entry-point method-name="initCqs" name="InitCqs" where="start-init" property="none" />
+  <entry-point method-name="initCqs1" name="InitCqs1" where="start-init" property="none" />
   <entry-point method-name="initNodeCoordBis" name="InitNodeCoordBis" where="start-init" property="none" />
   <entry-point method-name="initCellArr12" name="InitCellArr12" where="start-init" property="none" />
   <entry-point method-name="initBenchCartesian" name="InitBenchCartesian" where="start-init" property="none" />
@@ -246,6 +247,13 @@
     <description>Choix version implémentation InitCqs </description>
     <enumvalue name="ori" genvalue="ICQV_ori" />
     <enumvalue name="arcgpu_v1" genvalue="ICQV_arcgpu_v1" />
+  </enumeration>
+
+  <!-- - - - - init-cqs1-version - - - - -->
+  <enumeration name="init-cqs1-version" type="eInitCqs1Version" default="ori">
+    <description>Choix version implémentation InitCqs1 </description>
+    <enumvalue name="ori" genvalue="ICQ1V_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="ICQ1V_arcgpu_v1" />
   </enumeration>
 
   <!-- - - - - init-cell-arr12-version - - - - -->
