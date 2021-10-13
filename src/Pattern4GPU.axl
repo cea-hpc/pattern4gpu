@@ -232,6 +232,7 @@
   <enumeration name="init-node-vector-version" type="eInitNodeVectorVersion" default="ori">
     <description>Choix version implémentation InitNodeVector </description>
     <enumvalue name="ori" genvalue="INVV_ori" />
+    <enumvalue name="mt" genvalue="INVV_mt" />
     <enumvalue name="arcgpu_v1" genvalue="INVV_arcgpu_v1" />
   </enumeration>
 
@@ -263,10 +264,19 @@
     <enumvalue name="arcgpu_v1" genvalue="IA12V_arcgpu_v1" />
   </enumeration>
 
+  <!-- - - - - update-vector-from-tensor-version - - - - -->
+  <enumeration name="update-vector-from-tensor-version" type="eUpdateVectorFromTensorVersion" default="ori">
+    <description>Choix version implémentation UpdateVectorFromTensor </description>
+    <enumvalue name="ori" genvalue="UVTV_ori" />
+    <enumvalue name="mt" genvalue="UVTV_mt" />
+  </enumeration>
+
   <!-- - - - - compute-cqs-vector-version - - - - -->
   <enumeration name="compute-cqs-vector-version" type="eComputeCqsVectorVersion" default="ori">
     <description>Choix version implémentation ComputeCqsAndVector </description>
     <enumvalue name="ori" genvalue="CCVV_ori" />
+    <enumvalue name="mt" genvalue="CCVV_mt" />
+    <enumvalue name="mt_v2" genvalue="CCVV_mt_v2" />
     <enumvalue name="arcgpu_v1" genvalue="CCVV_arcgpu_v1" />
   </enumeration>
 

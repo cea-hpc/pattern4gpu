@@ -5,6 +5,7 @@
  */
 enum eInitNodeVectorVersion {
   INVV_ori = 0, //! Version CPU d'origine
+  INVV_mt, //! Version CPU multi-thread
   INVV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
 };
 
@@ -36,10 +37,19 @@ enum eInitCellArr12Version {
   IA12V_arcgpu_v1 //! Implémentation API GPU Arcane version 1
 };
 
+/*! \brief Définit les implémentations de UpdateVectorFromTensor
+ */
+enum eUpdateVectorFromTensorVersion {
+  UVTV_ori = 0, //! Version CPU d'origine
+  UVTV_mt //! Implémentation CPU multi-thread
+};
+
 /*! \brief Définit les implémentations de ComputeCqsAndVector
  */
 enum eComputeCqsVectorVersion {
   CCVV_ori = 0, //! Version CPU d'origine
+  CCVV_mt, //! Implémentation CPU Arcane multi-thread
+  CCVV_mt_v2, //! Implémentation CPU Arcane multi-thread version 2
   CCVV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
 };
 
