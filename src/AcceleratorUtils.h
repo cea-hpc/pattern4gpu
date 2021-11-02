@@ -62,6 +62,77 @@ ArrayView<value_type> envView(CellMaterialVariableScalarRef<value_type>& var_men
 }
 
 /*---------------------------------------------------------------------------*/
+/* Pour repérer un EnvCell (fortement inspiré de MatVarIndex)                */
+/*---------------------------------------------------------------------------*/
+class EnvVarIndex {
+ public:
+  ARCCORE_HOST_DEVICE EnvVarIndex(Int32 array_index, Int32 value_index) :
+    m_array_index (array_index),
+    m_value_index (value_index)
+  {
+  }
+  ARCCORE_HOST_DEVICE Int32 arrayIndex() const { return m_array_index; }
+  ARCCORE_HOST_DEVICE Int32 valueIndex() const { return m_value_index; }
+ protected:
+  Int32 m_array_index;
+  Int32 m_value_index;
+};
+
+/*---------------------------------------------------------------------------*/
+/* Vues sur les variables multi-environnement                                */
+/*---------------------------------------------------------------------------*/
+template<typename value_type>
+class MultiEnvView {
+ public:
+  MultiEnvView(const Span< Span<value_type> >& spn) :
+    m_var_menv_views (spn)
+  {
+  }
+
+  ARCCORE_HOST_DEVICE MultiEnvView(const MultiEnvView<value_type>& rhs) :
+    m_var_menv_views (rhs.m_var_menv_views)
+  {
+  }
+
+  ARCCORE_HOST_DEVICE value_type operator[](const EnvVarIndex& evi) const {
+    return m_var_menv_views[evi.arrayIndex()][evi.valueIndex()];
+  }
+
+  ARCCORE_HOST_DEVICE void setValue(const EnvVarIndex& evi, value_type val) const {
+    return m_var_menv_views[evi.arrayIndex()].setItem(evi.valueIndex(), val);
+  }
+
+ public:
+  Span< Span<value_type> > m_var_menv_views;
+};
+
+/*---------------------------------------------------------------------------*/
+/* Pour créer des vues sur les variables multi-environnement                 */
+/*---------------------------------------------------------------------------*/
+template<typename value_type>
+class MultiEnvVar {
+ public:
+  MultiEnvVar(CellMaterialVariableScalarRef<value_type>& var_menv, IMeshMaterialMng* mm) :
+   m_var_menv_impl(platform::getAcceleratorHostMemoryAllocator(), mm->environments().size()+1)
+  {
+    m_var_menv_impl[0].setArray(Span<value_type>(var_menv._internalValue()[0]));
+    ENUMERATE_ENV(ienv, mm) {
+      IMeshEnvironment* env = *ienv;
+      Integer env_id = env->id();
+      m_var_menv_impl[env_id+1].setArray(Span<value_type>(envView(var_menv,env)));
+    }
+  }
+
+  //! Pour y accéder en lecture/écriture
+  auto span() {
+    return MultiEnvView<value_type>(m_var_menv_impl);
+  }
+
+ protected:
+  UniqueArray< Span<value_type> > m_var_menv_impl;
+};
+
+/*---------------------------------------------------------------------------*/
 /* Pour gérer un nombre dynamique de RunQueue asynchrones                    */
 /*---------------------------------------------------------------------------*/
 class MultiAsyncRunQueue {

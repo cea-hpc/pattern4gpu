@@ -877,32 +877,12 @@ partialAndMean4() {
     auto in_l_env_idx = m_l_env_idx.constSpan();
     auto in_l_env_pos = ax::viewIn(command, m_l_env_pos);
     // fin description multi-env
-    
-    // TODO : variable multi-env à encapsuler
-    UniqueArray< Span<Real> > menv_menv_var2(platform::getAcceleratorHostMemoryAllocator(), max_nb_env+1);
+   
+    MultiEnvVar<Real> menv_menv_var2(m_menv_var2, m_mesh_material_mng);
+    auto in_menv_var2(menv_menv_var2.span());
 
-    menv_menv_var2[0].setArray(Span<Real>(m_menv_var2._internalValue()[0]));
-    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
-      IMeshEnvironment* env = *ienv;
-      Integer env_id = env->id();
-      menv_menv_var2[env_id+1].setArray(Span<Real>(envView(m_menv_var2,env)));
-    }
-    // fin variable multi-env
-    
-    auto in_menv_var2 = menv_menv_var2.constSpan();
-
-    // TODO : variable multi-env à encapsuler
-    UniqueArray< Span<Real> > menv_menv_var3(platform::getAcceleratorHostMemoryAllocator(), max_nb_env+1);
-
-    menv_menv_var3[0].setArray(Span<Real>(m_menv_var3._internalValue()[0]));
-    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
-      IMeshEnvironment* env = *ienv;
-      Integer env_id = env->id();
-      menv_menv_var3[env_id+1].setArray(Span<Real>(envView(m_menv_var3,env)));
-    }
-    // fin variable multi-env
-    
-    auto out_menv_var3 = menv_menv_var3.span();
+    MultiEnvVar<Real> menv_menv_var3(m_menv_var3, m_mesh_material_mng);
+    auto out_menv_var3(menv_menv_var3.span());
 
     auto in_menv_var2_g    = ax::viewIn(command, m_menv_var2.globalVariable());
     auto in_menv_var3_g    = ax::viewIn(command, m_menv_var3.globalVariable());
@@ -914,17 +894,19 @@ partialAndMean4() {
       for(Integer ienv=0 ; ienv<in_nb_env[cid] ; ++ienv) {
         Integer i=in_l_env_idx[cid.localId()*max_nb_env+ienv];
         Integer j=in_l_env_pos[cid][ienv];
+        EnvVarIndex evi(i,j);
 
-        sum2 += in_menv_var2[i][j]/in_menv_var2_g[cid];
+        sum2 += in_menv_var2[evi]/in_menv_var2_g[cid];
       }
 
       Real sum3=0.;
       for(Integer ienv=0 ; ienv<in_nb_env[cid] ; ++ienv) {
         Integer i=in_l_env_idx[cid.localId()*max_nb_env+ienv];
         Integer j=in_l_env_pos[cid][ienv];
+        EnvVarIndex evi(i,j);
 
-        Real contrib2 = (in_menv_var2[i][j]/in_menv_var2_g[cid])*(sum2+1.);
-        out_menv_var3[i][j] = contrib2 * in_menv_var3_g[cid];
+        Real contrib2 = (in_menv_var2[evi]/in_menv_var2_g[cid])*(sum2+1.);
+        out_menv_var3.setValue(evi, contrib2 * in_menv_var3_g[cid]);
         sum3 += contrib2;
       }
 
