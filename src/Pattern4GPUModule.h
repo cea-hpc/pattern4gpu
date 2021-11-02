@@ -70,6 +70,7 @@ class Pattern4GPUModule
   void partialImpureOnly() override; // PartialImpureOnly
   void partialOnly() override; // PartialOnly
   void partialAndMean() override; // PartialAndMean
+  void partialAndMean4() override; // PartialAndMean4
 
  public:
   // Note: il faut mettre ce champs statique si on veut que sa valeur
@@ -121,6 +122,7 @@ class Pattern4GPUModule
   MaterialVariableCellReal m_compxx;
   MaterialVariableCellReal m_compxy;
   MaterialVariableCellReal m_compyy;
+  VariableCellReal m_tmp1; // un tableau temporaire de travail
 
   // CartesianInterface:: = Arcane:: ou Cartesian::
   CartesianInterface::ICartesianMesh* m_cartesian_mesh = nullptr;
@@ -137,6 +139,9 @@ class Pattern4GPUModule
 
   //! Indice de chaque noeud dans la maille
   UniqueArray<Int16> m_node_index_in_cells;
+
+  //! liste des indexes des env par maille
+  UniqueArray<Int16> m_l_env_idx;
 
   // Les queues asynchrones d'exéution
   MultiAsyncRunQueue* m_menv_queue=nullptr; //!< les queues pour traiter les environnements de façon asynchrone

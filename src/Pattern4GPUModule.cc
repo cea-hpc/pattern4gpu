@@ -29,6 +29,8 @@ Pattern4GPUModule(const ModuleBuildInfo& mbi)
         m_mesh_material_mng, "Compxy", IVariable::PTemporary | IVariable::PExecutionDepend)),
   m_compyy(MaterialVariableBuildInfo(
         m_mesh_material_mng, "Compyy", IVariable::PTemporary | IVariable::PExecutionDepend)),
+  m_tmp1(VariableBuildInfo(mesh(), "Tmp1", IVariable::PTemporary | IVariable::PExecutionDepend)),
+  m_l_env_idx(platform::getAcceleratorHostMemoryAllocator()),
   m_node_index_in_cells(platform::getAcceleratorHostMemoryAllocator())
 {
 }
