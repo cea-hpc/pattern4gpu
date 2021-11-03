@@ -35,6 +35,7 @@
     <!-- <init-menv-var-version>ori</init-menv-var-version> -->
     <init-menv-var-version>arcgpu_v1</init-menv-var-version>
     <!-- <partial-and-mean4-version>ori</partial-and-mean4-version> -->
-    <partial-and-mean4-version>arcgpu_v1</partial-and-mean4-version>
+    <!-- <partial-and-mean4-version>arcgpu_v1</partial-and-mean4-version> -->
+    <partial-and-mean4-version>arcgpu_v2</partial-and-mean4-version>
   </pattern4-g-p-u>
 </case>

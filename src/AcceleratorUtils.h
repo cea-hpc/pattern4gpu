@@ -4,10 +4,16 @@
 #include "arcane/IApplication.h"
 #include "arcane/accelerator/Reduce.h"
 #include "arcane/accelerator/Runner.h"
-#include "arcane/accelerator/Views.h"
 #include "arcane/accelerator/Accelerator.h"
 #include "arcane/accelerator/RunCommandLoop.h"
 #include "arcane/accelerator/RunCommandEnumerate.h"
+#include "arcane/MeshVariableScalarRef.h"
+#include "arcane/MeshVariableArrayRef.h"
+#include "arcane/accelerator/Views.h"
+#include <arcane/IMesh.h>
+#include <arcane/VariableBuildInfo.h>
+#include <arcane/VariableView.h>
+#include <arcane/materials/ComponentPartItemVectorView.h>
 
 /*---------------------------------------------------------------------------*/
 /* Pour les accélérateurs                                                    */
@@ -48,6 +54,83 @@ namespace ax = Arcane::Accelerator;
 #endif
 
 #endif
+
+/*---------------------------------------------------------------------------*/
+/* Pour gérer un nombre dynamique de RunQueue asynchrones                    */
+/*---------------------------------------------------------------------------*/
+class MultiAsyncRunQueue {
+ public:
+
+  MultiAsyncRunQueue(ax::Runner& runner, Integer asked_nb_queue) {
+    // au plus 32 queues (32 = nb de kernels max exécutables simultanément)
+    m_nb_queue = std::min(asked_nb_queue, 32);
+    m_queues.resize(m_nb_queue);
+    for(Integer iq=0 ; iq<m_nb_queue ; ++iq) {
+      m_queues[iq] = new ax::RunQueue(runner);
+      m_queues[iq]->setAsync(true);
+    }
+  }
+
+  virtual ~MultiAsyncRunQueue() {
+    for(auto q : m_queues) {
+      delete q;
+    }
+    m_nb_queue=0;
+    m_queues.clear();
+  }
+
+  // Pour récupérer la iq%nbQueue()-ième queue d'exécution
+  inline ax::RunQueue& queue(Integer iq) {
+    return *(m_queues[iq%m_nb_queue]);
+  }
+
+  // Force l'attente de toutes les RunQueue
+  void waitAllQueues() {
+    for(auto q : m_queues) {
+      q->barrier();
+    }
+  }
+
+  // Nombre de RunQueue asynchrones
+  inline Integer nbQueue() const {
+    ARCANE_ASSERT(m_nb_queue==m_queues.size(), ("m_nb_queue est different de m_queues.size()"));
+    return m_nb_queue;
+  }
+
+ protected:
+  UniqueArray<ax::RunQueue*> m_queues; //!< toutes les RunQueue
+  Integer m_nb_queue=0; //!< m_queues.size()
+};
+
+/*---------------------------------------------------------------------------*/
+/* "Conseiller" mémoire, permet de caractériser des accès mémoire            */
+/*---------------------------------------------------------------------------*/
+class AccMemAdviser {
+ public:
+  AccMemAdviser(bool enable=true) : 
+    m_enable(enable) {
+#ifdef ARCANE_COMPILING_CUDA
+    if (m_enable) {
+      cudaGetDevice(&m_device);
+    }
+#endif
+  }
+  ~AccMemAdviser() {}
+
+  bool enable() const { return m_enable; }
+
+  template<typename ViewType>
+  void setReadMostly(ViewType view) {
+#ifdef ARCANE_COMPILING_CUDA
+    if (m_enable && view.size()) {
+      cudaMemAdvise (view.data(), view.size(), cudaMemAdviseSetReadMostly,m_device);
+    }
+#endif
+  }
+ private:
+  bool m_enable=true;
+  int m_device=-1;
+};
 
 /*---------------------------------------------------------------------------*/
 /* Pour créer une vue sur les valeurs d'un environnement                     */
@@ -133,80 +216,161 @@ class MultiEnvVar {
 };
 
 /*---------------------------------------------------------------------------*/
-/* Pour gérer un nombre dynamique de RunQueue asynchrones                    */
+/* Vue sur stockage du multi-env                                             */
 /*---------------------------------------------------------------------------*/
-class MultiAsyncRunQueue {
+class MultiEnvCellViewIn {
  public:
+  MultiEnvCellViewIn(ax::RunCommand& command, Integer max_nb_env,
+      const VariableCellInteger& v_nb_env,
+      const UniqueArray<Int16>& v_l_env_arrays_idx,
+      const VariableCellArrayInteger& v_l_env_values_idx) :
+    m_max_nb_env (max_nb_env),
+    m_nb_env_in (ax::viewIn(command,v_nb_env)),
+    m_l_env_arrays_idx_in (v_l_env_arrays_idx.constSpan()),
+    m_l_env_values_idx_in (ax::viewIn(command,v_l_env_values_idx))
+  {}
 
-  MultiAsyncRunQueue(ax::Runner& runner, Integer asked_nb_queue) {
-    // au plus 32 queues (32 = nb de kernels max exécutables simultanément)
-    m_nb_queue = std::min(asked_nb_queue, 32);
-    m_queues.resize(m_nb_queue);
-    for(Integer iq=0 ; iq<m_nb_queue ; ++iq) {
-      m_queues[iq] = new ax::RunQueue(runner);
-      m_queues[iq]->setAsync(true);
-    }
+  ARCCORE_HOST_DEVICE MultiEnvCellViewIn(const MultiEnvCellViewIn& rhs) : 
+    m_max_nb_env (rhs.m_max_nb_env),
+    m_nb_env_in (rhs.m_nb_env_in),
+    m_l_env_arrays_idx_in (rhs.m_l_env_arrays_idx_in),
+    m_l_env_values_idx_in (rhs.m_l_env_values_idx_in)
+  {}
+
+  ARCCORE_HOST_DEVICE Integer nbEnv(CellLocalId cid) const {
+    return m_nb_env_in[cid];
   }
 
-  virtual ~MultiAsyncRunQueue() {
-    for(auto q : m_queues) {
-      delete q;
-    }
-    m_nb_queue=0;
-    m_queues.clear();
-  }
-
-  // Pour récupérer la iq%nbQueue()-ième queue d'exécution
-  inline ax::RunQueue& queue(Integer iq) {
-    return *(m_queues[iq%m_nb_queue]);
-  }
-
-  // Force l'attente de toutes les RunQueue
-  void waitAllQueues() {
-    for(auto q : m_queues) {
-      q->barrier();
-    }
-  }
-
-  // Nombre de RunQueue asynchrones
-  inline Integer nbQueue() const {
-    ARCANE_ASSERT(m_nb_queue==m_queues.size(), ("m_nb_queue est different de m_queues.size()"));
-    return m_nb_queue;
+  ARCCORE_HOST_DEVICE EnvVarIndex envCell(CellLocalId cid, Integer ienv) const {
+    return EnvVarIndex(
+        m_l_env_arrays_idx_in[cid.localId()*m_max_nb_env+ienv],
+        m_l_env_values_idx_in[cid][ienv]);
   }
 
  protected:
-  UniqueArray<ax::RunQueue*> m_queues; //!< toutes les RunQueue
-  Integer m_nb_queue=0; //!< m_queues.size()
+  Integer m_max_nb_env;
+  ax::VariableCellInt32InView m_nb_env_in;
+  Span<const Int16> m_l_env_arrays_idx_in;
+  ax::ItemVariableArrayInViewT<Cell,Int32> m_l_env_values_idx_in;
 };
 
 /*---------------------------------------------------------------------------*/
-/* "Conseiller" mémoire, permet de caractériser des accès mémoire            */
+/* Stockage du multi-env                                                     */
 /*---------------------------------------------------------------------------*/
-class AccMemAdviser {
+class MultiEnvCellStorage {
  public:
-  AccMemAdviser(bool enable=true) : 
-    m_enable(enable) {
-#ifdef ARCANE_HAS_CUDA
-    if (m_enable) {
-      cudaGetDevice(&m_device);
+  MultiEnvCellStorage(IMeshMaterialMng* mm, AccMemAdviser* acc_mem_adv) :
+    m_mesh_material_mng (mm),
+    m_max_nb_env (mm->environments().size()),
+    m_nb_env(VariableBuildInfo(mm->mesh(), "NbEnv" , IVariable::PNoDump| IVariable::PNoNeedSync)),
+    m_l_env_arrays_idx(platform::getAcceleratorHostMemoryAllocator()),
+    m_l_env_values_idx(VariableBuildInfo(mm->mesh(), "LEnvValuesIdx" , IVariable::PNoDump| IVariable::PNoNeedSync))
+#ifdef ARCANE_DEBUG
+    , m_env_id(VariableBuildInfo(mm->mesh(), "EnvId" , IVariable::PNoDump| IVariable::PNoNeedSync))
+#endif
+  {
+    m_l_env_arrays_idx.resize(m_max_nb_env*mm->mesh()->allCells().size());
+    acc_mem_adv->setReadMostly(m_l_env_arrays_idx.view());
+    m_l_env_values_idx.resize(m_max_nb_env);
+  }
+
+  //! Remplissage
+  void buildStorage(Materials::MaterialVariableCellInteger& v_global_cell) {
+    ENUMERATE_CELL(icell, m_mesh_material_mng->mesh()->allCells()){
+      // Init du nb d'env par maille qui va être calculé à la boucle suivante
+      m_nb_env[icell] = 0;
+    }
+
+    auto in_nb_env  = Arcane::viewIn(m_nb_env);
+    auto out_nb_env = Arcane::viewOut(m_nb_env);
+    auto out_l_env_pos = Arcane::viewOut(m_l_env_values_idx);
+
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+      Integer env_id = env->id();
+
+      // Mailles mixtes
+      Span<const Integer> in_global_cell(envView(v_global_cell, env));
+
+      Integer nb_imp = env->impureEnvItems().nbItem();
+      for(Integer imix = 0 ; imix < nb_imp ; ++imix) {
+        CellLocalId cid(in_global_cell[imix]); // on récupère l'identifiant de la maille globale
+
+        auto index_cell = in_nb_env[cid];
+
+        // On relève le numéro de l'environnement 
+        // et l'indice de la maille dans la liste de mailles mixtes env
+        m_l_env_arrays_idx[cid*m_max_nb_env+index_cell] = env_id+1; // décalage +1 car 0 est pris pour global
+        out_l_env_pos[cid][index_cell] = imix;
+
+        out_nb_env[cid] = index_cell+1; // ++ n'est pas supporté
+      }
+
+      // Mailles pures
+      // Pour les mailles pures, valueIndexes() est la liste des ids locaux des mailles
+      Span<const Int32> in_cell_id(env->pureEnvItems().valueIndexes());
+
+      // Nombre de mailles pures de l'environnement
+      Integer nb_pur = env->pureEnvItems().nbItem();
+
+      for(Integer ipur = 0 ; ipur < nb_pur ; ++ipur) {
+        CellLocalId cid(in_cell_id[ipur]); // accés indirect à la valeur de la maille
+
+        auto index_cell = in_nb_env[cid];
+        ARCANE_ASSERT(index_cell==0, ("Maille pure mais index_cell!=0"));
+
+        m_l_env_arrays_idx[cid*m_max_nb_env+index_cell] = 0; // 0 référence le tableau global
+        out_l_env_pos[cid][index_cell] = cid.localId();
+
+        // Equivalent à affecter 1
+        out_nb_env[cid] = index_cell+1; // ++ n'est pas supporté
+      }
+    }
+
+    checkStorage(v_global_cell);
+  }
+
+  //! Verification
+  void checkStorage(Materials::MaterialVariableCellInteger& v_global_cell) {
+#ifdef ARCANE_DEBUG
+    // m_env_id doit être calculé
+    MultiEnvVar<Integer> menv_global_cell(v_global_cell, m_mesh_material_mng);
+    auto in_menv_global_cell(menv_global_cell.span());
+
+    ENUMERATE_CELL(icell, m_mesh_material_mng->mesh()->allCells()){
+      Cell cell = * icell;
+      Integer cid = cell.localId();
+
+      Integer nb_env = m_nb_env[icell];
+      Integer nb_env_bis = (m_env_id[cell]>=0 ? 1 : -m_env_id[cell]-1);
+      ARCANE_ASSERT(nb_env_bis==nb_env, ("nb_env_bis!=nb_env"));
+
+      for(Integer ienv=0 ; ienv<nb_env ; ++ienv) {
+        Integer i=m_l_env_arrays_idx[cid*m_max_nb_env+ienv];
+        Integer j=m_l_env_values_idx[icell][ienv];
+        EnvVarIndex evi(i,j);
+
+        Integer cid_bis=in_menv_global_cell[evi];
+        ARCANE_ASSERT(cid_bis==cid, ("cid_bis!=cid"));
+      }
     }
 #endif
   }
-  ~AccMemAdviser() {}
 
-  bool enable() const { return m_enable; }
-
-  template<typename ViewType>
-  void setReadMostly(ViewType view) {
-#ifdef ARCANE_HAS_CUDA
-    if (m_enable && view.size()) {
-      cudaMemAdvise (view.data(), view.size(), cudaMemAdviseSetReadMostly,m_device);
-    }
-#endif
+  //! Vue sur le stockage pour utilisation en lecture sur GPU
+  MultiEnvCellViewIn viewIn(ax::RunCommand& command) {
+    return MultiEnvCellViewIn(command, m_max_nb_env, m_nb_env, m_l_env_arrays_idx, m_l_env_values_idx);
   }
- private:
-  bool m_enable=true;
-  int m_device=-1;
+
+ protected:
+  IMeshMaterialMng* m_mesh_material_mng=nullptr;
+  Integer m_max_nb_env;
+  VariableCellInteger m_nb_env;  //! Nb d'env par maille
+  UniqueArray<Int16> m_l_env_arrays_idx; //! liste des indexes des env par maille
+  VariableCellArrayInteger m_l_env_values_idx;
+#ifdef ARCANE_DEBUG
+  VariableCellInteger m_env_id;
+#endif
 };
 
 /*---------------------------------------------------------------------------*/

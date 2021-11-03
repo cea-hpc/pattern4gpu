@@ -1,7 +1,5 @@
 #include "Pattern4GPUModule.h"
 
-#include <arcane/VariableView.h>
-
 #include <arcane/materials/ComponentPartItemVectorView.h>
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
 
@@ -44,58 +42,9 @@ _computeMultiEnvGlobalCellId() {
         m_env_id[icell] = ev.environmentId();
       }
     }
-
-    // Init du nb d'env par maille qui va être calculé à la boucle suivante
-    m_nb_env[icell] = 0;
   }
-  // On va construire par maille
-  Integer max_nb_env = m_mesh_material_mng->environments().size();
 
-  auto in_nb_env  = viewIn(m_nb_env);
-  auto out_nb_env = viewOut(m_nb_env);
-  auto out_l_env_pos = viewOut(m_l_env_pos);
-
-  ENUMERATE_ENV(ienv, m_mesh_material_mng) {
-    IMeshEnvironment* env = *ienv;
-    Integer env_id = env->id();
-
-    // Mailles mixtes
-    Span<const Integer> in_global_cell(envView(m_global_cell, env));
-    
-    Integer nb_imp = env->impureEnvItems().nbItem();
-    for(Integer imix = 0 ; imix < nb_imp ; ++imix) {
-      CellLocalId cid(in_global_cell[imix]); // on récupère l'identifiant de la maille globale
-
-      auto index_cell = in_nb_env[cid];
-
-      // On relève le numéro de l'environnement 
-      // et l'indice de la maille dans la liste de mailles mixtes env
-      m_l_env_idx[cid*max_nb_env+index_cell] = env_id+1; // décalage +1 car 0 est pris pour global
-      out_l_env_pos[cid][index_cell] = imix;
-
-      out_nb_env[cid] = index_cell+1; // ++ n'est pas supporté
-    }
-
-    // Mailles pures
-    // Pour les mailles pures, valueIndexes() est la liste des ids locaux des mailles
-    Span<const Int32> in_cell_id(env->pureEnvItems().valueIndexes());
-
-    // Nombre de mailles pures de l'environnement
-    Integer nb_pur = env->pureEnvItems().nbItem();
-
-    for(Integer ipur = 0 ; ipur < nb_pur ; ++ipur) {
-      CellLocalId cid(in_cell_id[ipur]); // accés indirect à la valeur de la maille
-
-      auto index_cell = in_nb_env[cid];
-      ARCANE_ASSERT(index_cell==0, ("Maille pure mais index_cell!=0"));
-
-      m_l_env_idx[cid*max_nb_env+index_cell] = 0; // 0 référence le tableau global
-      out_l_env_pos[cid][index_cell] = cid.localId();
-
-      // Equivalent à affecter 1
-      out_nb_env[cid] = index_cell+1; // ++ n'est pas supporté
-    }
-  }
+  m_menv_cell->buildStorage(m_global_cell);
 
   _checkMultiEnvGlobalCellId();
   PROF_ACC_END;
@@ -107,7 +56,6 @@ _checkMultiEnvGlobalCellId() {
   debug() << "_checkMultiEnvGlobalCellId";
 
   // Vérification
-  Integer max_nb_env = m_mesh_material_mng->environments().size();
   ENUMERATE_ENV(ienv, m_mesh_material_mng) {
     IMeshEnvironment* env = *ienv;
     Integer env_id = env->id();
@@ -125,31 +73,7 @@ _checkMultiEnvGlobalCellId() {
     }
   }
 
-  // TODO : à encapsuler
-  UniqueArray< Span<Integer> > menv_global_cell(platform::getAcceleratorHostMemoryAllocator(), max_nb_env+1);
-
-  menv_global_cell[0].setArray(Span<Integer>(m_global_cell._internalValue()[0]));
-  ENUMERATE_ENV(ienv, m_mesh_material_mng) {
-    IMeshEnvironment* env = *ienv;
-    Integer env_id = env->id();
-    menv_global_cell[env_id+1].setArray(Span<Integer>(envView(m_global_cell,env)));
-  }
-  ENUMERATE_CELL(icell, allCells()){
-    Cell cell = * icell;
-    Integer cid = cell.localId();
-
-    Integer nb_env = m_nb_env[icell];
-    Integer nb_env_bis = (m_env_id[cell]>=0 ? 1 : -m_env_id[cell]-1);
-    ARCANE_ASSERT(nb_env_bis==nb_env, ("nb_env_bis!=nb_env"));
-
-    for(Integer ienv=0 ; ienv<nb_env ; ++ienv) {
-      Integer i=m_l_env_idx[cid*max_nb_env+ienv];
-      Integer j=m_l_env_pos[icell][ienv];
-
-      Integer cid_bis=menv_global_cell[i][j];
-      ARCANE_ASSERT(cid_bis==cid, ("cid_bis!=cid"));
-    }
-  }
+  m_menv_cell->checkStorage(m_global_cell);
 #endif
 }
 
@@ -163,9 +87,7 @@ _initEnvForAcc() {
   Integer max_nb_env = m_mesh_material_mng->environments().size();
   m_menv_queue = new MultiAsyncRunQueue(m_runner, max_nb_env);
 
-  m_l_env_idx.resize(max_nb_env*allCells().size());
-  m_acc_mem_adv->setReadMostly(m_l_env_idx.view());
-  m_l_env_pos.resize(max_nb_env);
+  m_menv_cell = new MultiEnvCellStorage(m_mesh_material_mng, m_acc_mem_adv);
 
   // construit le tableau multi-env m_global_cell_id et le tableau global m_env_id
   _computeMultiEnvGlobalCellId();
@@ -870,14 +792,6 @@ partialAndMean4() {
     auto queue = makeQueue(m_runner);
     auto command = makeCommand(queue);
 
-    // TODO : description multi-env à encapsuler
-    Integer max_nb_env = m_mesh_material_mng->environments().size();
-    auto in_nb_env  = ax::viewIn(command, m_nb_env);
-
-    auto in_l_env_idx = m_l_env_idx.constSpan();
-    auto in_l_env_pos = ax::viewIn(command, m_l_env_pos);
-    // fin description multi-env
-   
     MultiEnvVar<Real> menv_menv_var2(m_menv_var2, m_mesh_material_mng);
     auto in_menv_var2(menv_menv_var2.span());
 
@@ -888,22 +802,21 @@ partialAndMean4() {
     auto in_menv_var3_g    = ax::viewIn(command, m_menv_var3.globalVariable());
     auto out_menv_var1_g   = ax::viewOut(command, m_menv_var1.globalVariable());
 
+    // Pour décrire l'accés multi-env sur GPU
+    auto in_menv_cell(m_menv_cell->viewIn(command));
+
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
 
       Real sum2=0.;
-      for(Integer ienv=0 ; ienv<in_nb_env[cid] ; ++ienv) {
-        Integer i=in_l_env_idx[cid.localId()*max_nb_env+ienv];
-        Integer j=in_l_env_pos[cid][ienv];
-        EnvVarIndex evi(i,j);
+      for(Integer ienv=0 ; ienv<in_menv_cell.nbEnv(cid) ; ++ienv) {
+        auto evi = in_menv_cell.envCell(cid,ienv);
 
         sum2 += in_menv_var2[evi]/in_menv_var2_g[cid];
       }
 
       Real sum3=0.;
-      for(Integer ienv=0 ; ienv<in_nb_env[cid] ; ++ienv) {
-        Integer i=in_l_env_idx[cid.localId()*max_nb_env+ienv];
-        Integer j=in_l_env_pos[cid][ienv];
-        EnvVarIndex evi(i,j);
+      for(Integer ienv=0 ; ienv<in_menv_cell.nbEnv(cid) ; ++ienv) {
+        auto evi = in_menv_cell.envCell(cid,ienv);
 
         Real contrib2 = (in_menv_var2[evi]/in_menv_var2_g[cid])*(sum2+1.);
         out_menv_var3.setValue(evi, contrib2 * in_menv_var3_g[cid]);

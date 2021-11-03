@@ -166,14 +166,6 @@
   <variable field-name="env_id" name="EnvId" data-type="integer" item-kind="cell"
 	    dim="0" dump="false" need-sync="false" />
 
-  <!-- L ENV POS -->
-  <variable field-name="l_env_pos" name="LEnvPos" data-type="integer" item-kind="cell"
-	    dim="1" dump="false" need-sync="false" />
-
-  <!-- NB ENV -->
-  <variable field-name="nb_env" name="NbEnv" data-type="integer" item-kind="cell"
-	    dim="0" dump="false" need-sync="false" />
-
   <!-- MENV-VAR1 -->
   <variable field-name="menv_var1" name="MEnvVar1" data-type="real" item-kind="cell"
       dim="0" dump="false" need-sync="false" material="true" />

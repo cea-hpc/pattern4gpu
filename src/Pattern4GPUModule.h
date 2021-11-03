@@ -140,8 +140,8 @@ class Pattern4GPUModule
   //! Indice de chaque noeud dans la maille
   UniqueArray<Int16> m_node_index_in_cells;
 
-  //! liste des indexes des env par maille
-  UniqueArray<Int16> m_l_env_idx;
+  //! Description/accès aux mailles multi-env
+  MultiEnvCellStorage* m_menv_cell=nullptr;
 
   // Les queues asynchrones d'exéution
   MultiAsyncRunQueue* m_menv_queue=nullptr; //!< les queues pour traiter les environnements de façon asynchrone
