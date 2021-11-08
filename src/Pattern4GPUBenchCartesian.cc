@@ -66,19 +66,6 @@ initBenchCartesian() {
     m_face_arr1[face_i] = Real(face_i.localId());
   }
   PROF_ACC_END;
-
-  // "Conseils" accés mémoire
-  if (!m_acc_mem_adv) {
-    m_acc_mem_adv = new AccMemAdviser(options()->getAccMemAdvise());
-  }
-
-  for(Integer dir(0) ; dir < mesh()->dimension() ; ++dir) {
-    auto cell_dm = m_arc_cartesian_mesh->cellDirection(dir);
-
-    m_acc_mem_adv->setReadMostly(cell_dm.innerCells().view().localIds());
-    m_acc_mem_adv->setReadMostly(cell_dm.outerCells().view().localIds());
-    m_acc_mem_adv->setReadMostly(cell_dm.allCells().view().localIds());
-  }
 }
 
 /*---------------------------------------------------------------------------*/

@@ -6,7 +6,7 @@
 #include <arcane/materials/MeshMaterialVariableRef.h>
 
 // Ajout pour accélérateur
-#include "AcceleratorUtils.h"
+#include "accenv/AcceleratorUtils.h"
 //
 
 /*! \brief Définit les configurations géométriques pré-définies

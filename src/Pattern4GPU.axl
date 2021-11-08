@@ -217,6 +217,7 @@
   <entry-point method-name="partialImpureOnly" name="PartialImpureOnly" where="compute-loop" property="none" />
   <entry-point method-name="partialOnly" name="PartialOnly" where="compute-loop" property="none" />
   <entry-point method-name="partialAndMean" name="PartialAndMean" where="compute-loop" property="none" />
+  <entry-point method-name="partialAndMean4" name="PartialAndMean4" where="compute-loop" property="none" />
 </entry-points>
 
 <options>
@@ -289,6 +290,15 @@
     <enumvalue name="ori" genvalue="PMV_ori" />
     <enumvalue name="ori_v2" genvalue="PMV_ori_v2" />
     <enumvalue name="arcgpu_v1" genvalue="PMV_arcgpu_v1" />
+  </enumeration>
+
+  <!-- - - - - partial-and-mean4-version - - - - -->
+  <enumeration name="partial-and-mean4-version" type="ePartialAndMean4Version" default="ori">
+    <description>Choix version implémentation PartialAndMean4 </description>
+    <enumvalue name="ori" genvalue="PM4V_ori" />
+    <enumvalue name="ori_v2" genvalue="PM4V_ori_v2" />
+    <enumvalue name="arcgpu_v1" genvalue="PM4V_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2" genvalue="PM4V_arcgpu_v2" />
   </enumeration>
 </options>
 </module>

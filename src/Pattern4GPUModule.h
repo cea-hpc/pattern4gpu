@@ -9,8 +9,8 @@
 #include "cartesian/interface/ICartesianMesh.h"
 
 // Ajout pour accélérateur
-#include "arcane/UnstructuredMeshConnectivity.h"
-#include "AcceleratorUtils.h"
+#include "accenv/IAccEnv.h"
+#include "accenv/AcceleratorUtils.h"
 //
 
 // Ce fichier doit être inclu avant Pattern4GPU_axl.h
@@ -70,13 +70,9 @@ class Pattern4GPUModule
   void partialImpureOnly() override; // PartialImpureOnly
   void partialOnly() override; // PartialOnly
   void partialAndMean() override; // PartialAndMean
+  void partialAndMean4() override; // PartialAndMean4
 
  public:
-  // Note: il faut mettre ce champs statique si on veut que sa valeur
-  // soit correcte lors de la capture avec CUDA (sinon on passe par this et
-  // cela provoque une erreur mémoire)
-  static const Integer MAX_NODE_CELL = 8;
-
   // Implémentations des points d'entrées, devrait être private mais 
   // impossible car toute méthode déportée sur GPU doit être publique !
   void _computeCqsAndVector_Vori();
@@ -101,17 +97,8 @@ class Pattern4GPUModule
   template<typename CartesianMeshT>
   void _detEnvOrder();
 
-  // Construit le tableau m_node_index_in_cells
-  void _computeNodeIndexInCells();
-
   // Ecriture m_menv_var1 dans m_menv_var1_visu pour visualisation
   void _dumpVisuMEnvVar();
-
-  // UTILITAIRES POUR PREPARER LES CALCULS MULTI-ENVIRONNEMENT SUR GPU
-  void _computeMultiEnvGlobalCellId();
-  void _checkMultiEnvGlobalCellId();
-  void _initEnvForAcc();
-  void _updateEnvForAcc();
 
  private:
 
@@ -121,6 +108,7 @@ class Pattern4GPUModule
   MaterialVariableCellReal m_compxx;
   MaterialVariableCellReal m_compxy;
   MaterialVariableCellReal m_compyy;
+  VariableCellReal m_tmp1; // un tableau temporaire de travail
 
   // CartesianInterface:: = Arcane:: ou Cartesian::
   CartesianInterface::ICartesianMesh* m_cartesian_mesh = nullptr;
@@ -130,16 +118,7 @@ class Pattern4GPUModule
   Arcane::ICartesianMesh* m_arc_cartesian_mesh = nullptr;
 
   // Pour l'utilisation des accélérateurs
-  ax::Runner m_runner;
-  AccMemAdviser* m_acc_mem_adv=nullptr;
-
-  UnstructuredMeshConnectivityView m_connectivity_view;
-
-  //! Indice de chaque noeud dans la maille
-  UniqueArray<Int16> m_node_index_in_cells;
-
-  // Les queues asynchrones d'exéution
-  MultiAsyncRunQueue* m_menv_queue=nullptr; //!< les queues pour traiter les environnements de façon asynchrone
+  IAccEnv* m_acc_env=nullptr;
 };
 
 #endif

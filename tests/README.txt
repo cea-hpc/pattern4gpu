@@ -6,6 +6,7 @@ p4gpu_cqs_vector_tensor          :  calcul cqs et vecteur + maj vecteur par tens
 p4gpu_env_order                  :  détermination de l'ordre des environnements sur les mailles mixtes (1 seul pt d'entrée)
 p4gpu_partial_impure_only        :  maj de valeurs partielles sur les mailles mixtes (impures) (1 seul pt d'entrée)
 p4gpu_partial_mean               :  calculs valeurs partielles sur mailles pures et mixtes puis maj grandeur moyenne (1 seul pt d'entrée)
+p4gpu_partial_mean4              :  combinaison sommes grandeurs partielles pour maj grandeurs moyennes (1 seul pt d'entrée)
 p4gpu_partial_only               :  maj de valeurs partielles sur les mailles pures et mixtes (1 seul pt d'entrée)
 p4gpu_test_cartesian             :  tests sur des acces par stencil directionnel
 p4gpu_update_tensor              :  maj tenseur en multi-env (1 seul pt d'entrée)
