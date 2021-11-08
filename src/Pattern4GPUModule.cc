@@ -13,6 +13,7 @@
 #include <arcane/utils/StringBuilder.h>
 
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
+#include <arcane/ServiceBuilder.h>
 
 using namespace Arcane;
 using namespace Arcane::Materials;
@@ -29,17 +30,13 @@ Pattern4GPUModule(const ModuleBuildInfo& mbi)
         m_mesh_material_mng, "Compxy", IVariable::PTemporary | IVariable::PExecutionDepend)),
   m_compyy(MaterialVariableBuildInfo(
         m_mesh_material_mng, "Compyy", IVariable::PTemporary | IVariable::PExecutionDepend)),
-  m_tmp1(VariableBuildInfo(mesh(), "Tmp1", IVariable::PTemporary | IVariable::PExecutionDepend)),
-  m_node_index_in_cells(platform::getAcceleratorHostMemoryAllocator())
+  m_tmp1(VariableBuildInfo(mesh(), "Tmp1", IVariable::PTemporary | IVariable::PExecutionDepend))
 {
 }
 
 Pattern4GPUModule::
 ~Pattern4GPUModule() {
   delete m_allenvcell_converter;
-  delete m_acc_mem_adv;
-  delete m_menv_cell;
-  delete m_menv_queue;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -50,47 +47,10 @@ accBuild()
 {
   PROF_ACC_BEGIN(__FUNCTION__);
 
-  info() << "Using Pattern4GPU with accelerator";
-  IApplication* app = subDomain()->application();
-  initializeRunner(m_runner,traceMng(),app->acceleratorRuntimeInitialisationInfo());
+  m_acc_env = ServiceBuilder<IAccEnv>(subDomain()).getSingleton();
+  m_acc_env->initAcc();
 
   PROF_ACC_END;
-}
-
-/*---------------------------------------------------------------------------*/
-/* m_node_index_in_cells[nid*N + ième-maille-du-noeud] =                     */
-/*                                     indice du noeud nid dans la maille    */
-/*---------------------------------------------------------------------------*/
-void Pattern4GPUModule::
-_computeNodeIndexInCells() {
-  debug() << "_computeNodeIndexInCells";
-  // Un noeud est connecté au maximum à MAX_NODE_CELL mailles
-  // Calcul pour chaque noeud son index dans chacune des
-  // mailles à laquelle il est connecté.
-  NodeGroup nodes = allNodes();
-  Integer nb_node = nodes.size();
-  m_node_index_in_cells.resize(MAX_NODE_CELL*nb_node);
-  m_node_index_in_cells.fill(-1);
-  auto node_cell_cty = m_connectivity_view.nodeCell();
-  auto cell_node_cty = m_connectivity_view.cellNode();
-  ENUMERATE_NODE(inode,nodes){
-    NodeLocalId node = *inode;
-    Int32 index = 0; 
-    Int32 first_pos = node.localId() * MAX_NODE_CELL;
-    for( CellLocalId cell : node_cell_cty.cells(node) ){
-      Int16 node_index_in_cell = 0; 
-      for( NodeLocalId cell_node : cell_node_cty.nodes(cell) ){
-        if (cell_node==node)
-          break;
-        ++node_index_in_cell;
-      }    
-      m_node_index_in_cells[first_pos + index] = node_index_in_cell;
-      ++index;
-    }    
-  }
-
-  // Tableau préferentiellement lu sur le device
-  m_acc_mem_adv->setReadMostly(m_node_index_in_cells.view());
 }
 
 /*---------------------------------------------------------------------------*/
@@ -110,24 +70,7 @@ initP4GPU()
   m_global_deltat = 1.e-3;
 
   // Pour accélérateur
-  if (!m_acc_mem_adv) {
-    m_acc_mem_adv = new AccMemAdviser(options()->getAccMemAdvise());
-  }
-  m_connectivity_view.setMesh(this->mesh());
-  _computeNodeIndexInCells();
-
-  // "Conseils" mémoire
-  // CellLocalId
-  m_acc_mem_adv->setReadMostly(allCells().view().localIds());
-  m_acc_mem_adv->setReadMostly(ownCells().view().localIds());
-
-  // NodeLocalId
-  m_acc_mem_adv->setReadMostly(allNodes().view().localIds());
-  m_acc_mem_adv->setReadMostly(ownNodes().view().localIds());
-
-  // FaceLocalId
-  m_acc_mem_adv->setReadMostly(allFaces().view().localIds());
-  m_acc_mem_adv->setReadMostly(ownFaces().view().localIds());
+  m_acc_env->initMesh(mesh());
 
   PROF_ACC_END;
 }
@@ -202,7 +145,7 @@ initNodeVector()
   }
   else if (options()->getInitNodeVectorVersion() == INVV_arcgpu_v1)
   {
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
 
     auto in_node_coord = ax::viewIn(command, node_coord);
@@ -239,7 +182,7 @@ initNodeCoordBis()
   }
   else if (options()->getInitNodeCoordBisVersion() == INCBV_arcgpu_v1)
   {
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
 
     auto in_node_coord = ax::viewIn(command, node_coord);
@@ -275,7 +218,7 @@ initCqs()
   }
   else if (options()->getInitCqsVersion() == ICQV_arcgpu_v1)
   {
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
 
     auto out_cell_cqs = ax::viewOut(command, m_cell_cqs);
@@ -311,7 +254,7 @@ initCellArr12()
   }
   else if (options()->getInitCellArr12Version() == IA12V_arcgpu_v1)
   {
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
 
     auto in_node_coord = ax::viewIn(command, node_coord);
@@ -319,7 +262,7 @@ initCellArr12()
     auto out_cell_arr1 = ax::viewOut(command, m_cell_arr1);
     auto out_cell_arr2 = ax::viewOut(command, m_cell_arr2);
 
-    auto cnc = m_connectivity_view.cellNode();
+    auto cnc = m_acc_env->connectivityView().cellNode();
 
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
       NodeLocalId first_nid(cnc.nodes(cid)[0]);
@@ -531,13 +474,13 @@ _computeCqsAndVector_Varcgpu_v1() {
   debug() << "Dans _computeCqsAndVector_Varcgpu_v1";
 
   {
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
 
     auto in_node_coord_bis = ax::viewIn(command,m_node_coord_bis);
     auto out_cell_cqs = ax::viewInOut(command,m_cell_cqs);
 
-    auto cnc = m_connectivity_view.cellNode();
+    auto cnc = m_acc_env->connectivityView().cellNode();
 
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()){
       // Recopie les coordonnées locales (pour le cache)
@@ -561,7 +504,7 @@ _computeCqsAndVector_Varcgpu_v1() {
     // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
     //   1- on initialise le vecteur à 0
     //   2- on calcule les constributions des mailles connectées au noeud uniquement si elles sont actives
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
 
     auto in_cell_arr1 = ax::viewIn(command, m_cell_arr1);
@@ -571,11 +514,13 @@ _computeCqsAndVector_Varcgpu_v1() {
 
     auto out_node_vector = ax::viewOut(command, m_node_vector);
 
-    auto node_index_in_cells = m_node_index_in_cells.constSpan();
-    auto nc_cty = m_connectivity_view.nodeCell();
+    auto node_index_in_cells = m_acc_env->nodeIndexInCells();
+    const Integer max_node_cell = m_acc_env->maxNodeCell();
+
+    auto nc_cty = m_acc_env->connectivityView().nodeCell();
 
     command << RUNCOMMAND_ENUMERATE(Node,nid,allNodes()) {
-      Int32 first_pos = nid.localId() * MAX_NODE_CELL;
+      Int32 first_pos = nid.localId() * max_node_cell;
       Integer index = 0;
       Real3 node_vec = Real3::zero();
       for( CellLocalId cid : nc_cty.cells(nid) ){

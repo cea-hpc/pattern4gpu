@@ -7,110 +7,6 @@ using namespace Arcane;
 using namespace Arcane::Materials;
 
 /*---------------------------------------------------------------------------*/
-/* UTILITAIRES POUR PREPARER LES CALCULS MULTI-ENVIRONNEMENT SUR GPU         */
-/*---------------------------------------------------------------------------*/
-
-/*---------------------------------------------------------------------------*/
-/* Calcul des cell_id globaux : permet d'associer à chaque maille impure (mixte) */
-/* l'identifiant de la maille globale                                        */
-/*---------------------------------------------------------------------------*/
-void Pattern4GPUModule::
-_computeMultiEnvGlobalCellId() {
-  PROF_ACC_BEGIN(__FUNCTION__);
-
-  // Calcul des cell_id globaux 
-  CellToAllEnvCellConverter& all_env_cell_converter=*m_allenvcell_converter;
-  ENUMERATE_CELL(icell, allCells()){
-    Cell cell = * icell;
-    Integer cell_id = cell.localId();
-    m_global_cell[cell] = cell_id;
-    AllEnvCell all_env_cell = all_env_cell_converter[cell];
-    if (all_env_cell.nbEnvironment() !=1) {
-      ENUMERATE_CELL_ENVCELL(ienvcell,all_env_cell) {
-        EnvCell ev = *ienvcell;
-        m_global_cell[ev] = cell_id;
-      }
-      // Maille mixte ou vide, 
-      // Si mixte, contient l'opposé du nombre d'environnements+1
-      // Si vide, vaut -1
-      m_env_id[icell] = -all_env_cell.nbEnvironment()-1;
-    } else {
-      // Maille pure, cette boucle est de taille 1
-      ENUMERATE_CELL_ENVCELL(ienvcell,all_env_cell) {
-        EnvCell ev = *ienvcell;
-        // Cette affectation n'aura lieu qu'une fois
-        m_env_id[icell] = ev.environmentId();
-      }
-    }
-  }
-
-  m_menv_cell->buildStorage(m_global_cell);
-
-  _checkMultiEnvGlobalCellId();
-  PROF_ACC_END;
-}
-
-void Pattern4GPUModule::
-_checkMultiEnvGlobalCellId() {
-#ifdef ARCANE_DEBUG
-  debug() << "_checkMultiEnvGlobalCellId";
-
-  // Vérification
-  ENUMERATE_ENV(ienv, m_mesh_material_mng) {
-    IMeshEnvironment* env = *ienv;
-    Integer env_id = env->id();
-    ENUMERATE_ENVCELL(ienvcell,env){
-      EnvCell ev = *ienvcell;
-      Cell cell(ev.globalCell());
-      Integer cell_id = cell.localId();
-      ARCANE_ASSERT(cell_id==m_global_cell[ev], ("lid differents"));
-      AllEnvCell all_env_cell(ev.allEnvCell());
-      if (all_env_cell.nbEnvironment()==1) {
-        ARCANE_ASSERT(m_env_id[cell]==env_id, ("cell pure : environnement id incorrect dans m_env_id[cell]"));
-      } else {
-        ARCANE_ASSERT(m_env_id[cell]==(-all_env_cell.nbEnvironment()-1), ("cell mixte ou vide : m_env_id[cell] différent de -nbEnvironment()-1"));
-      }
-    }
-  }
-
-  m_menv_cell->checkStorage(m_global_cell);
-#endif
-}
-
-/*---------------------------------------------------------------------------*/
-/* A appeler après l'initialisation de la carte des environnements           */ 
-/* pour préparer  traitement des environnements sur accélérateur             */
-/*---------------------------------------------------------------------------*/
-void Pattern4GPUModule::
-_initEnvForAcc() {
-
-  Integer max_nb_env = m_mesh_material_mng->environments().size();
-  m_menv_queue = new MultiAsyncRunQueue(m_runner, max_nb_env);
-
-  m_menv_cell = new MultiEnvCellStorage(m_mesh_material_mng, m_acc_mem_adv);
-
-  // construit le tableau multi-env m_global_cell_id et le tableau global m_env_id
-  _computeMultiEnvGlobalCellId();
-
-  _updateEnvForAcc();
-}
-
-/*---------------------------------------------------------------------------*/
-/* Préparer les données multi-envronnement pour l'accélérateur               */
-/* A appeler quand la carte des environnements change                        */
-/*---------------------------------------------------------------------------*/
-void Pattern4GPUModule::
-_updateEnvForAcc() {
-  // "Conseils" accés mémoire
-  ENUMERATE_ENV(ienv,m_mesh_material_mng){
-    IMeshEnvironment* env = *ienv;
-    // La liste des mailles pures évoluant, il faut donner les nouveaux pointeur et taille
-    m_acc_mem_adv->setReadMostly(env->pureEnvItems().valueIndexes());
-  }
-}
-
-
-/*---------------------------------------------------------------------------*/
 /* INITIALISATION DES VARIABLES MULTI-ENVIRONNMENT                           */
 /*---------------------------------------------------------------------------*/
 
@@ -145,7 +41,7 @@ void Pattern4GPUModule::
 initMEnvVar() {
   PROF_ACC_BEGIN(__FUNCTION__);
 
-  _initEnvForAcc(); // TODO : en faire un point d'entrée ?
+  m_acc_env->initMultiEnv(m_mesh_material_mng); // TODO : en faire un point d'entrée ?
 
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
 
@@ -173,7 +69,7 @@ initMEnvVar() {
   }
   else if (options()->getInitMenvVarVersion() == IMVV_arcgpu_v1) 
   {
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     {
       auto command = makeCommand(queue);
 
@@ -182,7 +78,7 @@ initMEnvVar() {
       auto out_menv_var2_g = ax::viewOut(command, m_menv_var2.globalVariable());
       auto out_menv_var3_g = ax::viewOut(command, m_menv_var3.globalVariable());
 
-      auto cnc = m_connectivity_view.cellNode();
+      auto cnc = m_acc_env->connectivityView().cellNode();
 
       command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
         NodeLocalId first_nid(cnc.nodes(cid)[0]);
@@ -194,10 +90,11 @@ initMEnvVar() {
     }
 
     // Les calculs des mailles mixtes par environnement sont indépendants
+    auto menv_queue = m_acc_env->multiEnvQueue();
     ENUMERATE_ENV(ienv,m_mesh_material_mng){
       IMeshEnvironment* env = *ienv;
 
-      auto command = makeCommand(m_menv_queue->queue(env->id()));
+      auto command = makeCommand(menv_queue->queue(env->id()));
 
       auto in_menv_var2_g = ax::viewIn(command, m_menv_var2.globalVariable());
       auto in_menv_var3_g = ax::viewIn(command, m_menv_var3.globalVariable());
@@ -222,7 +119,7 @@ initMEnvVar() {
 
       }; // asynchrone par rapport au CPU et aux autres environnements
     }
-    m_menv_queue->waitAllQueues();
+    menv_queue->waitAllQueues();
   }
 
   // Sortie des variables multi-environnement pour la visu
@@ -273,10 +170,11 @@ partialImpureOnly() {
   else if (options()->getPartialImpureOnlyVersion() == PIOV_arcgpu_v1)
   {
     // Les calculs des mailles mixtes par environnement sont indépendants
+    auto menv_queue = m_acc_env->multiEnvQueue();
     ENUMERATE_ENV(ienv,m_mesh_material_mng){
       IMeshEnvironment* env = *ienv;
 
-      auto command = makeCommand(m_menv_queue->queue(env->id()));
+      auto command = makeCommand(menv_queue->queue(env->id()));
 
       auto in_menv_var1_g = ax::viewIn(command, m_menv_var1.globalVariable());
       Span<const Real>    in_frac_vol   (envView(m_frac_vol , env));
@@ -294,7 +192,7 @@ partialImpureOnly() {
 
       }; // asynchrone par rapport au CPU et aux autres environnements
     }
-    m_menv_queue->waitAllQueues();
+    menv_queue->waitAllQueues();
   }
 
   _dumpVisuMEnvVar();
@@ -336,7 +234,7 @@ partialOnly() {
   }
   else if (options()->getPartialOnlyVersion() == POV_arcgpu_v1)
   {
-    _checkMultiEnvGlobalCellId();
+    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
 
     // On traite séquentiellement les environnements, 
     // chaque environnement étant calculé en parallèle
@@ -344,7 +242,7 @@ partialOnly() {
       IMeshEnvironment* env = *ienv;
 
       // Mailles pures
-      auto queue_pur = makeQueue(m_runner);
+      auto queue_pur = m_acc_env->newQueue();
       queue_pur.setAsync(true);
       {
         auto command = makeCommand(queue_pur);
@@ -370,7 +268,7 @@ partialOnly() {
       }
 
       // Mailles mixtes
-      auto queue_mix = makeQueue(m_runner);
+      auto queue_mix = m_acc_env->newQueue();
       queue_mix.setAsync(true);
       {
         auto command = makeCommand(queue_mix);
@@ -397,12 +295,12 @@ partialOnly() {
   }
   else if (options()->getPartialOnlyVersion() == POV_arcgpu_v2)
   {
-    _checkMultiEnvGlobalCellId();
+    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
 
     // Comme le traitement est uniforme sur tous les environnements
     // on peut traiter toutes les mailles pures de tous les env simultanément
     // On lance de manière asynchrone les calculs des valeurs pures sur GPU sur queue_glob
-    auto queue_glob = makeQueue(m_runner);
+    auto queue_glob = m_acc_env->newQueue();
     queue_glob.setAsync(true);
     {
       auto command = makeCommand(queue_glob);
@@ -423,11 +321,12 @@ partialOnly() {
 
     // On traite en concurrence les mailles mixtes des environnements, 
     // chaque environnement étant calculé en parallèle
+    auto menv_queue = m_acc_env->multiEnvQueue();
     ENUMERATE_ENV(ienv, m_mesh_material_mng) {
       IMeshEnvironment* env = *ienv;
 
       // Mailles mixtes
-      auto command = makeCommand(m_menv_queue->queue(env->id()));
+      auto command = makeCommand(menv_queue->queue(env->id()));
 
       // Nombre de mailles impures (mixtes) de l'environnement
       Integer nb_imp = env->impureEnvItems().nbItem();
@@ -447,7 +346,7 @@ partialOnly() {
     }
 
     queue_glob.barrier();
-    m_menv_queue->waitAllQueues();
+    menv_queue->waitAllQueues();
   }
 
   _dumpVisuMEnvVar();
@@ -529,7 +428,7 @@ partialAndMean() {
     // On boucle sur l'intégralité du maillage pour faire 2 choses :
     //  - init à 0 de la grandeur globale (moyenne) pour toutes les mailles
     //  - puis calcul de la valeur partielle pour les mailles pures
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     {
       auto command = makeCommand(queue);
 
@@ -676,7 +575,7 @@ partialAndMean4() {
     // temporaire au maillage m_tmp1.
     // On va faire une première passe sur toutes les mailles pures/mixtes
     // pour calculer m_tmp1
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     {
       auto command = makeCommand(queue);
 
@@ -789,7 +688,7 @@ partialAndMean4() {
   {
     debug() << "PM4V_arcgpu_v2";
 
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
 
     MultiEnvVar<Real> menv_menv_var2(m_menv_var2, m_mesh_material_mng);
@@ -803,7 +702,8 @@ partialAndMean4() {
     auto out_menv_var1_g   = ax::viewOut(command, m_menv_var1.globalVariable());
 
     // Pour décrire l'accés multi-env sur GPU
-    auto in_menv_cell(m_menv_cell->viewIn(command));
+    auto in_menv_cell(m_acc_env->multiEnvCellStorage()->viewIn(command));
+
 
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
 

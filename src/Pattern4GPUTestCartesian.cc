@@ -33,7 +33,7 @@ _testCell2Cell() {
 
   Cartesian::FactCartDirectionMng cartesian_mesh(mesh());
 
-  auto queue = makeQueue(m_runner);
+  auto queue = m_acc_env->newQueue();
 
   for(Integer dir(0) ; dir < mesh()->dimension() ; ++dir) {
     
@@ -152,7 +152,7 @@ _testNode2Node() {
 
   Cartesian::FactCartDirectionMng cartesian_mesh(mesh());
 
-  auto queue = makeQueue(m_runner);
+  auto queue = m_acc_env->newQueue();
 
   for(Integer dir(0) ; dir < mesh()->dimension() ; ++dir) {
     
@@ -266,7 +266,7 @@ _testFace2Cell() {
 
   Cartesian::FactCartDirectionMng cartesian_mesh(mesh());
 
-  auto queue = makeQueue(m_runner);
+  auto queue = m_acc_env->newQueue();
 
   for(Integer dir(0) ; dir < mesh()->dimension() ; ++dir) {
     
@@ -361,7 +361,7 @@ _testCell2Face() {
 
   Cartesian::FactCartDirectionMng cartesian_mesh(mesh());
 
-  auto queue = makeQueue(m_runner);
+  auto queue = m_acc_env->newQueue();
 
   for(Integer dir(0) ; dir < mesh()->dimension() ; ++dir) {
     
@@ -462,7 +462,7 @@ _stencilCartesian() {
 
   Cartesian::FactCartDirectionMng cartesian_mesh(mesh());
 
-  auto queue = makeQueue(m_runner);
+  auto queue = m_acc_env->newQueue();
 
   for(Integer dir(0) ; dir < mesh()->dimension() ; ++dir) {
     
