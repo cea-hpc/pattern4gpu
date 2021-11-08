@@ -353,7 +353,7 @@ initCqs1()
   }
   else if (options()->getInitCqs1Version() == ICQ1V_arcgpu_v1)
   {
-    auto queue = makeQueue(m_runner);
+    auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
 
     NumArray<Real,1> cos_inode(8);
@@ -488,16 +488,19 @@ updateVectorFromTensor() {
       IMeshBlock* b = (m_mesh_material_mng->blocks())[i];
       CellGroup cell_group = b->cells();
 
+      auto node_index_in_cells = m_acc_env->nodeIndexInCells();
+      const Integer max_node_cell = m_acc_env->maxNodeCell();
+
       ParallelLoopOptions options;
       options.setPartitioner(ParallelLoopOptions::Partitioner::Auto);
 
       NodeGroup node_group = allNodes(); // TODO : passer aux noeuds du blocks
       arcaneParallelForeach(node_group, options, [&](NodeVectorView nodes) {
       ENUMERATE_NODE (node_i, nodes) {
-        Int32 first_pos = node_i.localId() * MAX_NODE_CELL;
+        Int32 first_pos = node_i.localId() * max_node_cell;
         ENUMERATE_CELL(cell_i, node_i->cells()) {
           if (true) { // TODO : vrai ssi cell_i est dans cell_group
-            Int16 node_index = m_node_index_in_cells[first_pos + cell_i.index()];
+            Int16 node_index = node_index_in_cells[first_pos + cell_i.index()];
             const Real3x3& cell_tensor = m_tensor[cell_i];
             m_node_vector[node_i] -= math::prodTensVec(cell_tensor,
               m_cell_cqs[cell_i][node_index]);
@@ -588,14 +591,17 @@ _computeCqsAndVector_Vmt() {
     }
   });
 
+  auto node_index_in_cells = m_acc_env->nodeIndexInCells();
+  const Integer max_node_cell = m_acc_env->maxNodeCell();
+
   // Puis, on applique les CQs sur les noeuds
   arcaneParallelForeach(allNodes(), options, [&](NodeVectorView nodes) {
     ENUMERATE_NODE (node_i, nodes) {
-      Int32 first_pos = node_i.localId() * MAX_NODE_CELL;
+      Int32 first_pos = node_i.localId() * max_node_cell;
       Real3 node_vec = Real3::zero();
       ENUMERATE_CELL(cell_i, node_i->cells()) {
         if (m_is_active_cell[cell_i]) { // la maille ne contribue que si elle est active
-          Int16 node_index = m_node_index_in_cells[first_pos + cell_i.index()];
+          Int16 node_index = node_index_in_cells[first_pos + cell_i.index()];
           node_vec += (m_cell_arr1[cell_i]+m_cell_arr2[cell_i])
             * m_cell_cqs[cell_i][node_index];
         }
