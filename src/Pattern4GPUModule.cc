@@ -143,6 +143,20 @@ initNodeVector()
       m_node_vector[node_i]=Real3(sin_th*cos(phi), sin_th*sin(phi),cos_th);
     }
   }
+  else if (options()->getInitNodeVectorVersion() == INVV_mt) 
+  {
+    ParallelLoopOptions options;
+    options.setPartitioner(ParallelLoopOptions::Partitioner::Static);
+    arcaneParallelForeach(allNodes(), options, [&](NodeVectorView nodes){
+      ENUMERATE_NODE(node_i, nodes) {
+        const Real3& c=node_coord[node_i];
+        Real cos_th=cos(c.x+c.y+c.z); // garantit une valeur dans [-1,+1]
+        Real sin_th=math::sqrt(1-cos_th*cos_th); // garantit une valeur dans [0,+1]
+        Real phi=(c.x+1)*(c.y+1)*(c.z+1);
+        m_node_vector[node_i]=Real3(sin_th*cos(phi), sin_th*sin(phi),cos_th);
+      }
+    });
+  }
   else if (options()->getInitNodeVectorVersion() == INVV_arcgpu_v1)
   {
     auto queue = m_acc_env->newQueue();
@@ -190,43 +204,6 @@ initNodeCoordBis()
 
     command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()) {
       out_node_coord_bis[nid]=in_node_coord[nid];
-    };
-  }
-
-  PROF_ACC_END;
-}
-
-/*---------------------------------------------------------------------------*/
-/*---------------------------------------------------------------------------*/
-
-void Pattern4GPUModule::
-initCqs()
-{
-  PROF_ACC_BEGIN(__FUNCTION__);
-  debug() << "Dans initCqs";
-
-  // Valable en 3D, 8 noeuds par maille
-  m_cell_cqs.resize(8);
-
-  if (options()->getInitCqsVersion() == ICQV_ori)
-  { 
-    ENUMERATE_CELL (cell_i, allCells()) {
-      for(Integer inode(0) ; inode<8 ; ++inode) {
-        m_cell_cqs[cell_i][inode] = Real3::zero();
-      }
-    }
-  }
-  else if (options()->getInitCqsVersion() == ICQV_arcgpu_v1)
-  {
-    auto queue = m_acc_env->newQueue();
-    auto command = makeCommand(queue);
-
-    auto out_cell_cqs = ax::viewOut(command, m_cell_cqs);
-
-    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
-      for(Integer inode(0) ; inode<8 ; ++inode) {
-        out_cell_cqs[cid][inode] = Real3::zero();
-      }
     };
   }
 
@@ -299,6 +276,111 @@ _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal
       f[envcell_i] /= volume[envcell_i];
     }
   }
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Initialisation à 0 de la CQS
+ */
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+initCqs()
+{
+  PROF_ACC_BEGIN(__FUNCTION__);
+  debug() << "Dans initCqs";
+
+  // Valable en 3D, 8 noeuds par maille
+  m_cell_cqs.resize(8);
+
+  if (options()->getInitCqsVersion() == ICQV_ori)
+  { 
+    ENUMERATE_CELL (cell_i, allCells()) {
+      for(Integer inode(0) ; inode<8 ; ++inode) {
+        m_cell_cqs[cell_i][inode] = Real3::zero();
+      }
+    }
+  }
+  else if (options()->getInitCqsVersion() == ICQV_arcgpu_v1)
+  {
+    auto queue = m_acc_env->newQueue();
+    auto command = makeCommand(queue);
+
+    auto out_cell_cqs = ax::viewOut(command, m_cell_cqs);
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      for(Integer inode(0) ; inode<8 ; ++inode) {
+        out_cell_cqs[cid][inode] = Real3::zero();
+      }
+    };
+  }
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Initialisation de la CQS avec des valeurs non nulles
+ */
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+initCqs1()
+{
+  PROF_ACC_BEGIN(__FUNCTION__);
+  debug() << "Dans initCqs1";
+
+  // Valable en 3D, 8 noeuds par maille
+  m_cell_cqs.resize(8);
+
+  if (options()->getInitCqs1Version() == ICQ1V_ori)
+  { 
+    Real cos_inode[8], sin_inode[8];
+    for(Integer inode(0) ; inode<8 ; ++inode) {
+      cos_inode[inode] = cos(1+inode);
+      sin_inode[inode] = sin(1+inode);
+    }
+    ENUMERATE_CELL (cell_i, allCells()) {
+      Integer cid = cell_i.localId();
+      Real sin_cid = sin(1+cid);
+      Real cos_cid = cos(1+cid);
+      for(Integer inode(0) ; inode<8 ; ++inode) {
+        Real cx = 1e-3*(1+math::abs(sin_cid*cos_inode[inode]));
+        Real cy = 1e-3*(1+math::abs(sin_cid*sin_inode[inode]));
+        Real cz = 1e-3*(1+math::abs(cos_cid*sin_inode[inode]));
+        m_cell_cqs[cell_i][inode] = Real3(cx,cy,cz);
+      }
+    }
+  }
+  else if (options()->getInitCqs1Version() == ICQ1V_arcgpu_v1)
+  {
+    auto queue = m_acc_env->newQueue();
+    auto command = makeCommand(queue);
+
+    NumArray<Real,1> cos_inode(8);
+    NumArray<Real,1> sin_inode(8);
+    Span<Real> out_cos_inode(cos_inode.to1DSpan());
+    Span<Real> out_sin_inode(sin_inode.to1DSpan());
+    for(Integer inode(0) ; inode<8 ; ++inode) {
+      out_cos_inode[inode] = cos(1+inode);
+      out_sin_inode[inode] = sin(1+inode);
+    }
+
+    auto in_cos_inode = ax::viewIn(command, cos_inode);
+    auto in_sin_inode = ax::viewIn(command, sin_inode);
+    auto out_cell_cqs = ax::viewOut(command, m_cell_cqs);
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      Real sin_cid = sin(1+cid.localId());
+      Real cos_cid = cos(1+cid.localId());
+      for(Integer inode(0) ; inode<8 ; ++inode) {
+        Real cx = 1e-3*(1+math::abs(sin_cid*in_cos_inode(inode)));
+        Real cy = 1e-3*(1+math::abs(sin_cid*in_sin_inode(inode)));
+        Real cz = 1e-3*(1+math::abs(cos_cid*in_sin_inode(inode)));
+        out_cell_cqs[cid][inode] = Real3(cx,cy,cz);
+      }
+    };
+  }
+
   PROF_ACC_END;
 }
 
@@ -377,23 +459,57 @@ updateVectorFromTensor() {
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans updateVectorFromTensor";
 
-  Integer nb_blocks = m_mesh_material_mng->blocks().size();
+  if (options()->getUpdateVectorFromTensorVersion() == UVTV_ori)
+  {
+    Integer nb_blocks = m_mesh_material_mng->blocks().size();
 
-  for (Integer i = 0; i < nb_blocks; i++) {
-    // on récupère le groupe de mailles associé au bloc
-    IMeshBlock* b = (m_mesh_material_mng->blocks())[i];
-    CellGroup cell_group = b->cells();
+    for (Integer i = 0; i < nb_blocks; i++) {
+      // on récupère le groupe de mailles associé au bloc
+      IMeshBlock* b = (m_mesh_material_mng->blocks())[i];
+      CellGroup cell_group = b->cells();
 
-    Real3x3 cell_tensor;
-    ENUMERATE_CELL (cell_i, cell_group) {
-    // boucle sur les noeuds de la maille
-      ENUMERATE_NODE (node_i, cell_i->nodes()) {
-        cell_tensor = m_tensor[cell_i];
-        m_node_vector[node_i] -= math::prodTensVec(cell_tensor,
-            m_cell_cqs[cell_i][node_i.index()]);
+      Real3x3 cell_tensor;
+      ENUMERATE_CELL (cell_i, cell_group) {
+        // boucle sur les noeuds de la maille
+        ENUMERATE_NODE (node_i, cell_i->nodes()) {
+          cell_tensor = m_tensor[cell_i];
+          m_node_vector[node_i] -= math::prodTensVec(cell_tensor,
+              m_cell_cqs[cell_i][node_i.index()]);
+        }
       }
-    }
-  }  // end iblock loop
+    }  // end iblock loop
+  }
+  else if (options()->getUpdateVectorFromTensorVersion() == UVTV_mt)
+  {
+    Integer nb_blocks = m_mesh_material_mng->blocks().size();
+
+    for (Integer i = 0; i < nb_blocks; i++) {
+      // on récupère le groupe de mailles associé au bloc
+      IMeshBlock* b = (m_mesh_material_mng->blocks())[i];
+      CellGroup cell_group = b->cells();
+
+      auto node_index_in_cells = m_acc_env->nodeIndexInCells();
+      const Integer max_node_cell = m_acc_env->maxNodeCell();
+
+      ParallelLoopOptions options;
+      options.setPartitioner(ParallelLoopOptions::Partitioner::Auto);
+
+      NodeGroup node_group = allNodes(); // TODO : passer aux noeuds du blocks
+      arcaneParallelForeach(node_group, options, [&](NodeVectorView nodes) {
+      ENUMERATE_NODE (node_i, nodes) {
+        Int32 first_pos = node_i.localId() * max_node_cell;
+        ENUMERATE_CELL(cell_i, node_i->cells()) {
+          if (true) { // TODO : vrai ssi cell_i est dans cell_group
+            Int16 node_index = node_index_in_cells[first_pos + cell_i.index()];
+            const Real3x3& cell_tensor = m_tensor[cell_i];
+            m_node_vector[node_i] -= math::prodTensVec(cell_tensor,
+              m_cell_cqs[cell_i][node_index]);
+          }
+        }
+      }
+      });
+    }  // end iblock loop
+  }
   PROF_ACC_END;
 }
 
@@ -437,6 +553,121 @@ _computeCqsAndVector_Vori() {
       m_node_vector[node_i] += (m_cell_arr1[cell_i] + m_cell_arr2[cell_i]) *
         m_cell_cqs[cell_i][node_i.index()];
     }
+  }
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Implémentation CPU Arcane multi-thread                                    */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+_computeCqsAndVector_Vmt() {
+
+  PROF_ACC_BEGIN(__FUNCTION__);
+  debug() << "Dans _computeCqsAndVector_Vmt";
+
+  ParallelLoopOptions options;
+
+  // On calcule les CQs sur les mailles
+  options.setPartitioner(ParallelLoopOptions::Partitioner::Auto);
+  arcaneParallelForeach(allCells(), options, [&](CellVectorView cells) {
+    constexpr Real k025 = 0.25;
+    ENUMERATE_CELL (cell_i, cells) {
+      // Recopie les coordonnées locales (pour le cache)
+      Real3 pos[8];
+      for (Integer ii = 0; ii < 8; ++ii) {
+        pos[ii] = m_node_coord_bis[cell_i->node(ii)];
+      }
+
+      m_cell_cqs[cell_i][0] = -k025*math::vecMul(pos[4]-pos[3], pos[1]-pos[3]);
+      m_cell_cqs[cell_i][1] = -k025*math::vecMul(pos[0]-pos[2], pos[5]-pos[2]);
+      m_cell_cqs[cell_i][2] = -k025*math::vecMul(pos[1]-pos[3], pos[6]-pos[3]);
+      m_cell_cqs[cell_i][3] = -k025*math::vecMul(pos[7]-pos[2], pos[0]-pos[2]);
+      m_cell_cqs[cell_i][4] = -k025*math::vecMul(pos[5]-pos[7], pos[0]-pos[7]);
+      m_cell_cqs[cell_i][5] = -k025*math::vecMul(pos[1]-pos[6], pos[4]-pos[6]);
+      m_cell_cqs[cell_i][6] = -k025*math::vecMul(pos[5]-pos[2], pos[7]-pos[2]);
+      m_cell_cqs[cell_i][7] = -k025*math::vecMul(pos[6]-pos[3], pos[4]-pos[3]);
+    }
+  });
+
+  auto node_index_in_cells = m_acc_env->nodeIndexInCells();
+  const Integer max_node_cell = m_acc_env->maxNodeCell();
+
+  // Puis, on applique les CQs sur les noeuds
+  arcaneParallelForeach(allNodes(), options, [&](NodeVectorView nodes) {
+    ENUMERATE_NODE (node_i, nodes) {
+      Int32 first_pos = node_i.localId() * max_node_cell;
+      Real3 node_vec = Real3::zero();
+      ENUMERATE_CELL(cell_i, node_i->cells()) {
+        if (m_is_active_cell[cell_i]) { // la maille ne contribue que si elle est active
+          Int16 node_index = node_index_in_cells[first_pos + cell_i.index()];
+          node_vec += (m_cell_arr1[cell_i]+m_cell_arr2[cell_i])
+            * m_cell_cqs[cell_i][node_index];
+        }
+      }
+      m_node_vector[node_i] = node_vec;
+    }
+  });
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Implémentation CPU version 2                                              */
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+_computeCqsAndVector_Vmt_v2() {
+
+  PROF_ACC_BEGIN(__FUNCTION__);
+  debug() << "Dans _computeCqsAndVector_Vmt_v2";
+
+  ParallelLoopOptions options;
+  options.setPartitioner(ParallelLoopOptions::Partitioner::Auto);
+
+  arcaneParallelForeach(allNodes(), options, [&](NodeVectorView nodes) {
+  ENUMERATE_NODE (node_i, nodes) {
+    m_node_vector[node_i].assign(0., 0., 0.);
+  }
+  });
+//  m_node_vector.fill(Real3::zero());
+
+  constexpr Real k025 = 0.25;
+
+  CellGroup active_cells = defaultMesh()->cellFamily()->findGroup("active_cells");
+
+  const Integer ipos[8][4] = {
+    {4, 3, 1, 3},
+    {0, 2, 5, 2},
+    {1, 3, 6, 3},
+    {7, 2, 0, 2},
+    {5, 7, 0, 7},
+    {1, 6, 4, 6},
+    {5, 2, 7, 2},
+    {6, 3, 4, 3}
+  };
+  for(Integer idx_node=0 ; idx_node<8 ; ++idx_node) {
+
+    arcaneParallelForeach(active_cells, options, [&](CellVectorView cells) {
+    const Integer ip0 = ipos[idx_node][0];
+    const Integer ip1 = ipos[idx_node][1];
+    const Integer ip2 = ipos[idx_node][2];
+    const Integer ip3 = ipos[idx_node][3];
+
+    ENUMERATE_CELL (cell_i, cells) {
+
+      const Real3& nd0 = m_node_coord_bis[cell_i->node(ip0)];
+      const Real3& nd1 = m_node_coord_bis[cell_i->node(ip1)];
+      const Real3& nd2 = m_node_coord_bis[cell_i->node(ip2)];
+      const Real3& nd3 = m_node_coord_bis[cell_i->node(ip3)];
+
+      Real3 cell_cqs = -k025*math::vecMul(nd0-nd1, nd2-nd3);
+
+      m_node_vector[cell_i->node(idx_node)] += 
+        (m_cell_arr1[cell_i] + m_cell_arr2[cell_i]) * cell_cqs;
+    }
+    });
   }
 
   PROF_ACC_END;
@@ -548,6 +779,8 @@ computeCqsAndVector() {
 
   switch (options()->getComputeCqsVectorVersion()) {
     case CCVV_ori: _computeCqsAndVector_Vori(); break;
+    case CCVV_mt: _computeCqsAndVector_Vmt(); break;
+    case CCVV_mt_v2: _computeCqsAndVector_Vmt_v2(); break;
     case CCVV_arcgpu_v1: _computeCqsAndVector_Varcgpu_v1(); break;
   };
 

@@ -43,6 +43,7 @@ class Pattern4GPUModule
   void initNodeVector() override; // InitNodeVector
   void initNodeCoordBis() override; // InitNodeCoordBis
   void initCqs() override; // InitCqs
+  void initCqs1() override; // InitCqs1
   void initCellArr12() override; // InitCellArr12
 
   void initBenchCartesian() override; // InitBenchCartesian
@@ -76,6 +77,8 @@ class Pattern4GPUModule
   // Implémentations des points d'entrées, devrait être private mais 
   // impossible car toute méthode déportée sur GPU doit être publique !
   void _computeCqsAndVector_Vori();
+  void _computeCqsAndVector_Vmt();
+  void _computeCqsAndVector_Vmt_v2();
   void _computeCqsAndVector_Varcgpu_v1();
 
   void _testCell2Cell();
