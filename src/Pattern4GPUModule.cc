@@ -280,6 +280,23 @@ _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal
 }
 
 /*---------------------------------------------------------------------------*/
+/* Ne met à jour que les valeurs partielles                                  */
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+_updateVariableV2(const MaterialVariableCellReal& volume, MaterialVariableCellReal& f)
+{
+  PROF_ACC_BEGIN(__FUNCTION__);
+  
+  ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+    ENUMERATE_ENVCELL (envcell_i, *env_i) {
+      f[envcell_i] /= volume[envcell_i];
+    }
+  }
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
 /* Initialisation à 0 de la CQS
  */
 /*---------------------------------------------------------------------------*/
@@ -393,45 +410,20 @@ updateTensor()
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans updateTensor";
 
-  // Remplir les variables composantes
-  ENUMERATE_ENV (env_i, m_mesh_material_mng) {
-    ENUMERATE_ENVCELL (envcell_i, *env_i) {
-      const Real3x3& real3x3 = m_tensor[envcell_i];
-      m_compxx[envcell_i] = real3x3.x.x;
-      m_compxy[envcell_i] = real3x3.x.y;
-      m_compyy[envcell_i] = real3x3.y.y;
-    }
-  }
-
-  _updateVariable(m_volume, m_compxx);
-  _updateVariable(m_volume, m_compxy);
-  _updateVariable(m_volume, m_compyy);
-
-  // Ranger les variables composantes
-  ENUMERATE_ENV (env_i, m_mesh_material_mng) {
-    ENUMERATE_ENVCELL (envcell_i, *env_i) {
-      Real3x3& real3x3 = m_tensor[envcell_i];
-
-      real3x3.x.y = m_compxy[envcell_i];
-      real3x3.y.x = m_compxy[envcell_i];
-
-      real3x3.x.x = m_compxx[envcell_i];
-      real3x3.y.y = m_compyy[envcell_i];
-      real3x3.z.z = - m_compxx[envcell_i] - m_compyy[envcell_i];
-    }
-  }
-
-  if (defaultMesh()->dimension() == 3) {
-    // Remplir les variables composantes (on utilise les memes variables tampon que pour les champs en 2D)
+  if (options()->getUpdateTensorVersion() == UVV_ori)
+  {
+    // Remplir les variables composantes
     ENUMERATE_ENV (env_i, m_mesh_material_mng) {
       ENUMERATE_ENVCELL (envcell_i, *env_i) {
-        m_compxx[envcell_i] = m_tensor[envcell_i].x.z;
-        m_compyy[envcell_i] = m_tensor[envcell_i].y.z;
+        const Real3x3& real3x3 = m_tensor[envcell_i];
+        m_compxx[envcell_i] = real3x3.x.x;
+        m_compxy[envcell_i] = real3x3.x.y;
+        m_compyy[envcell_i] = real3x3.y.y;
       }
     }
 
-    // Projeter les variables
     _updateVariable(m_volume, m_compxx);
+    _updateVariable(m_volume, m_compxy);
     _updateVariable(m_volume, m_compyy);
 
     // Ranger les variables composantes
@@ -439,13 +431,186 @@ updateTensor()
       ENUMERATE_ENVCELL (envcell_i, *env_i) {
         Real3x3& real3x3 = m_tensor[envcell_i];
 
-        real3x3.x.z = m_compxx[envcell_i];
-        real3x3.y.z = m_compyy[envcell_i];
-        real3x3.z.x = m_compxx[envcell_i];
-        real3x3.z.y = m_compyy[envcell_i];
+        real3x3.x.y = m_compxy[envcell_i];
+        real3x3.y.x = m_compxy[envcell_i];
+
+        real3x3.x.x = m_compxx[envcell_i];
+        real3x3.y.y = m_compyy[envcell_i];
+        real3x3.z.z = - m_compxx[envcell_i] - m_compyy[envcell_i];
       }
     }
-  }  // end if (dim == 3)
+
+    if (defaultMesh()->dimension() == 3) {
+      // Remplir les variables composantes (on utilise les memes variables tampon que pour les champs en 2D)
+      ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+        ENUMERATE_ENVCELL (envcell_i, *env_i) {
+          m_compxx[envcell_i] = m_tensor[envcell_i].x.z;
+          m_compyy[envcell_i] = m_tensor[envcell_i].y.z;
+        }
+      }
+
+      // Projeter les variables
+      _updateVariable(m_volume, m_compxx);
+      _updateVariable(m_volume, m_compyy);
+
+      // Ranger les variables composantes
+      ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+        ENUMERATE_ENVCELL (envcell_i, *env_i) {
+          Real3x3& real3x3 = m_tensor[envcell_i];
+
+          real3x3.x.z = m_compxx[envcell_i];
+          real3x3.y.z = m_compyy[envcell_i];
+          real3x3.z.x = m_compxx[envcell_i];
+          real3x3.z.y = m_compyy[envcell_i];
+        }
+      }
+    }  // end if (dim == 3)
+  }
+  else if (options()->getUpdateTensorVersion() == UVV_ori_v2)
+  {
+    // Même résultats numériques que ori
+    // Mais _updateVariableV2 ne calcule que les valeurs partielles
+
+    // Remplir les variables composantes
+    ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+      ENUMERATE_ENVCELL (envcell_i, *env_i) {
+        const Real3x3& real3x3 = m_tensor[envcell_i];
+        m_compxx[envcell_i] = real3x3.x.x;
+        m_compxy[envcell_i] = real3x3.x.y;
+        m_compyy[envcell_i] = real3x3.y.y;
+      }
+    }
+
+    _updateVariableV2(m_volume, m_compxx);
+    _updateVariableV2(m_volume, m_compxy);
+    _updateVariableV2(m_volume, m_compyy);
+
+    // Ranger les variables composantes
+    ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+      ENUMERATE_ENVCELL (envcell_i, *env_i) {
+        Real3x3& real3x3 = m_tensor[envcell_i];
+
+        real3x3.x.y = m_compxy[envcell_i];
+        real3x3.y.x = m_compxy[envcell_i];
+
+        real3x3.x.x = m_compxx[envcell_i];
+        real3x3.y.y = m_compyy[envcell_i];
+        real3x3.z.z = - m_compxx[envcell_i] - m_compyy[envcell_i];
+      }
+    }
+
+    if (defaultMesh()->dimension() == 3) {
+      // Remplir les variables composantes (on utilise les memes variables tampon que pour les champs en 2D)
+      ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+        ENUMERATE_ENVCELL (envcell_i, *env_i) {
+          m_compxx[envcell_i] = m_tensor[envcell_i].x.z;
+          m_compyy[envcell_i] = m_tensor[envcell_i].y.z;
+        }
+      }
+
+      // Projeter les variables
+      _updateVariableV2(m_volume, m_compxx);
+      _updateVariableV2(m_volume, m_compyy);
+
+      // Ranger les variables composantes
+      ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+        ENUMERATE_ENVCELL (envcell_i, *env_i) {
+          Real3x3& real3x3 = m_tensor[envcell_i];
+
+          real3x3.x.z = m_compxx[envcell_i];
+          real3x3.y.z = m_compyy[envcell_i];
+          real3x3.z.x = m_compxx[envcell_i];
+          real3x3.z.y = m_compyy[envcell_i];
+        }
+      }
+    }  // end if (dim == 3)
+  }
+  else if (options()->getUpdateTensorVersion() == UVV_ori_v3)
+  {
+    // On met aussi à jour la valeur moyenne sur les mailles mixtes
+    // Donne des résultats numériques différents que ori et ori_v2
+
+    // Remplir les variables composantes
+    ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+      ENUMERATE_ENVCELL (envcell_i, *env_i) {
+        const Real3x3& real3x3 = m_tensor[envcell_i];
+        m_compxx[envcell_i] = real3x3.x.x;
+        m_compxy[envcell_i] = real3x3.x.y;
+        m_compyy[envcell_i] = real3x3.y.y;
+      }
+    }
+
+    _updateVariable(m_volume, m_compxx);
+    _updateVariable(m_volume, m_compxy);
+    _updateVariable(m_volume, m_compyy);
+
+    // Ranger les variables composantes
+    ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+      ENUMERATE_ENVCELL (envcell_i, *env_i) {
+        Real3x3& real3x3 = m_tensor[envcell_i];
+
+        real3x3.x.y = m_compxy[envcell_i];
+        real3x3.y.x = m_compxy[envcell_i];
+
+        real3x3.x.x = m_compxx[envcell_i];
+        real3x3.y.y = m_compyy[envcell_i];
+        real3x3.z.z = - m_compxx[envcell_i] - m_compyy[envcell_i];
+      }
+    }
+    // Recopie des valeurs moyennes sur les mailles mixtes
+    CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
+    ENUMERATE_CELL (cell_i, allCells()) {
+      AllEnvCell allenvcell = allenvcell_converter[*cell_i];
+      if (allenvcell.nbEnvironment() > 1) {
+        Real3x3& real3x3 = m_tensor[cell_i];
+
+        real3x3.x.y = m_compxy[cell_i];
+        real3x3.y.x = m_compxy[cell_i];
+
+        real3x3.x.x = m_compxx[cell_i];
+        real3x3.y.y = m_compyy[cell_i];
+        real3x3.z.z = - m_compxx[cell_i] - m_compyy[cell_i];
+      }
+    }
+
+    if (defaultMesh()->dimension() == 3) {
+      // Remplir les variables composantes (on utilise les memes variables tampon que pour les champs en 2D)
+      ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+        ENUMERATE_ENVCELL (envcell_i, *env_i) {
+          m_compxx[envcell_i] = m_tensor[envcell_i].x.z;
+          m_compyy[envcell_i] = m_tensor[envcell_i].y.z;
+        }
+      }
+
+      // Projeter les variables
+      _updateVariable(m_volume, m_compxx);
+      _updateVariable(m_volume, m_compyy);
+
+      // Ranger les variables composantes
+      ENUMERATE_ENV (env_i, m_mesh_material_mng) {
+        ENUMERATE_ENVCELL (envcell_i, *env_i) {
+          Real3x3& real3x3 = m_tensor[envcell_i];
+
+          real3x3.x.z = m_compxx[envcell_i];
+          real3x3.y.z = m_compyy[envcell_i];
+          real3x3.z.x = m_compxx[envcell_i];
+          real3x3.z.y = m_compyy[envcell_i];
+        }
+      }
+      // Recopie des valeurs moyennes sur les mailles mixtes
+      ENUMERATE_CELL (cell_i, allCells()) {
+        AllEnvCell allenvcell = allenvcell_converter[*cell_i];
+        if (allenvcell.nbEnvironment() > 1) {
+          Real3x3& real3x3 = m_tensor[cell_i];
+
+          real3x3.x.z = m_compxx[cell_i];
+          real3x3.y.z = m_compyy[cell_i];
+          real3x3.z.x = m_compxx[cell_i];
+          real3x3.z.y = m_compyy[cell_i];
+        }
+      }
+    }  // end if (dim == 3)
+  }
   
   PROF_ACC_END;
 }

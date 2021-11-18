@@ -90,6 +90,7 @@ class Pattern4GPUModule
  private:
 
   void _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
+  void _updateVariableV2(const MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
 
   template<Integer DIM>
   void _benchCartesianDim();

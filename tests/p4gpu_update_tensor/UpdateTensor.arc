@@ -43,4 +43,12 @@
     <visu-volume>false</visu-volume>
     <geom-scene>env5m3</geom-scene>
   </geom-env>
+
+  <!-- Configuration du module Pattern4GPU -->
+  <pattern4-g-p-u>
+    <acc-mem-advise>true</acc-mem-advise>
+
+    <update-tensor-version>ori</update-tensor-version>
+    <!-- <update-tensor-version>ori_v2</update-tensor-version> -->
+  </pattern4-g-p-u>
 </case>

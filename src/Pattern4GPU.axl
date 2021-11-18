@@ -271,6 +271,15 @@
     <enumvalue name="mt" genvalue="UVTV_mt" />
   </enumeration>
 
+  <!-- - - - - update-tensor-version - - - - -->
+  <enumeration name="update-tensor-version" type="eUpdateTensorVersion" default="ori">
+    <description>Choix version implémentation UpdateTensor </description>
+    <enumvalue name="ori" genvalue="UVV_ori" />
+    <enumvalue name="ori_v2" genvalue="UVV_ori_v2" />
+    <enumvalue name="ori_v3" genvalue="UVV_ori_v3" />
+    <enumvalue name="arcgpu_v1" genvalue="UVV_arcgpu_v1" />
+  </enumeration>
+
   <!-- - - - - compute-cqs-vector-version - - - - -->
   <enumeration name="compute-cqs-vector-version" type="eComputeCqsVectorVersion" default="ori">
     <description>Choix version implémentation ComputeCqsAndVector </description>
