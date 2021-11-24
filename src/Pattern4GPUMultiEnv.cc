@@ -35,6 +35,18 @@ _dumpVisuMEnvVar() {
 }
 
 /*---------------------------------------------------------------------------*/
+/* Initialisation de l'environnement multi-envrionnement                     */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+initMEnv() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+
+  m_acc_env->initMultiEnv(m_mesh_material_mng); 
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
 /* Initialisation des variables multi-envrionnement                          */
 /*---------------------------------------------------------------------------*/
 void Pattern4GPUModule::

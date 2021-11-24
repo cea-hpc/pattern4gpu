@@ -53,6 +53,7 @@ class Pattern4GPUModule
 
   void initEnvOrder() override; // InitEnvOrder
 
+  void initMEnv() override; // InitMEnv
   void initMEnvVar() override; // InitMEnvVar
 
 
