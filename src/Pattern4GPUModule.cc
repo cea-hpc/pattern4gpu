@@ -402,6 +402,322 @@ initCqs1()
 }
 
 /*---------------------------------------------------------------------------*/
+/* UpdateTensor implementation arcgpu_v2 pour les mailles pures              */
+/*---------------------------------------------------------------------------*/
+Ref<ax::RunQueue> Pattern4GPUModule::
+_asyncUpdateVariableV2Pur(const char* kernel_name,
+    const MaterialVariableCellReal& volume, MaterialVariableCellReal& f)
+{
+  auto queue_ref = makeQueueRef(m_acc_env->runner());
+  queue_ref->setAsync(true);
+  {
+      auto command = makeCommand(queue_ref.get());
+
+      auto in_env_id     = ax::viewIn(command, m_env_id);
+      // suffixe _p = _pure
+      auto in_volume_p   = ax::viewIn(command, volume.globalVariable());
+      auto inout_f_p     = ax::viewInOut(command, f.globalVariable());
+
+      command.addKernelName(kernel_name) << RUNCOMMAND_ENUMERATE(Cell, cid, allCells())
+      {
+        if (in_env_id[cid]>=0) { // vrai ssi cid maille pure
+          Real upd_f = inout_f_p[cid]/in_volume_p[cid];
+          inout_f_p[cid] = upd_f; // operateur /= non supporté
+        }
+      };
+  }
+
+  return queue_ref;
+}
+
+void Pattern4GPUModule::
+_updateTensorPure_arcgpu_v2()
+{
+  /* Les recopies sont indépendantes par environnement et mailles pures/mixtes
+   * On peut donc récupérer toutes les valeurs pures de tous les environnements
+   * puis les traiter
+   */
+  auto queue_pur = m_acc_env->newQueue();
+  queue_pur.setAsync(true);
+  // Remplir les variables composantes
+  {
+    auto command = makeCommand(queue_pur);
+
+    auto in_env_id     = ax::viewIn(command, m_env_id);
+    // suffixe _p = _pure
+    auto in_tensor_p   = ax::viewIn(command, m_tensor.globalVariable());
+    auto out_compxx_p  = ax::viewOut(command, m_compxx.globalVariable());
+    auto out_compxy_p  = ax::viewOut(command, m_compxy.globalVariable());
+    auto out_compyy_p  = ax::viewOut(command, m_compyy.globalVariable());
+
+    command.addKernelName("tens2scal_pur") << RUNCOMMAND_ENUMERATE(Cell, cid, allCells())
+    {
+      if (in_env_id[cid]>=0) { // vrai ssi cid maille pure
+        const Real3x3& real3x3 = in_tensor_p[cid];
+        out_compxx_p[cid] = real3x3.x.x;
+        out_compxy_p[cid] = real3x3.x.y;
+        out_compyy_p[cid] = real3x3.y.y;
+      }
+    };
+  }
+
+  queue_pur.barrier();
+
+  // On doit attendre que les recopies à partir du tenseur soient terminées
+  auto queue_xx = _asyncUpdateVariableV2Pur("updxx_pur", m_volume, m_compxx);
+  auto queue_xy = _asyncUpdateVariableV2Pur("updxy_pur", m_volume, m_compxy);
+  auto queue_yy = _asyncUpdateVariableV2Pur("updyy_pur", m_volume, m_compyy);
+  queue_xx->barrier();
+  queue_xy->barrier();
+  queue_yy->barrier();
+
+  // Maintenant, on peut remettre à jour m_tensor pour les mailles pures
+  {
+    auto command = makeCommand(queue_pur);
+
+    auto in_env_id     = ax::viewIn(command, m_env_id);
+    // suffixe _p = _pure
+    auto in_compxx_p    = ax::viewIn(command, m_compxx.globalVariable());
+    auto in_compxy_p    = ax::viewIn(command, m_compxy.globalVariable());
+    auto in_compyy_p    = ax::viewIn(command, m_compyy.globalVariable());
+    auto inout_tensor_p = ax::viewInOut(command, m_tensor.globalVariable());
+
+    command.addKernelName("scal2tens_pur") << RUNCOMMAND_ENUMERATE(Cell, cid, allCells())
+    {
+      if (in_env_id[cid]>=0) { // vrai ssi cid maille pure
+        Real3x3 real3x3 = inout_tensor_p[cid];
+
+        real3x3.x.y = in_compxy_p[cid];
+        real3x3.y.x = in_compxy_p[cid];
+
+        real3x3.x.x = in_compxx_p[cid];
+        real3x3.y.y = in_compyy_p[cid];
+        real3x3.z.z = - in_compxx_p[cid] - in_compyy_p[cid];
+
+        inout_tensor_p[cid] = real3x3;
+      }
+    };
+  }
+  queue_pur.barrier();
+
+  if (defaultMesh()->dimension() == 3)
+  {
+    // Remplir les variables composantes (on utilise les memes variables tampon que pour les champs en 2D)
+    // On "lance" les recopies des valeurs pures du tenseur
+    {
+      auto command = makeCommand(queue_pur);
+
+      auto in_env_id     = ax::viewIn(command, m_env_id);
+      // suffixe _p = _pure
+      auto in_tensor_p   = ax::viewIn(command, m_tensor.globalVariable());
+      auto out_compxx_p  = ax::viewOut(command, m_compxx.globalVariable());
+      auto out_compyy_p  = ax::viewOut(command, m_compyy.globalVariable());
+
+      command.addKernelName("tens2scal3d_pur") << RUNCOMMAND_ENUMERATE(Cell, cid, allCells())
+      {
+        if (in_env_id[cid]>=0) { // vrai ssi cid maille pure
+          const Real3x3& real3x3 = in_tensor_p[cid];
+          out_compxx_p[cid] = real3x3.x.z;
+          out_compyy_p[cid] = real3x3.y.z;
+        }
+      };
+    }
+    queue_pur.barrier();
+
+    // Projeter les variables
+    auto queue_xz = _asyncUpdateVariableV2Pur("updxz_pur", m_volume, m_compxx);
+    auto queue_yz = _asyncUpdateVariableV2Pur("updyz_pur", m_volume, m_compyy);
+    queue_xz->barrier();
+    queue_yz->barrier();
+
+    // Ranger les variables composantes
+    {
+      auto command = makeCommand(queue_pur);
+
+      auto in_env_id     = ax::viewIn(command, m_env_id);
+      // suffixe _p = _pure
+      auto in_compxx_p    = ax::viewIn(command, m_compxx.globalVariable());
+      auto in_compyy_p    = ax::viewIn(command, m_compyy.globalVariable());
+      auto inout_tensor_p = ax::viewInOut(command, m_tensor.globalVariable());
+
+      command.addKernelName("scal2tens3d_pur") << RUNCOMMAND_ENUMERATE(Cell, cid, allCells())
+      {
+        if (in_env_id[cid]>=0) { // vrai ssi cid maille pure
+          Real3x3 real3x3 = inout_tensor_p[cid];
+
+          real3x3.x.z = in_compxx_p[cid];
+          real3x3.y.z = in_compyy_p[cid];
+          real3x3.z.x = in_compxx_p[cid];
+          real3x3.z.y = in_compyy_p[cid];
+
+          inout_tensor_p[cid] = real3x3;
+        }
+      };
+    }
+    queue_pur.barrier();
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/* UpdateTensor implementation arcgpu_v2 pour les mailles mixtes             */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+_asyncUpdateVariableV2Mix(IMeshEnvironment* env,
+    MaterialVariableCellReal& volume, MaterialVariableCellReal& f)
+{
+  auto menv_queue = m_acc_env->multiEnvQueue();
+  auto command = makeCommand(menv_queue->queue(env->id()));
+
+  Span<const Real> in_volume(envView(volume, env));
+  Span<Real>       inout_f  (envView(f     , env));
+
+  // Nombre de mailles impures (mixtes) de l'environnement
+  Integer nb_imp = env->impureEnvItems().nbItem();
+
+  command << RUNCOMMAND_LOOP1(iter, nb_imp) {
+    auto [imix] = iter(); // imix \in [0,nb_imp[
+
+    inout_f[imix] /= in_volume[imix];
+
+  }; // asynchrone par rapport au CPU et aux autres environnements
+}
+
+void Pattern4GPUModule::
+_updateTensorImpure_arcgpu_v2()
+{
+  // Les calculs des mailles mixtes par environnement sont indépendants
+  // Remplir les variables composantes
+  auto menv_queue = m_acc_env->multiEnvQueue();
+  ENUMERATE_ENV(ienv,m_mesh_material_mng){
+    IMeshEnvironment* env = *ienv;
+
+    auto command = makeCommand(menv_queue->queue(env->id()));
+
+    Span<const Real3x3> in_tensor(envView(m_tensor, env));
+    Span<Real>         out_compxx(envView(m_compxx, env));
+    Span<Real>         out_compxy(envView(m_compxy, env));
+    Span<Real>         out_compyy(envView(m_compyy, env));
+
+    // Nombre de mailles impures (mixtes) de l'environnement
+    Integer nb_imp = env->impureEnvItems().nbItem();
+
+    command << RUNCOMMAND_LOOP1(iter, nb_imp) {
+      auto [imix] = iter(); // imix \in [0,nb_imp[
+
+      const Real3x3& real3x3 = in_tensor[imix];
+      out_compxx[imix] = real3x3.x.x;
+      out_compxy[imix] = real3x3.x.y;
+      out_compyy[imix] = real3x3.y.y;
+
+    }; // asynchrone par rapport au CPU et aux autres environnements
+  }
+  menv_queue->waitAllQueues();
+
+  ENUMERATE_ENV(ienv,m_mesh_material_mng){
+    IMeshEnvironment* env = *ienv;
+
+    _asyncUpdateVariableV2Mix(env, m_volume, m_compxx);
+    _asyncUpdateVariableV2Mix(env, m_volume, m_compxy);
+    _asyncUpdateVariableV2Mix(env, m_volume, m_compyy);
+  }
+  menv_queue->waitAllQueues();
+
+  // Maintenant, on peut remettre à jour m_tensor pour les mailles mixtes
+  ENUMERATE_ENV(ienv,m_mesh_material_mng){
+    IMeshEnvironment* env = *ienv;
+
+    auto command = makeCommand(menv_queue->queue(env->id()));
+
+    Span<const Real>  in_compxx   (envView(m_compxx, env));
+    Span<const Real>  in_compxy   (envView(m_compxy, env));
+    Span<const Real>  in_compyy   (envView(m_compyy, env));
+    Span<Real3x3>     inout_tensor(envView(m_tensor, env));
+
+    // Nombre de mailles impures (mixtes) de l'environnement
+    Integer nb_imp = env->impureEnvItems().nbItem();
+
+    command << RUNCOMMAND_LOOP1(iter, nb_imp) {
+      auto [imix] = iter(); // imix \in [0,nb_imp[
+
+      Real3x3& real3x3 = inout_tensor[imix];
+
+      real3x3.x.y = in_compxy[imix];
+      real3x3.y.x = in_compxy[imix];
+
+      real3x3.x.x = in_compxx[imix];
+      real3x3.y.y = in_compyy[imix];
+      real3x3.z.z = - in_compxx[imix] - in_compyy[imix];
+
+    }; // asynchrone par rapport au CPU et aux autres environnements
+  }
+  menv_queue->waitAllQueues();
+
+  if (defaultMesh()->dimension() == 3)
+  {
+    // Remplir les variables composantes (on utilise les memes variables tampon que pour les champs en 2D)
+    // On "lance" les recopies des valeurs mixtes du tenseur
+    ENUMERATE_ENV(ienv,m_mesh_material_mng){
+      IMeshEnvironment* env = *ienv;
+
+      auto command = makeCommand(menv_queue->queue(env->id()));
+
+      Span<const Real3x3> in_tensor(envView(m_tensor, env));
+      Span<Real>         out_compxx(envView(m_compxx, env));
+      Span<Real>         out_compyy(envView(m_compyy, env));
+
+      // Nombre de mailles impures (mixtes) de l'environnement
+      Integer nb_imp = env->impureEnvItems().nbItem();
+
+      command << RUNCOMMAND_LOOP1(iter, nb_imp) {
+        auto [imix] = iter(); // imix \in [0,nb_imp[
+
+        const Real3x3& real3x3 = in_tensor[imix];
+        out_compxx[imix] = real3x3.x.z;
+        out_compyy[imix] = real3x3.y.z;
+
+      }; // asynchrone par rapport au CPU et aux autres environnements
+    }
+    menv_queue->waitAllQueues();
+
+    // Projeter les variables
+    ENUMERATE_ENV(ienv,m_mesh_material_mng){
+      IMeshEnvironment* env = *ienv;
+
+      _asyncUpdateVariableV2Mix(env, m_volume, m_compxx);
+      _asyncUpdateVariableV2Mix(env, m_volume, m_compyy);
+    }
+    menv_queue->waitAllQueues();
+
+    // Ranger les variables composantes
+    ENUMERATE_ENV(ienv,m_mesh_material_mng){
+      IMeshEnvironment* env = *ienv;
+
+      auto command = makeCommand(menv_queue->queue(env->id()));
+
+      Span<const Real>  in_compxx   (envView(m_compxx, env));
+      Span<const Real>  in_compyy   (envView(m_compyy, env));
+      Span<Real3x3>     inout_tensor(envView(m_tensor, env));
+
+      // Nombre de mailles impures (mixtes) de l'environnement
+      Integer nb_imp = env->impureEnvItems().nbItem();
+
+      command << RUNCOMMAND_LOOP1(iter, nb_imp) {
+        auto [imix] = iter(); // imix \in [0,nb_imp[
+
+        Real3x3& real3x3 = inout_tensor[imix];
+
+        real3x3.x.z = in_compxx[imix];
+        real3x3.y.z = in_compyy[imix];
+        real3x3.z.x = in_compxx[imix];
+        real3x3.z.y = in_compyy[imix];
+
+      }; // asynchrone par rapport au CPU et aux autres environnements
+    }
+    menv_queue->waitAllQueues();
+  }
+}
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
@@ -524,6 +840,16 @@ updateTensor()
         }
       }
     }  // end if (dim == 3)
+  }
+  else if (options()->getUpdateTensorVersion() == UVV_arcgpu_v2)
+  {
+    // Même résultats numériques que ori
+    // Mais _updateVariableV2 ne calcule que les valeurs partielles
+
+    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+
+    _updateTensorPure_arcgpu_v2();
+    _updateTensorImpure_arcgpu_v2();
   }
   else if (options()->getUpdateTensorVersion() == UVV_ori_v3)
   {

@@ -88,6 +88,15 @@ class Pattern4GPUModule
   void _testCell2Face();
   void _stencilCartesian();
 
+  // Pour UpdateTensor sur GPU
+  Ref<ax::RunQueue> _asyncUpdateVariableV2Pur(const char* kernel_name,
+      const MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
+  void _updateTensorPure_arcgpu_v2();
+
+  void _asyncUpdateVariableV2Mix(IMeshEnvironment* env,
+      MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
+  void _updateTensorImpure_arcgpu_v2();
+
  private:
 
   void _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal& f);

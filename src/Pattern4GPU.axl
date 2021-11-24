@@ -279,6 +279,7 @@
     <enumvalue name="ori_v2" genvalue="UVV_ori_v2" />
     <enumvalue name="ori_v3" genvalue="UVV_ori_v3" />
     <enumvalue name="arcgpu_v1" genvalue="UVV_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2" genvalue="UVV_arcgpu_v2" />
   </enumeration>
 
   <!-- - - - - compute-cqs-vector-version - - - - -->
