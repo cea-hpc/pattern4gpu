@@ -51,7 +51,8 @@ enum eUpdateTensorVersion {
   UVV_ori_v2, //! Version CPU sans calculs inutiles des valeurs moyennes
   UVV_ori_v3, //! Version CPU avec maj des valeurs moyennes
   UVV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
-  UVV_arcgpu_v2  //! Implémentation API GPU Arcane correspondant à ori_v2
+  UVV_arcgpu_v2a, //! Implémentation API GPU Arcane correspondant à ori_v2 avec tableau intermédiaire
+  UVV_arcgpu_v2b  //! Implémentation API GPU Arcane correspondant à ori_v2 sans tableau intermédiaire
 };
 
 /*! \brief Définit les implémentations de ComputeCqsAndVector

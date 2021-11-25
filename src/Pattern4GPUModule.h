@@ -91,11 +91,13 @@ class Pattern4GPUModule
   // Pour UpdateTensor sur GPU
   Ref<ax::RunQueue> _asyncUpdateVariableV2Pur(const char* kernel_name,
       const MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
-  void _updateTensorPure_arcgpu_v2();
+  void _updateTensorPure_arcgpu_v2a();
 
   void _asyncUpdateVariableV2Mix(IMeshEnvironment* env,
       MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
-  void _updateTensorImpure_arcgpu_v2();
+  void _updateTensorImpure_arcgpu_v2a();
+
+  void _updateTensor3D_arcgpu_v2b();
 
  private:
 

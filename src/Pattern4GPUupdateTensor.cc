@@ -61,7 +61,7 @@ _updateVariableV2(const MaterialVariableCellReal& volume, MaterialVariableCellRe
 }
 
 /*---------------------------------------------------------------------------*/
-/* UpdateTensor implementation arcgpu_v2 pour les mailles pures              */
+/* UpdateTensor implementation arcgpu_v2a pour les mailles pures             */
 /*---------------------------------------------------------------------------*/
 Ref<ax::RunQueue> Pattern4GPUModule::
 _asyncUpdateVariableV2Pur(const char* kernel_name,
@@ -90,7 +90,7 @@ _asyncUpdateVariableV2Pur(const char* kernel_name,
 }
 
 void Pattern4GPUModule::
-_updateTensorPure_arcgpu_v2()
+_updateTensorPure_arcgpu_v2a()
 {
   /* Les recopies sont indépendantes par environnement et mailles pures/mixtes
    * On peut donc récupérer toutes les valeurs pures de tous les environnements
@@ -218,7 +218,7 @@ _updateTensorPure_arcgpu_v2()
 }
 
 /*---------------------------------------------------------------------------*/
-/* UpdateTensor implementation arcgpu_v2 pour les mailles mixtes             */
+/* UpdateTensor implementation arcgpu_v2a pour les mailles mixtes            */
 /*---------------------------------------------------------------------------*/
 void Pattern4GPUModule::
 _asyncUpdateVariableV2Mix(IMeshEnvironment* env,
@@ -242,7 +242,7 @@ _asyncUpdateVariableV2Mix(IMeshEnvironment* env,
 }
 
 void Pattern4GPUModule::
-_updateTensorImpure_arcgpu_v2()
+_updateTensorImpure_arcgpu_v2a()
 {
   // Les calculs des mailles mixtes par environnement sont indépendants
   // Remplir les variables composantes
@@ -377,6 +377,82 @@ _updateTensorImpure_arcgpu_v2()
 }
 
 /*---------------------------------------------------------------------------*/
+/* Implem updateTensor pour arcgpu_v2b en 3D                                 */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+_updateTensor3D_arcgpu_v2b()
+{
+  auto queue_pur = m_acc_env->newQueue();
+  queue_pur.setAsync(true);
+  {
+    auto command = makeCommand(queue_pur);
+
+    auto in_env_id       = ax::viewIn   (command, m_env_id);
+    // suffixe _p = _pure
+    auto in_volume_p     = ax::viewIn   (command, m_volume.globalVariable());
+    auto inout_tensor_p  = ax::viewInOut(command, m_tensor.globalVariable());
+
+    command.addKernelName("pure") << RUNCOMMAND_ENUMERATE(Cell, cid, allCells())
+    {
+      if (in_env_id[cid]>=0) { // vrai ssi cid maille pure
+        Real3x3 real3x3 = inout_tensor_p[cid];
+
+        Real vol = in_volume_p[cid];
+        real3x3.x.x /= vol;
+        real3x3.x.y /= vol;
+        real3x3.x.z /= vol;
+
+        real3x3.y.x = real3x3.x.y;
+        real3x3.y.y /= vol;
+        real3x3.y.z /= vol;
+
+        real3x3.z.x = real3x3.x.z;
+        real3x3.z.y = real3x3.y.z;
+        real3x3.z.z = -real3x3.x.x - real3x3.y.y;
+
+        inout_tensor_p[cid] = real3x3;
+      }
+    };
+  }
+
+  auto menv_queue = m_acc_env->multiEnvQueue();
+  ENUMERATE_ENV(ienv,m_mesh_material_mng){
+    IMeshEnvironment* env = *ienv;
+
+    auto command = makeCommand(menv_queue->queue(env->id()));
+
+    Span<const Real>  in_volume   (envView(m_volume, env));
+    Span<Real3x3>     inout_tensor(envView(m_tensor, env));
+
+    // Nombre de mailles impures (mixtes) de l'environnement
+    Integer nb_imp = env->impureEnvItems().nbItem();
+
+    command << RUNCOMMAND_LOOP1(iter, nb_imp) {
+      auto [imix] = iter(); // imix \in [0,nb_imp[
+
+      Real3x3& real3x3 = inout_tensor[imix];
+
+      Real vol = in_volume[imix];
+      real3x3.x.x /= vol;
+      real3x3.x.y /= vol;
+      real3x3.x.z /= vol;
+
+      real3x3.y.x = real3x3.x.y;
+      real3x3.y.y /= vol;
+      real3x3.y.z /= vol;
+
+      real3x3.z.x = real3x3.x.z;
+      real3x3.z.y = real3x3.y.z;
+      real3x3.z.z = -real3x3.x.x - real3x3.y.y;
+
+    }; // asynchrone par rapport au CPU et aux autres environnements
+  }
+
+  queue_pur.barrier();
+  menv_queue->waitAllQueues();
+}
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
@@ -500,15 +576,32 @@ updateTensor()
       }
     }  // end if (dim == 3)
   }
-  else if (options()->getUpdateTensorVersion() == UVV_arcgpu_v2)
+  else if (options()->getUpdateTensorVersion() == UVV_arcgpu_v2a)
   {
     // Même résultats numériques que ori
     // Mais _updateVariableV2 ne calcule que les valeurs partielles
 
     m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
 
-    _updateTensorPure_arcgpu_v2();
-    _updateTensorImpure_arcgpu_v2();
+    _updateTensorPure_arcgpu_v2a();
+    _updateTensorImpure_arcgpu_v2a();
+  }
+  else if (options()->getUpdateTensorVersion() == UVV_arcgpu_v2b)
+  {
+    // Même résultats numériques que ori
+    // On n'utilise pas des tableaux temporaires,
+    // on travaille directement sur m_tensor
+
+    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+
+    if (defaultMesh()->dimension() == 3) 
+    {
+      _updateTensor3D_arcgpu_v2b();
+    } 
+    else 
+    {
+      fatal() << "UVV_arcgpu_v2b non implemente pour dim != 2";
+    }
   }
   else if (options()->getUpdateTensorVersion() == UVV_ori_v3)
   {
