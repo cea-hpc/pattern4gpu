@@ -66,6 +66,10 @@ class MultiEnvView {
     return m_var_menv_views[evi.arrayIndex()].setItem(evi.valueIndex(), val);
   }
 
+  ARCCORE_HOST_DEVICE value_type& ref(const EnvVarIndex& evi) const {
+    return m_var_menv_views[evi.arrayIndex()].item(evi.valueIndex());
+  }
+
  public:
   Span< Span<value_type> > m_var_menv_views;
 };

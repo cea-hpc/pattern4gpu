@@ -51,6 +51,7 @@
 
     <!-- <update-tensor-version>ori</update-tensor-version> -->
     <!-- <update-tensor-version>ori_v2</update-tensor-version> -->
-    <update-tensor-version>ori_v3</update-tensor-version>
+    <!-- <update-tensor-version>ori_v3</update-tensor-version> -->
+    <update-tensor-version>arcgpu_v3b</update-tensor-version>
   </pattern4-g-p-u>
 </case>

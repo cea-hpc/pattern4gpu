@@ -453,6 +453,92 @@ _updateTensor3D_arcgpu_v2b()
 }
 
 /*---------------------------------------------------------------------------*/
+/* Implem updateTensor pour arcgpu_v3b en 3D                                 */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+_updateTensor3D_arcgpu_v3b()
+{
+  auto queue = m_acc_env->newQueue();
+  {
+    auto command = makeCommand(queue);
+
+    auto in_volume_g    = ax::viewIn   (command, m_volume.globalVariable());
+//#define USE_VIEW_INOUT_TENSOR_G // bug si actif
+#ifdef USE_VIEW_INOUT_TENSOR_G
+#warning "USE_VIEW_INOUT_TENSOR_G : bug si actif"
+    auto inout_tensor_g = ax::viewInOut(command, m_tensor.globalVariable());
+#endif
+
+    MultiEnvVar<Real> menv_volume(m_volume, m_mesh_material_mng);
+    auto in_volume(menv_volume.span());
+
+    MultiEnvVar<Real3x3> menv_tensor(m_tensor, m_mesh_material_mng);
+    auto inout_tensor(menv_tensor.span());
+
+    // Pour décrire l'accés multi-env sur GPU
+    auto in_menv_cell(m_acc_env->multiEnvCellStorage()->viewIn(command));
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+
+      Real sum_xx=0., sum_xy=0., sum_xz=0.;
+      Real            sum_yy=0., sum_yz=0.;
+      for(Integer ienv=0 ; ienv<in_menv_cell.nbEnv(cid) ; ++ienv) {
+        auto evi = in_menv_cell.envCell(cid,ienv);
+
+        Real vol = in_volume[evi];
+        Real3x3& real3x3 = inout_tensor.ref(evi); // référence sur la valeur partielle
+
+        sum_xx += real3x3.x.x;
+        sum_xy += real3x3.x.y;
+        sum_xz += real3x3.x.z;
+
+        sum_yy += real3x3.y.y;
+        sum_yz += real3x3.y.z;
+
+        real3x3.x.x /= vol;
+        real3x3.x.y /= vol;
+        real3x3.x.z /= vol;
+
+        real3x3.y.x = real3x3.x.y;
+        real3x3.y.y /= vol;
+        real3x3.y.z /= vol;
+
+        real3x3.z.x = real3x3.x.z;
+        real3x3.z.y = real3x3.y.z;
+        real3x3.z.z = -real3x3.x.x - real3x3.y.y;
+      }
+
+      // Valeurs moyennes uniquement sur les mailles mixtes
+      if (in_menv_cell.nbEnv(cid)>1) {
+        Real vol_glob = in_volume_g[cid];
+#ifdef USE_VIEW_INOUT_TENSOR_G
+        Real3x3 tens_glob = inout_tensor_g[cid];
+#else
+        EnvVarIndex evi_g(0, cid.localId()); // maille globale
+        Real3x3& tens_glob = inout_tensor.ref(evi_g);
+#endif
+
+        tens_glob.x.x = sum_xx/vol_glob;
+        tens_glob.x.y = sum_xy/vol_glob;
+        tens_glob.x.z = sum_xz/vol_glob;
+
+        tens_glob.y.x = tens_glob.x.y;
+        tens_glob.y.y = sum_yy/vol_glob;
+        tens_glob.y.z = sum_yz/vol_glob;
+
+        tens_glob.z.x = tens_glob.x.z;
+        tens_glob.z.y = tens_glob.y.z;
+        tens_glob.z.z = -tens_glob.x.x - tens_glob.y.y;
+
+#ifdef USE_VIEW_INOUT_TENSOR_G
+        inout_tensor_g[cid] = tens_glob;
+#endif
+      }
+    };
+  }
+}
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
@@ -688,6 +774,23 @@ updateTensor()
         }
       }
     }  // end if (dim == 3)
+  }
+  else if (options()->getUpdateTensorVersion() == UVV_arcgpu_v3b)
+  {
+    // Même résultats numériques que ori_v3
+    // On n'utilise pas des tableaux temporaires,
+    // on travaille directement sur m_tensor
+
+    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+
+    if (defaultMesh()->dimension() == 3) 
+    {
+      _updateTensor3D_arcgpu_v3b();
+    } 
+    else 
+    {
+      fatal() << "UVV_arcgpu_v3b non implemente pour dim != 2";
+    }
   }
   
   PROF_ACC_END;
