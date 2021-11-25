@@ -3,6 +3,7 @@ project(Pattern4GPU LANGUAGES C CXX)
 include(../samples.common.cmake)
 
 add_executable(Pattern4GPU Pattern4GPUModule.cc
+                           Pattern4GPUupdateTensor.cc 
                            Pattern4GPUTestCartesian.cc 
                            Pattern4GPUBenchCartesian.cc 
                            Pattern4GPUCartesian.cc 
@@ -39,6 +40,7 @@ if(WANT_CUDA)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   set_source_files_properties(Pattern4GPUModule.cc 
+      Pattern4GPUupdateTensor.cc 
       Pattern4GPUTestCartesian.cc 
       Pattern4GPUBenchCartesian.cc 
       Pattern4GPUCartesian.cc 
