@@ -5,7 +5,7 @@
 
 #include "arcane/MeshVariableScalarRef.h"
 #include "arcane/MeshVariableArrayRef.h"
-#include "arcane/accelerator/Views.h"
+#include "arcane/accelerator/VariableViews.h"
 #include <arcane/IMesh.h>
 #include <arcane/VariableBuildInfo.h>
 

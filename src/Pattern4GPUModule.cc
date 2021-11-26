@@ -129,6 +129,7 @@ initTensor()
 
       auto in_node_coord  = ax::viewIn(command, node_coord);
       auto in_volume_g    = ax::viewIn(command, m_volume.globalVariable());
+      auto out_tensor_g   = ax::viewOut(command, m_tensor.globalVariable());
 
       MultiEnvVar<Real> menv_volume(m_volume, m_mesh_material_mng);
       auto in_volume(menv_volume.span());
@@ -148,10 +149,7 @@ initTensor()
         const Real dc=0.5*sin(1+c.x+c.y+c.z);
 
         Real vol_glob = in_volume_g[cid];
-        // tens_glob = Real3x3::zero();
-        Real3 tens_glob_x(0,0,0);
-        Real3 tens_glob_y(0,0,0);
-        Real3 tens_glob_z(0,0,0);
+        Real3x3 tens_glob = Real3x3::zero();
 
         for(Integer ienv=0 ; ienv<in_menv_cell.nbEnv(cid) ; ++ienv) {
           auto evi = in_menv_cell.envCell(cid,ienv);
@@ -167,21 +165,11 @@ initTensor()
 
           if (vol_glob>0) {
             Real vol_part = in_volume[evi];
-            //tens_glob += vol_part*tens3x3; // Real3x3 += Real * Real3x3
-            tens_glob_x += vol_part*tens3x3.x; 
-            tens_glob_y += vol_part*tens3x3.y; 
-            tens_glob_z += vol_part*tens3x3.z; 
+            tens_glob += vol_part*tens3x3; // Real3x3 += Real * Real3x3
           }
         }
         if (vol_glob>0) {
-          // Contournement pour accès valeur globale
-          EnvVarIndex evi_g(0, cid.localId()); // maille globale
-          Real3x3& tens_glob = inout_tensor.ref(evi_g);
-
-          // tens_glob /= vol_glob;
-          tens_glob.x = tens_glob_x/vol_glob;
-          tens_glob.y = tens_glob_y/vol_glob;
-          tens_glob.z = tens_glob_z/vol_glob;
+          out_tensor_g[cid] = tens_glob/vol_glob;
         }
       };
     }

@@ -462,12 +462,8 @@ _updateTensor3D_arcgpu_v3b()
   {
     auto command = makeCommand(queue);
 
-    auto in_volume_g    = ax::viewIn   (command, m_volume.globalVariable());
-//#define USE_VIEW_INOUT_TENSOR_G // bug si actif
-#ifdef USE_VIEW_INOUT_TENSOR_G
-#warning "USE_VIEW_INOUT_TENSOR_G : bug si actif"
-    auto inout_tensor_g = ax::viewInOut(command, m_tensor.globalVariable());
-#endif
+    auto in_volume_g  = ax::viewIn (command, m_volume.globalVariable());
+    auto out_tensor_g = ax::viewOut(command, m_tensor.globalVariable());
 
     MultiEnvVar<Real> menv_volume(m_volume, m_mesh_material_mng);
     auto in_volume(menv_volume.span());
@@ -511,12 +507,7 @@ _updateTensor3D_arcgpu_v3b()
       // Valeurs moyennes uniquement sur les mailles mixtes
       if (in_menv_cell.nbEnv(cid)>1) {
         Real vol_glob = in_volume_g[cid];
-#ifdef USE_VIEW_INOUT_TENSOR_G
-        Real3x3 tens_glob = inout_tensor_g[cid];
-#else
-        EnvVarIndex evi_g(0, cid.localId()); // maille globale
-        Real3x3& tens_glob = inout_tensor.ref(evi_g);
-#endif
+        Real3x3 tens_glob; 
 
         tens_glob.x.x = sum_xx/vol_glob;
         tens_glob.x.y = sum_xy/vol_glob;
@@ -530,9 +521,7 @@ _updateTensor3D_arcgpu_v3b()
         tens_glob.z.y = tens_glob.y.z;
         tens_glob.z.z = -tens_glob.x.x - tens_glob.y.y;
 
-#ifdef USE_VIEW_INOUT_TENSOR_G
-        inout_tensor_g[cid] = tens_glob;
-#endif
+        out_tensor_g[cid] = tens_glob;
       }
     };
   }

@@ -4,7 +4,7 @@
 #include "arcane/IApplication.h"
 #include "arcane/accelerator/Reduce.h"
 #include "arcane/accelerator/Runner.h"
-#include "arcane/accelerator/Views.h"
+#include "arcane/accelerator/VariableViews.h"
 #include "arcane/accelerator/Accelerator.h"
 #include "arcane/accelerator/RunCommandLoop.h"
 #include "arcane/accelerator/RunCommandEnumerate.h"
