@@ -1,6 +1,13 @@
 #ifndef PATTERN_4_GPU_OPTIONS_H
 #define PATTERN_4_GPU_OPTIONS_H
 
+/*! \brief Définit les implémentations de InitTensor
+ */
+enum eInitTensorVersion {
+  ITV_ori = 0, //! Version CPU d'origine
+  ITV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+};
+
 /*! \brief Définit les implémentations de InitNodeVector
  */
 enum eInitNodeVectorVersion {

@@ -49,9 +49,14 @@
   <pattern4-g-p-u>
     <acc-mem-advise>true</acc-mem-advise>
 
+    <!-- <init-tensor-version>ori</init-tensor-version> -->
+    <init-tensor-version>arcgpu_v1</init-tensor-version>
+
     <!-- <update-tensor-version>ori</update-tensor-version> -->
     <!-- <update-tensor-version>ori_v2</update-tensor-version> -->
     <!-- <update-tensor-version>ori_v3</update-tensor-version> -->
+    <!-- <update-tensor-version>arcgpu_v2a</update-tensor-version> -->
+    <!-- <update-tensor-version>arcgpu_v2b</update-tensor-version> -->
     <update-tensor-version>arcgpu_v3b</update-tensor-version>
   </pattern4-g-p-u>
 </case>

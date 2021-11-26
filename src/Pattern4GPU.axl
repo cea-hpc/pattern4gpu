@@ -229,6 +229,13 @@
   <!-- - - - - - visu-m-env-var - - - - -->
   <simple name="visu-m-env-var" type="bool" default="false"><description>Alloue et calcule <em>MEnvVar*Visu</em> pour la visualisation multi-env des variables MEnvVar{1|2|3}.</description></simple>
 
+  <!-- - - - - init-tensor-version - - - - -->
+  <enumeration name="init-tensor-version" type="eInitTensorVersion" default="ori">
+    <description>Choix version implémentation InitTensor </description>
+    <enumvalue name="ori" genvalue="ITV_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="ITV_arcgpu_v1" />
+  </enumeration>
+
   <!-- - - - - init-node-vector-version - - - - -->
   <enumeration name="init-node-vector-version" type="eInitNodeVectorVersion" default="ori">
     <description>Choix version implémentation InitNodeVector </description>

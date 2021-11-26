@@ -86,36 +86,104 @@ initTensor()
 
   // Initialise m_tensor de telle sorte qu'il soit symétrique
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
-  ENUMERATE_ENV(ienv, m_mesh_material_mng) {
-    IMeshEnvironment* env = *ienv;
-    Integer env_id = env->id();
-    const Real d=3*env_id;
-    ENUMERATE_ENVCELL (envcell_i, env) {
-      EnvCell envcell=(*envcell_i);
-      Cell cell=envcell.globalCell();
-      const Node& first_node=cell.node(0);
-      const Real3& c=node_coord[first_node];
-      const Real dd=d+0.5*sin(1+c.x+c.y+c.z);
+  if (options()->getInitTensorVersion() == ITV_ori) 
+  {
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+      Integer env_id = env->id();
+      const Real d=3*env_id;
+      ENUMERATE_ENVCELL (envcell_i, env) {
+        EnvCell envcell=(*envcell_i);
+        Cell cell=envcell.globalCell();
+        const Node& first_node=cell.node(0);
+        const Real3& c=node_coord[first_node];
+        const Real dd=d+0.5*sin(1+c.x+c.y+c.z);
 
-      Real3x3& tens3x3 = m_tensor[envcell_i];
-      tens3x3.x.x=dd+1.;       tens3x3.x.y=dd+1.5;      tens3x3.x.z=dd+1.75;
-      tens3x3.y.x=tens3x3.x.y; tens3x3.y.y=dd+2.;       tens3x3.y.z=dd+2.5;
-      tens3x3.z.x=tens3x3.x.z; tens3x3.z.y=tens3x3.y.z; tens3x3.z.z=-tens3x3.x.x-tens3x3.y.y;
+        Real3x3& tens3x3 = m_tensor[envcell_i];
+        tens3x3.x.x=dd+1.;       tens3x3.x.y=dd+1.5;      tens3x3.x.z=dd+1.75;
+        tens3x3.y.x=tens3x3.x.y; tens3x3.y.y=dd+2.;       tens3x3.y.z=dd+2.5;
+        tens3x3.z.x=tens3x3.x.z; tens3x3.z.y=tens3x3.y.z; tens3x3.z.z=-tens3x3.x.x-tens3x3.y.y;
+      }
+    }
+    CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
+    const Real3x3 zero_r3x3(Real3x3::zero());
+
+    ENUMERATE_CELL (cell_i, allCells()) {
+      AllEnvCell allenvcell = allenvcell_converter[*cell_i];
+
+      Real3x3 tens3x3 = zero_r3x3;
+      if (m_volume[cell_i]>0.) {
+        ENUMERATE_CELL_ENVCELL (envcell_i, allenvcell) {
+          tens3x3 += m_volume[envcell_i]*m_tensor[envcell_i]; // Real3x3 += Real * Real3x3
+        }
+        tens3x3 /= m_volume[cell_i];
+      }
+      m_tensor[cell_i] = tens3x3;
     }
   }
-  CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
-  const Real3x3 zero_r3x3(Real3x3::zero());
+  else if (options()->getInitTensorVersion() == ITV_arcgpu_v1)
+  {
+    auto queue = m_acc_env->newQueue();
+    {
+      auto command = makeCommand(queue);
 
-  ENUMERATE_CELL (cell_i, allCells()) {
-    AllEnvCell allenvcell = allenvcell_converter[*cell_i];
+      auto in_node_coord  = ax::viewIn(command, node_coord);
+      auto in_volume_g    = ax::viewIn(command, m_volume.globalVariable());
 
-    Real3x3& tens3x3 = m_tensor[cell_i];
-    tens3x3 = zero_r3x3;
-    if (m_volume[cell_i]>0.) {
-      ENUMERATE_CELL_ENVCELL (envcell_i, allenvcell) {
-        tens3x3 += m_volume[envcell_i]*m_tensor[envcell_i]; // Real3x3 += Real * Real3x3
-      }
-      tens3x3 /= m_volume[cell_i];
+      MultiEnvVar<Real> menv_volume(m_volume, m_mesh_material_mng);
+      auto in_volume(menv_volume.span());
+
+      MultiEnvVar<Real3x3> menv_tensor(m_tensor, m_mesh_material_mng);
+      auto inout_tensor(menv_tensor.span());
+
+      // Pour décrire l'accés multi-env sur GPU
+      auto in_menv_cell(m_acc_env->multiEnvCellStorage()->viewIn(command));
+
+      auto cnc = m_acc_env->connectivityView().cellNode();
+
+      command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+
+        NodeLocalId first_nid(cnc.nodes(cid)[0]);
+        Real3 c=in_node_coord[first_nid];
+        const Real dc=0.5*sin(1+c.x+c.y+c.z);
+
+        Real vol_glob = in_volume_g[cid];
+        // tens_glob = Real3x3::zero();
+        Real3 tens_glob_x(0,0,0);
+        Real3 tens_glob_y(0,0,0);
+        Real3 tens_glob_z(0,0,0);
+
+        for(Integer ienv=0 ; ienv<in_menv_cell.nbEnv(cid) ; ++ienv) {
+          auto evi = in_menv_cell.envCell(cid,ienv);
+          Integer env_id = in_menv_cell.envId(cid,ienv);
+          const Real d=3*env_id;
+          const Real dd=d+dc;
+
+          Real3x3& tens3x3 = inout_tensor.ref(evi); // référence sur la valeur partielle
+
+          tens3x3.x.x=dd+1.;       tens3x3.x.y=dd+1.5;      tens3x3.x.z=dd+1.75;
+          tens3x3.y.x=tens3x3.x.y; tens3x3.y.y=dd+2.;       tens3x3.y.z=dd+2.5;
+          tens3x3.z.x=tens3x3.x.z; tens3x3.z.y=tens3x3.y.z; tens3x3.z.z=-tens3x3.x.x-tens3x3.y.y;
+
+          if (vol_glob>0) {
+            Real vol_part = in_volume[evi];
+            //tens_glob += vol_part*tens3x3; // Real3x3 += Real * Real3x3
+            tens_glob_x += vol_part*tens3x3.x; 
+            tens_glob_y += vol_part*tens3x3.y; 
+            tens_glob_z += vol_part*tens3x3.z; 
+          }
+        }
+        if (vol_glob>0) {
+          // Contournement pour accès valeur globale
+          EnvVarIndex evi_g(0, cid.localId()); // maille globale
+          Real3x3& tens_glob = inout_tensor.ref(evi_g);
+
+          // tens_glob /= vol_glob;
+          tens_glob.x = tens_glob_x/vol_glob;
+          tens_glob.y = tens_glob_y/vol_glob;
+          tens_glob.z = tens_glob_z/vol_glob;
+        }
+      };
     }
   }
   PROF_ACC_END;
