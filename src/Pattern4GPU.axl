@@ -206,6 +206,7 @@
   <entry-point method-name="initCartMesh" name="InitCartMesh" where="start-init" property="none" />
   <entry-point method-name="initForVol" name="InitForVol" where="start-init" property="none" />
   <entry-point method-name="initEnvOrder" name="InitEnvOrder" where="start-init" property="none" />
+  <entry-point method-name="initMEnv" name="InitMEnv" where="start-init" property="none" />
   <entry-point method-name="initMEnvVar" name="InitMEnvVar" where="start-init" property="none" />
 
   <entry-point method-name="updateTensor" name="UpdateTensor" where="compute-loop" property="none" />
@@ -227,6 +228,13 @@
 
   <!-- - - - - - visu-m-env-var - - - - -->
   <simple name="visu-m-env-var" type="bool" default="false"><description>Alloue et calcule <em>MEnvVar*Visu</em> pour la visualisation multi-env des variables MEnvVar{1|2|3}.</description></simple>
+
+  <!-- - - - - init-tensor-version - - - - -->
+  <enumeration name="init-tensor-version" type="eInitTensorVersion" default="ori">
+    <description>Choix version implémentation InitTensor </description>
+    <enumvalue name="ori" genvalue="ITV_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="ITV_arcgpu_v1" />
+  </enumeration>
 
   <!-- - - - - init-node-vector-version - - - - -->
   <enumeration name="init-node-vector-version" type="eInitNodeVectorVersion" default="ori">
@@ -269,6 +277,18 @@
     <description>Choix version implémentation UpdateVectorFromTensor </description>
     <enumvalue name="ori" genvalue="UVTV_ori" />
     <enumvalue name="mt" genvalue="UVTV_mt" />
+  </enumeration>
+
+  <!-- - - - - update-tensor-version - - - - -->
+  <enumeration name="update-tensor-version" type="eUpdateTensorVersion" default="ori">
+    <description>Choix version implémentation UpdateTensor </description>
+    <enumvalue name="ori" genvalue="UVV_ori" />
+    <enumvalue name="ori_v2" genvalue="UVV_ori_v2" />
+    <enumvalue name="ori_v3" genvalue="UVV_ori_v3" />
+    <enumvalue name="arcgpu_v1" genvalue="UVV_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2a" genvalue="UVV_arcgpu_v2a" />
+    <enumvalue name="arcgpu_v2b" genvalue="UVV_arcgpu_v2b" />
+    <enumvalue name="arcgpu_v3b" genvalue="UVV_arcgpu_v3b" />
   </enumeration>
 
   <!-- - - - - compute-cqs-vector-version - - - - -->

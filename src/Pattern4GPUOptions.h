@@ -1,6 +1,13 @@
 #ifndef PATTERN_4_GPU_OPTIONS_H
 #define PATTERN_4_GPU_OPTIONS_H
 
+/*! \brief Définit les implémentations de InitTensor
+ */
+enum eInitTensorVersion {
+  ITV_ori = 0, //! Version CPU d'origine
+  ITV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+};
+
 /*! \brief Définit les implémentations de InitNodeVector
  */
 enum eInitNodeVectorVersion {
@@ -42,6 +49,18 @@ enum eInitCellArr12Version {
 enum eUpdateVectorFromTensorVersion {
   UVTV_ori = 0, //! Version CPU d'origine
   UVTV_mt //! Implémentation CPU multi-thread
+};
+
+/*! \brief Définit les implémentations de UpdateTensor
+ */
+enum eUpdateTensorVersion {
+  UVV_ori = 0, //! Version CPU d'origine
+  UVV_ori_v2, //! Version CPU sans calculs inutiles des valeurs moyennes
+  UVV_ori_v3, //! Version CPU avec maj des valeurs moyennes
+  UVV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
+  UVV_arcgpu_v2a, //! Implémentation API GPU Arcane correspondant à ori_v2 avec tableau intermédiaire
+  UVV_arcgpu_v2b, //! Implémentation API GPU Arcane correspondant à ori_v2 sans tableau intermédiaire
+  UVV_arcgpu_v3b  //! Implémentation API GPU Arcane correspondant à ori_v3 sans tableau intermédiaire
 };
 
 /*! \brief Définit les implémentations de ComputeCqsAndVector

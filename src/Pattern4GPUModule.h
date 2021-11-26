@@ -53,6 +53,7 @@ class Pattern4GPUModule
 
   void initEnvOrder() override; // InitEnvOrder
 
+  void initMEnv() override; // InitMEnv
   void initMEnvVar() override; // InitMEnvVar
 
 
@@ -87,9 +88,23 @@ class Pattern4GPUModule
   void _testCell2Face();
   void _stencilCartesian();
 
+  // Pour UpdateTensor sur GPU
+  Ref<ax::RunQueue> _asyncUpdateVariableV2Pur(const char* kernel_name,
+      const MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
+  void _updateTensorPure_arcgpu_v2a();
+
+  void _asyncUpdateVariableV2Mix(IMeshEnvironment* env,
+      MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
+  void _updateTensorImpure_arcgpu_v2a();
+
+  void _updateTensor3D_arcgpu_v2b();
+
+  void _updateTensor3D_arcgpu_v3b();
+
  private:
 
   void _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
+  void _updateVariableV2(const MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
 
   template<Integer DIM>
   void _benchCartesianDim();

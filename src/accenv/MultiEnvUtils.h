@@ -5,7 +5,7 @@
 
 #include "arcane/MeshVariableScalarRef.h"
 #include "arcane/MeshVariableArrayRef.h"
-#include "arcane/accelerator/Views.h"
+#include "arcane/accelerator/VariableViews.h"
 #include <arcane/IMesh.h>
 #include <arcane/VariableBuildInfo.h>
 
@@ -64,6 +64,10 @@ class MultiEnvView {
 
   ARCCORE_HOST_DEVICE void setValue(const EnvVarIndex& evi, value_type val) const {
     return m_var_menv_views[evi.arrayIndex()].setItem(evi.valueIndex(), val);
+  }
+
+  ARCCORE_HOST_DEVICE value_type& ref(const EnvVarIndex& evi) const {
+    return m_var_menv_views[evi.arrayIndex()].item(evi.valueIndex());
   }
 
  public:
