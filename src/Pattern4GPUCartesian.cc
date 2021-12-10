@@ -205,27 +205,13 @@ _computeVolDir(const Integer dir, const Real dt) {
     Real face_velocity = 0.;
     Real def_coord = 0.;
     Real car_coord = 0.;
-#if 0
-    Integer lnids[4];
-    Integer nnids=0;
-#endif
     for(Integer inode = 0 ; inode < nb_node_on_face ; inode++) {
       const auto node_id{cart_conn_cfn.node(inode)};
 
-#if 0
-      lnids[nnids++] = node_id.localId();
-#endif
       face_velocity += in_node_velocity_dir[node_id];
       def_coord += in_def_node_coord_dir[node_id];
       car_coord += in_car_node_coord_dir[node_id];
     }
-#if 0
-    std::cout << "dir=" << "UNDEF" << ", cid=" << cell_id.localId();
-    for(Integer inn=0 ; inn<nnids ; inn++) {
-      std::cout << " " << lnids[inn];
-    }
-    std::cout << std::endl;
-#endif
     face_velocity *= nb_node_inverse;
     def_coord *= nb_node_inverse;
     car_coord *= nb_node_inverse;
@@ -333,11 +319,12 @@ computeVol() {
   {
     auto queue = m_acc_env->newQueue();
 
+    using CartesianMeshT = CartCartesianMeshT;
+    using ConnectivityCellFaceNode = typename CartesianMeshT::ConnectivityCellFaceNode;
+
     Cartesian::FactCartDirectionMng cartesian_mesh(mesh());
-
-    const Integer nb_node_on_face = 1 << (mesh()->dimension()-1);
-    const Real nb_node_inverse = 1.0 / nb_node_on_face;
-
+    CartesianMeshT cart_mesh_t(m_cartesian_mesh);
+   
     for(Integer dir=0 ; dir<mesh()->dimension() ; ++dir) 
     {
       auto cart_node_dm = cartesian_mesh.nodeDirection(dir);
@@ -353,6 +340,11 @@ computeVol() {
         case 1: dir_perp_0 = 0; dir_perp_1 = 2; break;
         case 2: dir_perp_0 = 0; dir_perp_1 = 1; break;
       }
+
+      ConnectivityCellFaceNode&& cart_conn_cfn = cart_mesh_t.connectivityCellFaceNode(dir);
+
+      const Integer nb_node_on_face = cart_conn_cfn.nbNode();
+      const Real nb_node_inverse = 1.0 / nb_node_on_face;
 
       // Previous (left)
       {
@@ -371,6 +363,9 @@ computeVol() {
         auto out_dir_vol1_left        = ax::viewOut(command, m_dir_vol1_left);
         auto out_dir_vol2_left        = ax::viewOut(command, m_dir_vol2_left);
 
+        // Pour récupérer les noeuds sur la face "previous" orthogonale à dir sur GPU
+        auto cfn = cart_conn_cfn.cellFace2Node(MS_previous);
+
         command.addKernelName("prev") << RUNCOMMAND_LOOP(iter, cell_group.loopRanges()) {
           auto [cid, idx] = c2cid_stm.idIdx(iter);
 
@@ -387,36 +382,15 @@ computeVol() {
           Real car_coord = 0.;
 
           // On boucle sur les noeuds de la face "previous" transverse
-          // TODO : à encapsuler
-#if 0
-          Integer lnids[4];
-          Integer nnids=0;
-#endif
-          IdxType idxn; // (i,j,k) cell => (i,k,k) node
-          idxn[dir] = idx[dir]+0; // previous
-          for(Integer sh1=0 ; sh1<2 ; sh1++) {
-            idxn[dir_perp_1] = idx[dir_perp_1]+sh1;
-            for(Integer sh0=0 ; sh0<2 ; sh0++) {
-              idxn[dir_perp_0] = idx[dir_perp_0]+sh0;
-              NodeLocalId nid{n2nid_stm.id(idxn[0], idxn[1], idxn[2])};
+          NodeLocalId bnid{cfn.baseNode(idx)};
+          for(Integer inode = 0 ; inode < nb_node_on_face ; inode++) {
+            NodeLocalId nid{cfn.node(bnid, inode)};
 
-#if 0
-              lnids[nnids++] = nid.localId();
-#endif
-
-              // TODO : utiliser la vue par direction
-              face_velocity += in_node_velocity [nid][dir];
-              def_coord     += in_def_node_coord[nid][dir];
-              car_coord     += in_car_node_coord[nid][dir];
-            }
+            // TODO : utiliser la vue par direction
+            face_velocity += in_node_velocity [nid][dir];
+            def_coord     += in_def_node_coord[nid][dir];
+            car_coord     += in_car_node_coord[nid][dir];
           }
-#if 0
-          std::cout << "dir=" << dir << ", prev, cid=" << cid.localId();
-          for(Integer inn=0 ; inn<nnids ; inn++) {
-            std::cout << " " << lnids[inn];
-          }
-          std::cout << std::endl;
-#endif
           face_velocity *= nb_node_inverse;
           def_coord *= nb_node_inverse;
           car_coord *= nb_node_inverse;
@@ -454,6 +428,9 @@ computeVol() {
         auto inout_dir_vol2_left            = ax::viewInOut(command, m_dir_vol2_left);
         auto inout_dir_vol2_right           = ax::viewInOut(command, m_dir_vol2_right);
 
+        // Pour récupérer les noeuds sur la face "next" orthogonale à dir sur GPU
+        auto cfn = cart_conn_cfn.cellFace2Node(MS_next);
+
         command.addKernelName("next") << RUNCOMMAND_LOOP(iter, cell_group.loopRanges()) {
           auto [cid, idx] = c2cid_stm.idIdx(iter);
 
@@ -488,35 +465,15 @@ computeVol() {
 
             // On boucle sur les noeuds de la face "previous" transverse
             // TODO : à encapsuler
-#if 0
-            Integer lnids[4];
-            Integer nnids=0;
-#endif
-            IdxType idxn; // (i,j,k) cell => (i,k,k) node
-            idxn[dir] = idx[dir]+1; // next
-            for(Integer sh1=0 ; sh1<2 ; sh1++) {
-              idxn[dir_perp_1] = idx[dir_perp_1]+sh1;
-              for(Integer sh0=0 ; sh0<2 ; sh0++) {
-                idxn[dir_perp_0] = idx[dir_perp_0]+sh0;
-                NodeLocalId nid{n2nid_stm.id(idxn[0], idxn[1], idxn[2])};
+            NodeLocalId bnid{cfn.baseNode(idx)};
+            for(Integer inode = 0 ; inode < nb_node_on_face ; inode++) {
+              NodeLocalId nid{cfn.node(bnid, inode)};
 
-#if 0
-                lnids[nnids++] = nid.localId();
-#endif
-
-                // TODO : utiliser la vue par direction
-                face_velocity += in_node_velocity [nid][dir];
-                def_coord     += in_def_node_coord[nid][dir];
-                car_coord     += in_car_node_coord[nid][dir];
-              }
+              // TODO : utiliser la vue par direction
+              face_velocity += in_node_velocity [nid][dir];
+              def_coord     += in_def_node_coord[nid][dir];
+              car_coord     += in_car_node_coord[nid][dir];
             }
-#if 0
-            std::cout << "dir=" << dir << ", next, cid=" << cid.localId();
-            for(Integer inn=0 ; inn<nnids ; inn++) {
-              std::cout << " " << lnids[inn];
-            }
-            std::cout << std::endl;
-#endif
             face_velocity *= nb_node_inverse;
             def_coord *= nb_node_inverse;
             car_coord *= nb_node_inverse;

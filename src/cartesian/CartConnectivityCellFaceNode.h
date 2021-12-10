@@ -6,6 +6,53 @@
 
 namespace Cartesian {
   
+/*---------------------------------------------------------------------------*/
+/*!
+ * \brief
+ * Maille => noeuds sur une face pour une direction donnée et un côté donné
+ */
+/*---------------------------------------------------------------------------*/
+class CartCellFaceNode {
+ public:
+  using NodeType = NodeLocalId;
+  using StrideArrayType = std::array<LocalIdType, 4>;
+  using CartNodeLocalIdNumbering = CartLocalIdNumberingT<NodeLocalId>;
+
+  CartCellFaceNode(const CartNodeLocalIdNumbering& cart_numb_node,
+      const StrideArrayType& strides) :
+    m_cart_numb_node (cart_numb_node),
+    m_nodef_stride (strides)
+  {
+  }
+
+  ARCCORE_HOST_DEVICE CartCellFaceNode(const CartCellFaceNode& rhs) :
+    m_cart_numb_node (rhs.m_cart_numb_node),
+    m_nodef_stride (rhs.m_nodef_stride)
+  {
+  }
+
+  /*!
+   * \brief Retourne le NodeLocalId du noeud de base de la maille idx=(i,j,k)
+   */
+  ARCCORE_HOST_DEVICE NodeType baseNode(IdxType idx) const {
+    return NodeType{m_cart_numb_node.id(
+        static_cast<LocalIdType>(idx[0]),
+        static_cast<LocalIdType>(idx[1]),
+        static_cast<LocalIdType>(idx[2]) )};
+  }
+
+  /*!
+   * \brief Retourne le NodeLocalId du inode-ième à partir de base_nid 
+   * (premier noeud dit de base pour la maille)
+   */
+  ARCCORE_HOST_DEVICE NodeType node(NodeType base_nid, Integer inode) const {
+    return NodeType{base_nid + m_nodef_stride[inode]};
+  }
+
+ protected:
+  CartNodeLocalIdNumbering m_cart_numb_node;  //! Numérotation locale des noeuds
+  StrideArrayType m_nodef_stride;  //! Sauts pour retrouver les NodeLocalId
+};
 
 /*---------------------------------------------------------------------------*/
 /*!
@@ -20,6 +67,8 @@ class CartConnectivityCellFaceNode {
   using CellEnumeratorType = CartCellEnumerator;
   using CartesianGrid = CartesianGridT<LocalIdType>;
   using CartesianNumbering = CartesianGrid::CartesianNumbering;
+  using CartNodeLocalIdNumbering = CartCellFaceNode::CartNodeLocalIdNumbering;
+  using StrideArrayType = CartCellFaceNode::StrideArrayType;
   
   CartConnectivityCellFaceNode(Integer dir, const CartesianGrid &cart_grid)
   : m_dir (dir),
@@ -79,6 +128,17 @@ class CartConnectivityCellFaceNode {
 
   NodeType node(Integer inode) const {
     return NodeType(m_base_node_id + m_ptr_nodef_stride[inode]);
+  }
+
+  auto cellFace2Node(eMeshSide side) const {
+    return CartCellFaceNode(
+        CartNodeLocalIdNumbering(m_cart_numb_node), 
+        {
+        m_nodef_stride[side][0],
+        m_nodef_stride[side][1],
+        m_nodef_stride[side][2],
+        m_nodef_stride[side][3]
+        });
   }
 
  private:
