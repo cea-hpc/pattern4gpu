@@ -1,6 +1,7 @@
 set(EXAMPLE_NAME Pattern4GPU)
 project(Pattern4GPU LANGUAGES C CXX)
 include(../samples.common.cmake)
+add_definitions("-g")
 
 add_executable(Pattern4GPU Pattern4GPUModule.cc
                            Pattern4GPUupdateTensor.cc 
