@@ -40,6 +40,8 @@ class AccEnvDefaultService : public ArcaneAccEnvDefaultObject
 
   MultiEnvCellStorage* multiEnvCellStorage() override { return m_menv_cell; }
 
+  VarSyncMng* vsyncMng() override { return m_vsync_mng; }
+
  protected:
 
   void _computeNodeIndexInCells();
@@ -56,6 +58,9 @@ class AccEnvDefaultService : public ArcaneAccEnvDefaultObject
 
   // Les queues asynchrones d'exéution
   MultiAsyncRunQueue* m_menv_queue=nullptr; //!< les queues pour traiter les environnements de façon asynchrone
+
+  //! Pour "synchroniser" les items fantômes
+  VarSyncMng* m_vsync_mng=nullptr;
 };
 
 #endif

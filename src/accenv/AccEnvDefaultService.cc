@@ -27,6 +27,7 @@ AccEnvDefaultService::~AccEnvDefaultService() {
   delete m_acc_mem_adv;
   delete m_menv_cell;
   delete m_menv_queue;
+  delete m_vsync_mng;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -102,6 +103,8 @@ initMesh(IMesh* mesh)
   // FaceLocalId
   m_acc_mem_adv->setReadMostly(allFaces().view().localIds());
   m_acc_mem_adv->setReadMostly(ownFaces().view().localIds());
+
+  m_vsync_mng = new VarSyncMng(mesh);
 }
 
 /*---------------------------------------------------------------------------*/

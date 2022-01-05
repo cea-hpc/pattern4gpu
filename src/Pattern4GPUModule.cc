@@ -14,6 +14,9 @@
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
 #include <arcane/ServiceBuilder.h>
 
+#include "msgpass/VarSyncMng.h"
+#include <arcane/IVariableSynchronizer.h>
+
 #include "Pattern4GPU4Kokkos.h"
 
 using namespace Arcane;
@@ -57,6 +60,166 @@ accBuild()
   m_acc_env->initAcc();
 
   PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* On ré-implémente le .synchronize                                          */
+/*---------------------------------------------------------------------------*/
+template<typename ItemType, typename value_type>
+void globalSynchronize(MeshVariableScalarRefT<ItemType, value_type> var)
+{
+  ItemGroup item_group = var.itemGroup();
+  IParallelMng* pm = item_group.mesh()->parallelMng();
+  //ITraceMng* tr_mng = pm->traceMng();
+  IItemFamily* item_family = item_group.itemFamily();
+  IVariableSynchronizer* var_sync = item_family->allItemsSynchronizer();
+  auto comm_ranks = var_sync->communicatingRanks();
+  GroupIndexTable& lid_to_index = *item_group.localIdToIndex().get();
+
+  Integer nb_nei = comm_ranks.size();
+#if 0
+  std::ostringstream ostr;
+  ostr << "P=" << pm->commRank()
+    << ", comm_ranks.size()=" << comm_ranks.size() << ", =[";
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    Int32 rank_nei = comm_ranks[inei];
+    ostr << " " << rank_nei;
+  }
+  ostr << " ]";
+  std::cout << ostr.str() << std::endl;
+#endif
+
+  // "shared" ou "owned" : les items intérieurs au sous-domaine et qui doivent être envoyés
+  // "ghost" : les items fantômes pour lesquels on va recevoir des informations
+  IntegerUniqueArray nb_owned_item_per_neigh(nb_nei);
+  IntegerUniqueArray nb_ghost_item_per_neigh(nb_nei);
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    nb_owned_item_per_neigh[inei] = var_sync->sharedItems(inei).size();
+    nb_ghost_item_per_neigh[inei] = var_sync->ghostItems(inei).size();
+  }
+
+  auto lids2itemidx = [&](Int32ConstArrayView lids, Int32ArrayView item_idx)
+  {
+    for(Integer ilid=0 ; ilid<lids.size() ; ++ilid) {
+      Int32 lid = lids[ilid];
+      Integer idx_in_group = lid_to_index[lid];
+      ARCANE_ASSERT(idx_in_group != -1, ("idx_in_group == -1"));
+      item_idx[ilid] = idx_in_group;
+    }
+  };
+
+  MultiArray2<Integer> owned_item_idx_per_neigh(nb_owned_item_per_neigh);
+  MultiArray2<Integer> ghost_item_idx_per_neigh(nb_ghost_item_per_neigh);
+
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    lids2itemidx(var_sync->sharedItems(inei), owned_item_idx_per_neigh[inei]);
+    lids2itemidx(var_sync->ghostItems(inei) , ghost_item_idx_per_neigh[inei]);
+  }
+
+  UniqueArray<Parallel::Request> requests;
+
+  // Quelques verifs
+  // On vérifie que les tailles envoyées/reçues sont cohérentes
+  IntegerUniqueArray nb_recv_item_per_neigh(nb_nei);
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    Int32 rank_nei = comm_ranks[inei]; // le rang du inei-ième voisin
+    
+    auto req_rcv = pm->recv(nb_recv_item_per_neigh.subView(inei,1), rank_nei, /*blocking=*/false);
+    requests.add(req_rcv);
+    
+    auto req_snd = pm->send(nb_owned_item_per_neigh.subView(inei,1), rank_nei, /*blocking=*/false);
+    requests.add(req_snd);
+  }
+
+  pm->waitAllRequests(requests);
+  requests.clear();
+
+  // Vérification proprement dite
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    ARCANE_ASSERT(nb_recv_item_per_neigh[inei]==nb_ghost_item_per_neigh[inei], ("Nb de valeurs à recevoir != nb d'items fantomes"));
+  }
+
+  // On va envoyer les UniqueId des items "shared" pour les comparer avec les ghosts des voisins
+  MultiArray2<UniqueIdType> owned_uid_per_neigh(nb_owned_item_per_neigh);
+  MultiArray2<UniqueIdType> ghost_uid_per_neigh(nb_ghost_item_per_neigh);
+
+  auto internal = item_family->itemsInternal().data();
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    Int32 rank_nei = comm_ranks[inei]; // le rang du inei-ième voisin
+
+    // On amorce la réception
+    auto req_rcv = pm->recv(ghost_uid_per_neigh[inei], rank_nei, /*blocking=*/false);
+    requests.add(req_rcv);
+     
+    // On remplit les UniqueIds
+    for(Integer i=0 ; i<nb_owned_item_per_neigh[inei] ; ++i) {
+      LocalIdType lid{owned_item_idx_per_neigh[inei][i]};
+      ItemType item(internal, lid);
+      owned_uid_per_neigh[inei][i] = item.uniqueId();
+    }
+
+    // On amorce l'envoi
+    auto req_snd = pm->send(owned_uid_per_neigh[inei], rank_nei, /*blocking=*/false);
+    requests.add(req_snd);
+  }
+
+  pm->waitAllRequests(requests);
+  requests.clear();
+
+  // Vérification proprement dite
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    // On relit les UniqueIds reçus et on les compare avec les UniqueIds des items ghost
+    for(Integer i=0 ; i<nb_ghost_item_per_neigh[inei] ; ++i) {
+      // Le UniqueId reçu
+      UniqueIdType uid{ghost_uid_per_neigh[inei][i]};
+      // On reconstruit l'item local qui est ghost
+      LocalIdType lid{ghost_item_idx_per_neigh[inei][i]};
+      ItemType item(internal, lid);
+      // verif
+      ARCANE_ASSERT(item.uniqueId()==uid, ("Incohérence entre unique Id reçu et celui de l'item ghost"));
+    }
+  }
+
+  // L'échange proprement dit des valeurs de var
+  auto var_arr = var.asArray();
+  // Les buffers des données à envoyer/recevoir
+  MultiArray2<value_type> owned_val_per_neigh(nb_owned_item_per_neigh);
+  MultiArray2<value_type> ghost_val_per_neigh(nb_ghost_item_per_neigh);
+
+  // On amorce les réceptions
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    Int32 rank_nei = comm_ranks[inei]; // le rang du inei-ième voisin
+
+    // On amorce la réception
+    auto req_rcv = pm->recv(ghost_val_per_neigh[inei], rank_nei, /*blocking=*/false);
+    requests.add(req_rcv);
+  }
+
+  // On remplit les buffers et on amorce les envois
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    Int32 rank_nei = comm_ranks[inei]; // le rang du inei-ième voisin
+
+    // On lit les valeurs de var pour les recopier dans le buffer d'envoi
+    for(Integer i=0 ; i<nb_owned_item_per_neigh[inei] ; ++i) {
+      LocalIdType lid{owned_item_idx_per_neigh[inei][i]};
+      owned_val_per_neigh[inei][i] = var_arr[lid];
+    }
+
+    // On amorce l'envoi
+    auto req_snd = pm->send(owned_val_per_neigh[inei], rank_nei, /*blocking=*/false);
+    requests.add(req_snd);
+  }
+
+  pm->waitAllRequests(requests);
+  requests.clear();
+
+  // On recopie les valeurs reçues dans les buffers dans var
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    for(Integer i=0 ; i<nb_ghost_item_per_neigh[inei] ; ++i) {
+      LocalIdType lid{ghost_item_idx_per_neigh[inei][i]};
+      var_arr[lid] = ghost_val_per_neigh[inei][i];
+    }
+  }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -326,12 +489,23 @@ initCellArr12()
 
     auto cnc = m_acc_env->connectivityView().cellNode();
 
-    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, ownCells()) {
       NodeLocalId first_nid(cnc.nodes(cid)[0]);
       Real3 c=in_node_coord[first_nid];
       out_cell_arr1[cid]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
       out_cell_arr2[cid]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
     };
+
+#if 0
+    m_cell_arr1.synchronize();
+    m_cell_arr2.synchronize();
+#else
+    auto vsync = m_acc_env->vsyncMng();
+    vsync->globalSynchronize(m_cell_arr1);
+    vsync->globalSynchronize(m_cell_arr2);
+    //  globalSynchronize(m_cell_arr1);
+    //  globalSynchronize(m_cell_arr2);
+#endif
   }
   else if (options()->getInitCellArr12Version() == IA12V_kokkos)
   {
@@ -755,7 +929,7 @@ _computeCqsAndVector_Varcgpu_v1() {
 
     auto nc_cty = m_acc_env->connectivityView().nodeCell();
 
-    command << RUNCOMMAND_ENUMERATE(Node,nid,allNodes()) {
+    command << RUNCOMMAND_ENUMERATE(Node,nid,ownNodes()) {
       Int32 first_pos = nid.localId() * max_node_cell;
       Integer index = 0;
       Real3 node_vec = Real3::zero();
@@ -770,6 +944,14 @@ _computeCqsAndVector_Varcgpu_v1() {
       out_node_vector[nid] = node_vec;
     };
   }
+
+#if 0
+  m_node_vector.synchronize();
+#else
+  auto vsync = m_acc_env->vsyncMng();
+  vsync->globalSynchronize(m_node_vector);
+//  globalSynchronize(m_node_vector);
+#endif
 
   PROF_ACC_END;
 }

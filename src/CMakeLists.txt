@@ -35,10 +35,15 @@ add_library(libaccenv accenv/AccEnvDefaultService.cc)
 target_include_directories(libaccenv PUBLIC .)
 target_link_libraries(libaccenv PUBLIC arcane_core)
 
+# Message Passing
+add_library(libmsgpass msgpass/VarSyncMng.cc)
+target_include_directories(libmsgpass PUBLIC .)
+target_link_libraries(libmsgpass PUBLIC arcane_core)
+
 if(WANT_KOKKOS)
 target_compile_options(libpattern4gpu PUBLIC -fopenmp)
 endif()
-target_link_libraries(libpattern4gpu PUBLIC libgeomenv libcartesian libaccenv)
+target_link_libraries(libpattern4gpu PUBLIC libgeomenv libcartesian libaccenv libmsgpass)
 
 # Pour la gestion des accélérateurs et des sources à compiler avec le
 # compilateur pour accélérateur
@@ -60,11 +65,13 @@ if(WANT_CUDA)
       cartesian/NodeDirectionMng.cc
       cartesian/CartesianItemSorter.cc
       accenv/AccEnvDefaultService.cc
+      msgpass/VarSyncMng.cc
       PROPERTIES LANGUAGE CUDA)
   target_link_libraries(libpattern4gpu PUBLIC arcane_accelerator_cuda_runtime)
   target_link_libraries(libgeomenv PUBLIC arcane_accelerator_cuda_runtime)
   target_link_libraries(libcartesian PUBLIC arcane_accelerator_cuda_runtime)
   target_link_libraries(libaccenv PUBLIC arcane_accelerator_cuda_runtime)
+  target_link_libraries(libmsgpass PUBLIC arcane_accelerator_cuda_runtime)
 endif()
 
 # Kokkos
@@ -87,6 +94,7 @@ if (WANT_PROF_ACC)
   target_compile_definitions(libgeomenv PRIVATE PROF_ACC)
   target_compile_definitions(libcartesian PRIVATE PROF_ACC)
   target_compile_definitions(libaccenv PRIVATE PROF_ACC)
+  target_compile_definitions(libmsgpass PRIVATE PROF_ACC)
 endif()
 
 # Les axl
