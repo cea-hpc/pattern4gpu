@@ -892,7 +892,7 @@ _computeCqsAndVector_Varcgpu_v1() {
 
     auto cnc = m_acc_env->connectivityView().cellNode();
 
-    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()){
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, ownCells()){
       // Recopie les coordonnées locales (pour le cache)
       Real3 pos[8];
       Int32 index=0;
@@ -904,6 +904,11 @@ _computeCqsAndVector_Varcgpu_v1() {
       computeCQs(pos, out_cell_cqs[cid]);
     };
   }
+#if 0
+  m_cell_cqs.synchronize();
+#else
+  m_acc_env->vsyncMng()->globalSynchronize(m_cell_cqs);
+#endif
   {
     // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
     // Du coup, on boucle sur les Node

@@ -46,23 +46,31 @@ class SyncItems {
 /*---------------------------------------------------------------------------*/
 /* Encapsule les buffers des valeurs à envoyer/recevoir                      */
 /*---------------------------------------------------------------------------*/
-template<typename DataType>
 class MultiBufView {
  public:
   MultiBufView();
   MultiBufView(ArrayView<Byte*> ptrs, Int64ConstArrayView sizes);
-  MultiBufView(const MultiBufView<DataType>& rhs);
+  MultiBufView(const MultiBufView& rhs);
 
-  MultiBufView<DataType>& operator=(const MultiBufView<DataType>& rhs);
+  MultiBufView& operator=(const MultiBufView& rhs);
 
-  //! Accès en lecture/écriture au i-ème buffer
-  ArrayView<DataType> operator[](Integer i);
+  //! Convertit un buffer d'octets en buffer de DataType
+  template<typename DataType>
+  static ArrayView<DataType> valBuf(ArrayView<Byte> buf);
+
+  //! Convertit un buffer d'octets en buffer 2D de DataType dont la taille dans la deuxième dimension est dim2_size
+  template<typename DataType>
+  static Array2View<DataType> valBuf2(ArrayView<Byte> buf, Integer dim2_size);
+
+  //! Accès en lecture/écriture au i-ème buffer d'octets
+  ArrayView<Byte> byteBuf(Integer i);
 
   //! Retourne [beg_ptr, end_ptr[ qui contient tous les buffers (peut-être espacés de trous)
   Span<Byte> rangeSpan();
 
  protected:
-  SharedArray< ArrayView<DataType> > m_multi_buf;
+  SharedArray<Byte*> m_ptrs;
+  SharedArray<Int64> m_sizes;
 };
 
 /*---------------------------------------------------------------------------*/
@@ -77,7 +85,7 @@ class SyncBuffers {
 
   // 
   template<typename DataType>
-  void addEstimatedMaxSz(ConstMultiArray2View<Integer> item_idx_pn);
+  void addEstimatedMaxSz(ConstMultiArray2View<Integer> item_idx_pn, Integer degree);
 
   // 
   void allocIfNeeded();
@@ -86,22 +94,22 @@ class SyncBuffers {
    * \brief A partir des nb d'items à communiquer, estime une borne sup de la taille du buffer en octets
    */
   template<typename DataType>
-  Int64 estimatedMaxBufSz(IntegerConstArrayView item_sizes);
+  Int64 estimatedMaxBufSz(IntegerConstArrayView item_sizes, Integer degree);
 
   /*!
    * \brief A partir de la vue sur m_buf_bytes, construit une vue par voisin des buffers
    */
   template<typename DataType>
-  MultiBufView<DataType> multiBufView(
-    ConstMultiArray2View<Integer> item_idx_pn);
+  MultiBufView multiBufView(
+    ConstMultiArray2View<Integer> item_idx_pn, Integer degree);
 
  protected:
   /*!
    * \brief A partir de la vue sur un buffer déjà alloué, construit une vue par voisin des buffers
    */
   template<typename DataType>
-  MultiBufView<DataType> _multiBufView(
-      IntegerConstArrayView item_sizes,
+  MultiBufView _multiBufView(
+      IntegerConstArrayView item_sizes, Integer degree,
       Span<Byte> buf_bytes);
 
  protected:
@@ -119,8 +127,8 @@ class VarSyncMng {
   virtual ~VarSyncMng();
 
   // Equivalent à un var.synchronize() où var est une variable globale (i.e. non multi-mat)
-  template<typename ItemType, typename DataType>
-  void globalSynchronize(MeshVariableScalarRefT<ItemType, DataType> var);
+  template<typename MeshVariableRefT>
+  void globalSynchronize(MeshVariableRefT var);
 
  protected:
 

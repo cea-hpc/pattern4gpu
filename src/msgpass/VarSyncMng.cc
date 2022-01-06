@@ -6,6 +6,7 @@
 #include <arcane/ISubDomain.h>
 #include <arcane/IParallelMng.h>
 #include <arcane/MeshVariableScalarRef.h>
+#include <arcane/MeshVariableArrayRef.h>
 
 // Retourne le eItemKind en fonction de ItemType
 template<typename ItemType>
@@ -88,61 +89,79 @@ SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks)
 /*---------------------------------------------------------------------------*/
 /* Encapsule des vues sur plusieurs buffers de communication                 */
 /*---------------------------------------------------------------------------*/
-template<typename DataType>
-MultiBufView<DataType>::MultiBufView()
+MultiBufView::MultiBufView()
 { }
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-template<typename DataType>
-MultiBufView<DataType>::MultiBufView(ArrayView<Byte*> ptrs, Int64ConstArrayView sizes) :
-  m_multi_buf (sizes.size())
+MultiBufView::MultiBufView(ArrayView<Byte*> ptrs, Int64ConstArrayView sizes) :
+  m_ptrs  (ptrs),
+  m_sizes (sizes)
 {
   ARCANE_ASSERT(ptrs.size()==sizes.size(), ("ptrs.size()!=sizes.size()"));
-  Integer nb_buf=sizes.size();
-  for(Integer i=0 ; i<nb_buf ; ++i) {
-
-    // ptrs[i] doit être aligné sur alignof(DataType)
-    ARCANE_ASSERT(reinterpret_cast<size_t>(ptrs[i])%alignof(DataType)==0, 
-        ("L'adresse ptrs[i] n'est pas aligne sur alignof(DataType)"));
-
-    // sizes[i] doit être un multiple de sizeof(DataType)
-    ARCANE_ASSERT(sizes[i]%sizeof(DataType)==0, 
-        ("sizes[i] n'est pas un multiple de sizeof(DataType)"));
-
-    m_multi_buf[i] = 
-      ArrayView<DataType>(static_cast<Integer>(sizes[i]/sizeof(DataType)),
-          reinterpret_cast<DataType*>(ptrs[i]));
-  }
 }
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-template<typename DataType>
-MultiBufView<DataType>::MultiBufView(const MultiBufView<DataType>& rhs) :
-  m_multi_buf (rhs.m_multi_buf)
+MultiBufView::MultiBufView(const MultiBufView& rhs) :
+  m_ptrs  (rhs.m_ptrs),
+  m_sizes (rhs.m_sizes)
 {
 }
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-//! Accès en lecture/écriture au i-ème buffer
+//! Convertit un buffer d'octets en buffer de DataType
 template<typename DataType>
-ArrayView<DataType> MultiBufView<DataType>::operator[](Integer i) {
-  return m_multi_buf[i];
+ArrayView<DataType> MultiBufView::valBuf(ArrayView<Byte> buf) {
+  // buf.data() doit être aligné sur alignof(DataType)
+  ARCANE_ASSERT(reinterpret_cast<size_t>(buf.data())%alignof(DataType)==0, 
+      ("L'adresse buf.data() n'est pas aligne sur alignof(DataType)"));
+
+  // buf.size() doit être un multiple de sizeof(DataType)
+  ARCANE_ASSERT(buf.size()%sizeof(DataType)==0, 
+      ("buf.size() n'est pas un multiple de sizeof(DataType)"));
+
+  return ArrayView<DataType>(
+      static_cast<Integer>(buf.size()/sizeof(DataType)), 
+      reinterpret_cast<DataType*>(buf.data()));
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+//! Convertit un buffer d'octets en buffer 2D de DataType dont la taille dans la deuxième dimension est dim2_size
+template<typename DataType>
+Array2View<DataType> MultiBufView::valBuf2(ArrayView<Byte> buf, Integer dim2_size) {
+  // buf.data() doit être aligné sur alignof(DataType)
+  ARCANE_ASSERT(reinterpret_cast<size_t>(buf.data())%alignof(DataType)==0, 
+      ("L'adresse buf.data() n'est pas aligne sur alignof(DataType)"));
+
+  // buf.size() doit être un multiple de dim2_size*sizeof(DataType)
+  ARCANE_ASSERT(buf.size()%(dim2_size*sizeof(DataType))==0, 
+      ("buf.size() n'est pas un multiple de dim2_size*sizeof(DataType)"));
+
+  return Array2View<DataType>(reinterpret_cast<DataType*>(buf.data()),
+      static_cast<Integer>(buf.size()/(dim2_size*sizeof(DataType))), 
+      dim2_size);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+//! Accès en lecture/écriture au i-ème buffer d'octets
+ArrayView<Byte> MultiBufView::byteBuf(Integer i) {
+  return ArrayView<Byte>(m_sizes[i], m_ptrs[i]);
 }
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 //! Retourne [beg_ptr, end_ptr[ qui contient tous les buffers (peut-être espacés de trous)
-template<typename DataType>
-Span<Byte> MultiBufView<DataType>::rangeSpan() {
-  if (m_multi_buf.size()==0) {
+Span<Byte> MultiBufView::rangeSpan() {
+  if (m_ptrs.size()==0) {
     return Span<Byte>();
   } else {
-    Byte* beg_ptr=reinterpret_cast<Byte*>(m_multi_buf[0].data());
-    Integer last = m_multi_buf.size()-1;
-    Byte* end_ptr=reinterpret_cast<Byte*>(m_multi_buf[last].data()+m_multi_buf[last].size());
+    Byte* beg_ptr=m_ptrs[0];
+    Integer last = m_ptrs.size()-1;
+    Byte* end_ptr=m_ptrs[last]+m_sizes[last];
     Int64 sz = end_ptr-beg_ptr;
     return Span<Byte>(beg_ptr, sz);
   }
@@ -153,12 +172,14 @@ Span<Byte> MultiBufView<DataType>::rangeSpan() {
 /* buffer en octets                                                          */
 /*---------------------------------------------------------------------------*/
 template<typename DataType>
-Int64 SyncBuffers::estimatedMaxBufSz(IntegerConstArrayView item_sizes) {
+Int64 SyncBuffers::estimatedMaxBufSz(IntegerConstArrayView item_sizes, 
+    Integer degree) {
   Integer nb_nei = item_sizes.size(); // nb de voisins
   Int64 estim_max_buf_sz = 0;
+  Int64 sizeof_item = sizeof(DataType)*degree;
   for(Integer inei=0 ; inei<nb_nei ; ++inei) {
     // Dans le pire des cas, le décalage est d'au plus alignof(DataType)-1 octets
-    estim_max_buf_sz += (item_sizes[inei]*sizeof(DataType) + alignof(DataType)-1);
+    estim_max_buf_sz += (item_sizes[inei]*sizeof_item + alignof(DataType)-1);
   }
   return estim_max_buf_sz;
 }
@@ -174,8 +195,9 @@ void SyncBuffers::resetBuf() {
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 template<typename DataType>
-void SyncBuffers::addEstimatedMaxSz(ConstMultiArray2View<Integer> item_idx_pn) {
-  m_buf_estim_sz += estimatedMaxBufSz<DataType>(item_idx_pn.dim2Sizes());
+void SyncBuffers::addEstimatedMaxSz(ConstMultiArray2View<Integer> item_idx_pn,
+    Integer degree) {
+  m_buf_estim_sz += estimatedMaxBufSz<DataType>(item_idx_pn.dim2Sizes(), degree);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -191,13 +213,13 @@ void SyncBuffers::allocIfNeeded() {
  */
 /*---------------------------------------------------------------------------*/
 template<typename DataType>
-MultiBufView<DataType> SyncBuffers::_multiBufView(
-    IntegerConstArrayView item_sizes,
+MultiBufView SyncBuffers::_multiBufView(
+    IntegerConstArrayView item_sizes, Integer degree,
     Span<Byte> buf_bytes) {
 
-  if (estimatedMaxBufSz<DataType>(item_sizes)>buf_bytes.size()) {
+  if (estimatedMaxBufSz<DataType>(item_sizes, degree)>buf_bytes.size()) {
     // Il y a un risque que le buffer déjà alloué ne soit pas assez grand
-    return MultiBufView<DataType>();
+    return MultiBufView();
   }
 
   Integer nb_nei = item_sizes.size(); // nb de voisins
@@ -206,6 +228,7 @@ MultiBufView<DataType> SyncBuffers::_multiBufView(
 
   Byte* cur_ptr{buf_bytes.data()};
   size_t available_space = buf_bytes.size();
+  size_t sizeof_item = sizeof(DataType)*degree;
   Integer inei;
 
   for(inei=0 ; available_space>0 && inei<nb_nei ; ++inei) {
@@ -219,7 +242,7 @@ MultiBufView<DataType> SyncBuffers::_multiBufView(
       // available_space a été diminué du nb d'octets = cur_ptr(après appel) - cur_ptr(avant appel)
 
       // Calcul en octets de l'occupation des valeurs pour le voisin inei
-      size_t sz_nei_in_bytes = item_sizes[inei]*sizeof(DataType);
+      size_t sz_nei_in_bytes = item_sizes[inei]*sizeof_item;
 
       ptrs[inei] = cur_ptr;
       sizes_in_bytes[inei] = sz_nei_in_bytes;
@@ -238,12 +261,12 @@ MultiBufView<DataType> SyncBuffers::_multiBufView(
   }
 
   if (inei==nb_nei) {
-    MultiBufView<DataType> mb(ptrs, sizes_in_bytes);
+    MultiBufView mb(ptrs, sizes_in_bytes);
     return mb;
   } else {
     // On ne devait jamais arriver là
     ARCANE_ASSERT(false, ("On ne devrait pas etre la"));
-    return MultiBufView<DataType>();
+    return MultiBufView();
   }
 }
 
@@ -251,12 +274,12 @@ MultiBufView<DataType> SyncBuffers::_multiBufView(
 /* */
 /*---------------------------------------------------------------------------*/
 template<typename DataType>
-MultiBufView<DataType> SyncBuffers::multiBufView(
-    ConstMultiArray2View<Integer> item_idx_pn) {
+MultiBufView SyncBuffers::multiBufView(
+    ConstMultiArray2View<Integer> item_idx_pn, Integer degree) {
 
   Int64 av_space = m_buf_bytes.size()-m_first_av_pos;
   Span<Byte> buf_bytes{m_buf_bytes.subView(m_first_av_pos, av_space)};
-  auto mb = _multiBufView<DataType>(item_idx_pn.dim2Sizes(), buf_bytes);
+  auto mb = _multiBufView<DataType>(item_idx_pn.dim2Sizes(), degree, buf_bytes);
   auto rg{mb.rangeSpan()}; // Encapsule [beg_ptr, end_ptr[
   Byte* end_ptr = rg.data()+rg.size();
   m_first_av_pos = (end_ptr - m_buf_bytes.data());
@@ -303,12 +326,143 @@ SyncItems<Node>* VarSyncMng::_getSyncItems() {
 }
 
 /*---------------------------------------------------------------------------*/
+/* Spécialisations pour retourner le nb de fois un type élémentaire DataType */
+/* est répété pour un représenter ItemType                                   */
+/*---------------------------------------------------------------------------*/
+template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
+Integer get_var_degree(MeshVarRefT<ItemType, DataType> var) {
+  // Ne devrait jamais être appelé
+  ARCANE_ASSERT(false, ("get_var_degree à spécifialiser"));
+  return 0;
+}
+template<typename ItemType, typename DataType>
+Integer get_var_degree(MeshVariableScalarRefT<ItemType, DataType> var) {
+  return 1;
+}
+
+template<typename ItemType, typename DataType>
+Integer get_var_degree(MeshVariableArrayRefT<ItemType, DataType> var) {
+  return var.arraySize();
+}
+
+/*---------------------------------------------------------------------------*/
+/* cpy_var2buf */
+/*---------------------------------------------------------------------------*/
+template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
+void cpy_var2buf(IntegerConstArrayView item_idx, 
+    MeshVarRefT<ItemType, DataType> var,
+    ArrayView<Byte> buf) 
+{
+  // Ne devrait jamais être appelé
+  ARCANE_ASSERT(false, ("cpy_var2buf à spécifialiser"));
+}
+
+// Spécialisation pour MeshVariable***Scalar***RefT
+template<typename ItemType, typename DataType>
+void cpy_var2buf(IntegerConstArrayView item_idx, 
+    MeshVariableScalarRefT<ItemType, DataType> var,
+    ArrayView<Byte> buf) 
+{
+  auto var_arr = var.asArray();
+
+  ArrayView<DataType> buf_vals(MultiBufView::valBuf<DataType>(buf));
+
+  Integer nb_item_idx = item_idx.size();
+
+  for(Integer i=0 ; i<nb_item_idx ; ++i) {
+    LocalIdType lid{item_idx[i]};
+    buf_vals[i] = var_arr[lid];
+  }
+}
+
+// Spécialisation pour MeshVariable***Array***RefT
+template<typename ItemType, typename DataType>
+void cpy_var2buf(IntegerConstArrayView item_idx, 
+    MeshVariableArrayRefT<ItemType, DataType> var,
+    ArrayView<Byte> buf) 
+{
+  auto var_arr = var.asArray();
+
+  Integer degree = var.arraySize();
+  // Vue sur tableau 2D [nb_item][degree]
+  Array2View<DataType> buf_vals(MultiBufView::valBuf2<DataType>(buf, degree));
+
+  Integer nb_item_idx = item_idx.size();
+
+  for(Integer i=0 ; i<nb_item_idx ; ++i) {
+    LocalIdType lid{item_idx[i]};
+    Span<const DataType> in_var_arr  (var_arr[lid]);
+    Span<DataType>       out_buf_vals(buf_vals[i]);
+    for(Integer j=0 ; j<degree ; ++j) {
+      out_buf_vals[j] = in_var_arr[j];
+    }
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/* cpy_buf2var */
+/*---------------------------------------------------------------------------*/
+template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
+void cpy_buf2var(IntegerConstArrayView item_idx, 
+    ArrayView<Byte> buf,
+    MeshVarRefT<ItemType, DataType> var) 
+{
+  // Ne devrait jamais être appelé
+  ARCANE_ASSERT(false, ("cpy_var2buf à spécifialiser"));
+}
+
+// Spécialisation pour MeshVariable***Scalar***RefT
+template<typename ItemType, typename DataType>
+void cpy_buf2var(IntegerConstArrayView item_idx, 
+    ArrayView<Byte> buf,
+    MeshVariableScalarRefT<ItemType, DataType> var)
+{
+  auto var_arr = var.asArray();
+
+  ConstArrayView<DataType> buf_vals(MultiBufView::valBuf<DataType>(buf));
+
+  Integer nb_item_idx = item_idx.size();
+
+  for(Integer i=0 ; i<nb_item_idx ; ++i) {
+    LocalIdType lid{item_idx[i]};
+    var_arr[lid] = buf_vals[i];
+  }
+}
+
+// Spécialisation pour MeshVariable***Array***RefT
+template<typename ItemType, typename DataType>
+void cpy_buf2var(IntegerConstArrayView item_idx, 
+    ArrayView<Byte> buf,
+    MeshVariableArrayRefT<ItemType, DataType> var)
+{
+  auto var_arr = var.asArray();
+
+  Integer degree = var.arraySize();
+  // Vue sur tableau 2D [nb_item][degree]
+  ConstArray2View<DataType> buf_vals(MultiBufView::valBuf2<DataType>(buf, degree));
+
+
+  Integer nb_item_idx = item_idx.size();
+
+  for(Integer i=0 ; i<nb_item_idx ; ++i) {
+    LocalIdType lid{item_idx[i]};
+    Span<const DataType> in_buf_vals(buf_vals[i]);
+    Span<DataType>       out_var_arr(var_arr[lid]);
+    for(Integer j=0 ; j<degree ; ++j) {
+      out_var_arr[j] = in_buf_vals[j];
+    }
+  }
+}
+
+/*---------------------------------------------------------------------------*/
 /* Equivalent à un var.synchronize() où var est une variable globale         */ 
 /* (i.e. non multi-mat)                                                      */
 /*---------------------------------------------------------------------------*/
-template<typename ItemType, typename DataType>
-void VarSyncMng::globalSynchronize(MeshVariableScalarRefT<ItemType, DataType> var)
+template<typename MeshVariableRefT>
+void VarSyncMng::globalSynchronize(MeshVariableRefT var)
 {
+  using ItemType = typename MeshVariableRefT::ItemType;
+  using DataType = typename MeshVariableRefT::DataType;
   /*
   // Distinguer la lecture de var/construction des buffers des messages proprement dits
 
@@ -328,27 +482,30 @@ void VarSyncMng::globalSynchronize(MeshVariableScalarRefT<ItemType, DataType> va
   auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
   auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
 
+  // Pour un ItemType donné, combien de DataType sont utilisés ? => degree
+  Integer degree = get_var_degree(var);
+
   m_sync_buffers->resetBuf();
   // On prévoit une taille max du buffer qui va contenir tous les messages
-  m_sync_buffers->addEstimatedMaxSz<DataType>(owned_item_idx_pn);
-  m_sync_buffers->addEstimatedMaxSz<DataType>(ghost_item_idx_pn);
+  m_sync_buffers->addEstimatedMaxSz<DataType>(owned_item_idx_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<DataType>(ghost_item_idx_pn, degree);
   // Le buffer de tous les messages est réalloué si pas assez de place
   m_sync_buffers->allocIfNeeded();
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception
-  auto buf_snd = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn);
-  auto buf_rcv = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn);
+  auto buf_snd = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree);
+  auto buf_rcv = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree);
 
   // L'échange proprement dit des valeurs de var
   UniqueArray<Parallel::Request> requests;
-  auto var_arr = var.asArray();
 
   // On amorce les réceptions
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
     Int32 rank_nei = m_neigh_ranks[inei]; // le rang du inei-ième voisin
 
     // On amorce la réception
-    auto req_rcv = m_pm->recv(buf_rcv[inei], rank_nei, /*blocking=*/false);
+    auto byte_buf_rcv = buf_rcv.byteBuf(inei); // le buffer de réception pour inei
+    auto req_rcv = m_pm->recv(byte_buf_rcv, rank_nei, /*blocking=*/false);
     requests.add(req_rcv);
   }
 
@@ -356,15 +513,9 @@ void VarSyncMng::globalSynchronize(MeshVariableScalarRefT<ItemType, DataType> va
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
 
     // On lit les valeurs de var pour les recopier dans le buffer d'envoi
-    auto owned_item_idx_nei = owned_item_idx_pn[inei];
-    Integer nb_owned_item_idx_nei = owned_item_idx_nei.size();
-
-    ArrayView<DataType> snd_vals = buf_snd[inei];
-
-    for(Integer i=0 ; i<nb_owned_item_idx_nei ; ++i) {
-      LocalIdType lid{owned_item_idx_nei[i]};
-      snd_vals[i] = var_arr[lid];
-    }
+    auto buf_snd_inei = buf_snd.byteBuf(inei); // buffer dans lequel on va écrire
+    // "buf_snd[inei] <= var"
+    cpy_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei);
   }
 
   // On amorce les envois
@@ -372,7 +523,8 @@ void VarSyncMng::globalSynchronize(MeshVariableScalarRefT<ItemType, DataType> va
     Int32 rank_nei = m_neigh_ranks[inei]; // le rang du inei-ième voisin
 
     // On amorce l'envoi
-    auto req_snd = m_pm->send(buf_snd[inei], rank_nei, /*blocking=*/false);
+    auto byte_buf_snd = buf_snd.byteBuf(inei); // le buffer d'envoi pour inei
+    auto req_snd = m_pm->send(byte_buf_snd, rank_nei, /*blocking=*/false);
     requests.add(req_snd);
   }
 
@@ -381,15 +533,9 @@ void VarSyncMng::globalSynchronize(MeshVariableScalarRefT<ItemType, DataType> va
 
   // On recopie les valeurs reçues dans les buffers dans var
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
-    auto ghost_item_idx_nei = ghost_item_idx_pn[inei];
-    Integer nb_ghost_item_idx_nei = ghost_item_idx_nei.size();
-
-    ArrayView<DataType> rcv_vals = buf_rcv[inei];
-
-    for(Integer i=0 ; i<nb_ghost_item_idx_nei ; ++i) {
-      LocalIdType lid{ghost_item_idx_nei[i]};
-      var_arr[lid] = rcv_vals[i];
-    }
+    auto buf_rcv_inei = buf_rcv.byteBuf(inei); // buffer duquel on va lire les données
+    // "var <= buf_rcv[inei]"
+    cpy_buf2var(ghost_item_idx_pn[inei], buf_rcv_inei, var);
   }
 }
 
@@ -398,9 +544,10 @@ void VarSyncMng::globalSynchronize(MeshVariableScalarRefT<ItemType, DataType> va
 /*---------------------------------------------------------------------------*/
 #include <arcane/utils/Real3.h>
 
-#define INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(__ItemType__, __DataType__) \
-  template void VarSyncMng::globalSynchronize(MeshVariableScalarRefT<__ItemType__,__DataType__> var)
+#define INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(__MeshVariableRefT__) \
+  template void VarSyncMng::globalSynchronize(__MeshVariableRefT__ var)
 
-INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(Cell, Real);
-INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(Node, Real3);
+INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(VariableCellReal);
+INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(VariableNodeReal3);
 
+INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(VariableCellArrayReal3);
