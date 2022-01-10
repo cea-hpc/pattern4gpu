@@ -1,6 +1,7 @@
 #ifndef VAR_SYNC_MNG_H
 #define VAR_SYNC_MNG_H
 
+#include "accenv/AcceleratorUtils.h"
 #include <arcane/IMesh.h>
 #include <arcane/utils/MultiArray2.h>
 
@@ -24,11 +25,13 @@ class SyncItems {
   }
 
   auto ownedItemIdxPn() const {
-    return m_owned_item_idx_pn.constView();
+    return ConstMultiArray2View<Integer>(m_buf_owned_item_idx.constView(),
+        m_indexes_owned_item_pn.constView(), m_nb_owned_item_pn.constView());
   }
 
   auto ghostItemIdxPn() const {
-    return m_ghost_item_idx_pn.constView();
+    return ConstMultiArray2View<Integer>(m_buf_ghost_item_idx.constView(),
+        m_indexes_ghost_item_pn.constView(), m_nb_ghost_item_pn.constView());
   }
 
  protected:
@@ -37,10 +40,24 @@ class SyncItems {
   // _pn : _per_neigh, info par voisin
   
   // Nb d'items par voisin et listes des indexes de ces items
+  // Owned ou Shared
+  IntegerUniqueArray m_buf_owned_item_idx;
+  IntegerUniqueArray m_indexes_owned_item_pn;
   IntegerUniqueArray m_nb_owned_item_pn;
+
+  // Ghost
+  IntegerUniqueArray m_buf_ghost_item_idx;
+  IntegerUniqueArray m_indexes_ghost_item_pn;
   IntegerUniqueArray m_nb_ghost_item_pn;
-  MultiArray2<Integer> m_owned_item_idx_pn;
-  MultiArray2<Integer> m_ghost_item_idx_pn;
+};
+
+/*---------------------------------------------------------------------------*/
+/* Emplacement de la mémoire                                                 */
+/*---------------------------------------------------------------------------*/
+enum eLocMem {
+  LM_HostMem=0,
+  LM_DevMem,
+  MAX_LocMem
 };
 
 /*---------------------------------------------------------------------------*/
@@ -49,7 +66,7 @@ class SyncItems {
 class MultiBufView {
  public:
   MultiBufView();
-  MultiBufView(ArrayView<Byte*> ptrs, Int64ConstArrayView sizes);
+  MultiBufView(ArrayView<Byte*> ptrs, Int64ConstArrayView sizes, eLocMem loc_mem=LM_HostMem);
   MultiBufView(const MultiBufView& rhs);
 
   MultiBufView& operator=(const MultiBufView& rhs);
@@ -68,17 +85,22 @@ class MultiBufView {
   //! Retourne [beg_ptr, end_ptr[ qui contient tous les buffers (peut-être espacés de trous)
   Span<Byte> rangeSpan();
 
+  //! Emplacement de la mémoire
+  eLocMem& locMem() { return m_loc_mem; }
+  eLocMem locMem() const { return m_loc_mem; }
+
  protected:
   SharedArray<Byte*> m_ptrs;
   SharedArray<Int64> m_sizes;
+  eLocMem m_loc_mem=LM_HostMem;  //! emplacement de la mémoire
 };
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 class SyncBuffers {
  public:
-  SyncBuffers() {}
-  virtual ~SyncBuffers() {}
+  SyncBuffers(bool is_acc_avl);
+  virtual ~SyncBuffers();
 
   //
   void resetBuf();
@@ -101,7 +123,7 @@ class SyncBuffers {
    */
   template<typename DataType>
   MultiBufView multiBufView(
-    ConstMultiArray2View<Integer> item_idx_pn, Integer degree);
+    ConstMultiArray2View<Integer> item_idx_pn, Integer degree, Integer imem);
 
  protected:
   /*!
@@ -113,9 +135,21 @@ class SyncBuffers {
       Span<Byte> buf_bytes);
 
  protected:
+  struct BufMem {
+    Byte* m_ptr=nullptr;  //! Adresse de base du buffer
+    Int64 m_size=0;  //! Taille totale (en octets) du buffer
+    Int64 m_first_av_pos=0;  //! Première position disponible
+    eLocMem m_loc_mem=LM_HostMem;  //! Emplacement de la mémoire
+    void reallocIfNeededOnHost(Int64 wanted_size, bool is_acc_avl);
+#ifdef ARCANE_COMPILING_CUDA
+    void reallocIfNeededOnDevice(Int64 wanted_size);
+#endif
+  };
+ protected:
+  bool m_is_accelerator_available=false;  //! Vrai si un GPU est disponible pour les calculs
   Int64 m_buf_estim_sz=0;  //! Taille qui va servir à allouer
-  Int64 m_first_av_pos=0;  //! Première position disponible
-  UniqueArray<Byte> m_buf_bytes;  //! Buffer des données à échanger
+  // Pour gérer les buffers sur l'hote et le device
+  BufMem m_buf_mem[2];
 };
 
 /*---------------------------------------------------------------------------*/
@@ -123,12 +157,19 @@ class SyncBuffers {
 /*---------------------------------------------------------------------------*/
 class VarSyncMng {
  public:
-  VarSyncMng(IMesh* mesh);
+  VarSyncMng(IMesh* mesh, ax::Runner& runner);
   virtual ~VarSyncMng();
+
+  //! Retourne vrai si un GPU est dispo pour exécuter les calculs
+  bool isAcceleratorAvailable() const;
 
   // Equivalent à un var.synchronize() où var est une variable globale (i.e. non multi-mat)
   template<typename MeshVariableRefT>
   void globalSynchronize(MeshVariableRefT var);
+
+  // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice
+  template<typename MeshVariableRefT>
+  void globalSynchronizeDev(MeshVariableRefT var);
 
  protected:
 
@@ -137,6 +178,8 @@ class VarSyncMng {
   SyncItems<ItemType>* _getSyncItems();
 
  protected:
+
+  ax::Runner& m_runner;
 
   IParallelMng* m_pm;  //! pour effectuer les send/receive proprement dit
 

@@ -9,6 +9,7 @@
 #include "arcane/materials/ComponentPartItemVectorView.h"
 
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
+#include <arcane/IParallelMng.h>
 
 using namespace Arcane;
 
@@ -39,6 +40,18 @@ initAcc()
   info() << "Using accelerator";
   IApplication* app = subDomain()->application();
   initializeRunner(m_runner,traceMng(),app->acceleratorRuntimeInitialisationInfo());
+
+#ifdef ARCANE_COMPILING_CUDA
+  Integer device_count=0;
+  cudaGetDeviceCount(&device_count);
+  if (device_count>0) {
+    Integer rank = mesh()->parallelMng()->commRank();
+    Integer device=rank%device_count;
+    cudaSetDevice(device);
+    pinfo() << "Processus " << rank 
+      << " : Device " << device << " (pour " << device_count << " device(s))";
+  }
+#endif
 }
 
 /*---------------------------------------------------------------------------*/
@@ -104,7 +117,7 @@ initMesh(IMesh* mesh)
   m_acc_mem_adv->setReadMostly(allFaces().view().localIds());
   m_acc_mem_adv->setReadMostly(ownFaces().view().localIds());
 
-  m_vsync_mng = new VarSyncMng(mesh);
+  m_vsync_mng = new VarSyncMng(mesh, m_runner);
 }
 
 /*---------------------------------------------------------------------------*/

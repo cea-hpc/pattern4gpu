@@ -7,6 +7,7 @@
 #include <arcane/IParallelMng.h>
 #include <arcane/MeshVariableScalarRef.h>
 #include <arcane/MeshVariableArrayRef.h>
+#include <arcane/accelerator/IRunQueueStream.h>
 
 // Retourne le eItemKind en fonction de ItemType
 template<typename ItemType>
@@ -45,7 +46,13 @@ ItemGroupT<Node> get_all_items(IMesh* mesh) {
 /* Encapsule la liste des items à envoyer/recevoir pour un type d'item donné */
 /*---------------------------------------------------------------------------*/
 template<typename ItemType>
-SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks) 
+SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks) :
+  m_buf_owned_item_idx    (platform::getAcceleratorHostMemoryAllocator()),
+  m_indexes_owned_item_pn (platform::getAcceleratorHostMemoryAllocator()),
+  m_nb_owned_item_pn      (platform::getAcceleratorHostMemoryAllocator()),
+  m_buf_ghost_item_idx    (platform::getAcceleratorHostMemoryAllocator()),
+  m_indexes_ghost_item_pn (platform::getAcceleratorHostMemoryAllocator()),
+  m_nb_ghost_item_pn      (platform::getAcceleratorHostMemoryAllocator())
 {
   eItemKind item_kind = get_item_kind<ItemType>();
   IItemFamily* item_family = mesh->itemFamily(item_kind);
@@ -55,13 +62,32 @@ SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks)
 
   // "shared" ou "owned" : les items intérieurs au sous-domaine et qui doivent être envoyés
   // "ghost" : les items fantômes pour lesquels on va recevoir des informations
+  m_indexes_owned_item_pn.resize(nb_nei);
+  m_indexes_ghost_item_pn.resize(nb_nei);
   m_nb_owned_item_pn.resize(nb_nei);
   m_nb_ghost_item_pn.resize(nb_nei);
 
+  Integer accu_nb_owned=0;
+  Integer accu_nb_ghost=0;
   for(Integer inei=0 ; inei<nb_nei ; ++inei) {
     m_nb_owned_item_pn[inei] = var_sync->sharedItems(inei).size();
     m_nb_ghost_item_pn[inei] = var_sync->ghostItems(inei).size();
+
+    m_indexes_owned_item_pn[inei] = accu_nb_owned;
+    m_indexes_ghost_item_pn[inei] = accu_nb_ghost;
+    
+    accu_nb_owned += m_nb_owned_item_pn[inei];
+    accu_nb_ghost += m_nb_ghost_item_pn[inei];
   }
+  m_buf_owned_item_idx.resize(accu_nb_owned);
+  m_buf_ghost_item_idx.resize(accu_nb_ghost);
+
+  // On construit des multi-vues sur des zones allouées en mémoire managées
+  MultiArray2View<Integer> owned_item_idx_pn(m_buf_owned_item_idx.view(),
+      m_indexes_owned_item_pn.constView(), m_nb_owned_item_pn.constView());
+
+  MultiArray2View<Integer> ghost_item_idx_pn(m_buf_ghost_item_idx.view(),
+      m_indexes_ghost_item_pn.constView(), m_nb_ghost_item_pn.constView());
 
   // On va récupérer les identifiants proprement dits
   ItemGroupT<ItemType> item_group = get_all_items<ItemType>(mesh);
@@ -77,12 +103,9 @@ SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks)
     }
   };
 
-  m_owned_item_idx_pn.resize(m_nb_owned_item_pn);
-  m_ghost_item_idx_pn.resize(m_nb_ghost_item_pn);
-
   for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    lids2itemidx(var_sync->sharedItems(inei), m_owned_item_idx_pn[inei]);
-    lids2itemidx(var_sync->ghostItems(inei) , m_ghost_item_idx_pn[inei]);
+    lids2itemidx(var_sync->sharedItems(inei), owned_item_idx_pn[inei]);
+    lids2itemidx(var_sync->ghostItems(inei) , ghost_item_idx_pn[inei]);
   }
 }
 
@@ -94,9 +117,11 @@ MultiBufView::MultiBufView()
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-MultiBufView::MultiBufView(ArrayView<Byte*> ptrs, Int64ConstArrayView sizes) :
-  m_ptrs  (ptrs),
-  m_sizes (sizes)
+MultiBufView::MultiBufView(ArrayView<Byte*> ptrs, Int64ConstArrayView sizes,
+    eLocMem loc_mem) :
+  m_ptrs    (ptrs),
+  m_sizes   (sizes),
+  m_loc_mem (loc_mem)
 {
   ARCANE_ASSERT(ptrs.size()==sizes.size(), ("ptrs.size()!=sizes.size()"));
 }
@@ -104,8 +129,9 @@ MultiBufView::MultiBufView(ArrayView<Byte*> ptrs, Int64ConstArrayView sizes) :
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 MultiBufView::MultiBufView(const MultiBufView& rhs) :
-  m_ptrs  (rhs.m_ptrs),
-  m_sizes (rhs.m_sizes)
+  m_ptrs    (rhs.m_ptrs),
+  m_sizes   (rhs.m_sizes),
+  m_loc_mem (rhs.m_loc_mem)
 {
 }
 
@@ -168,12 +194,57 @@ Span<Byte> MultiBufView::rangeSpan() {
 }
 
 /*---------------------------------------------------------------------------*/
+/* SyncBuffers                                                               */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+SyncBuffers::SyncBuffers(bool is_acc_avl) :
+  m_is_accelerator_available (is_acc_avl)
+{
+  for(Integer imem(0) ; imem<2 ; ++imem) {
+    m_buf_mem[imem].m_ptr=nullptr;
+    m_buf_mem[imem].m_size=0;
+    m_buf_mem[imem].m_first_av_pos=0;
+    m_buf_mem[imem].m_loc_mem=LM_HostMem;
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+SyncBuffers::~SyncBuffers() {
+  for(Integer imem(0) ; imem<2 ; ++imem) {
+    if (m_buf_mem[imem].m_loc_mem == LM_HostMem) {
+#ifdef ARCANE_COMPILING_CUDA
+      if (m_is_accelerator_available) {
+        cudaFreeHost(reinterpret_cast<void*>(m_buf_mem[imem].m_ptr));
+      } else {
+        delete[] m_buf_mem[imem].m_ptr;
+      }
+#else
+      delete[] m_buf_mem[imem].m_ptr;
+#endif
+    }
+#ifdef ARCANE_COMPILING_CUDA
+    else if (m_buf_mem[imem].m_ptr)
+    {
+      ARCANE_ASSERT(m_buf_mem[imem].m_loc_mem == LM_DevMem, 
+          ("Impossible de libérer de la mémoire qui n'est pas sur le device"));
+      cudaFree(reinterpret_cast<void*>(m_buf_mem[imem].m_ptr));
+    }
+#endif
+  }
+}
+
 /* A partir des items à communiquer, estime une borne sup de la taille du    */ 
 /* buffer en octets                                                          */
 /*---------------------------------------------------------------------------*/
 template<typename DataType>
 Int64 SyncBuffers::estimatedMaxBufSz(IntegerConstArrayView item_sizes, 
     Integer degree) {
+  // HYPOTHESE 1 : même valeur de sizeof(DataType) sur CPU et GPU
+  // HYPOTHESE 2 : même valeur de alignof(DataType) sur CPU et GPU
+  // TODO : comment le vérifier ?
   Integer nb_nei = item_sizes.size(); // nb de voisins
   Int64 estim_max_buf_sz = 0;
   Int64 sizeof_item = sizeof(DataType)*degree;
@@ -188,8 +259,9 @@ Int64 SyncBuffers::estimatedMaxBufSz(IntegerConstArrayView item_sizes,
 /*---------------------------------------------------------------------------*/
 void SyncBuffers::resetBuf() {
   m_buf_estim_sz = 0;
-  m_first_av_pos = 0;
-  m_buf_bytes.resize(0); // ou bien .clear() ?
+  for(Integer imem(0) ; imem<2 ; ++imem) {
+    m_buf_mem[imem].m_first_av_pos=0;
+  }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -201,9 +273,63 @@ void SyncBuffers::addEstimatedMaxSz(ConstMultiArray2View<Integer> item_idx_pn,
 }
 
 /*---------------------------------------------------------------------------*/
+/* Reallocation dans la mémoire hôte */
+/*---------------------------------------------------------------------------*/
+void SyncBuffers::BufMem::reallocIfNeededOnHost(Int64 wanted_size, bool is_acc_avl) {
+  m_loc_mem = LM_HostMem;
+  // S'il n'y a pas assez d'espace, on réalloue (peu importe les données précédentes)
+  if (m_size < wanted_size) {
+#ifdef ARCANE_COMPILING_CUDA
+    if (is_acc_avl) {
+      cudaFreeHost(reinterpret_cast<void*>(m_ptr));
+      void* h_ptr;
+      cudaMallocHost(&h_ptr, wanted_size);
+      m_ptr = reinterpret_cast<Byte*>(h_ptr);
+    } else {
+      delete[] m_ptr;
+      m_ptr = new Byte[wanted_size];
+    }
+#else
+    delete[] m_ptr;
+    m_ptr = new Byte[wanted_size];
+#endif
+    m_size = wanted_size;
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/* Reallocation dans la mémoire device */
+/*---------------------------------------------------------------------------*/
+#ifdef ARCANE_COMPILING_CUDA
+void SyncBuffers::BufMem::reallocIfNeededOnDevice(Int64 wanted_size) {
+  m_loc_mem = LM_DevMem;
+  // S'il n'y a pas assez d'espace, on réalloue (peu importe les données précédentes)
+  if (m_size < wanted_size) {
+    cudaFree(reinterpret_cast<void*>(m_ptr));
+    void* d_ptr;
+    cudaMalloc(&d_ptr, wanted_size);
+    m_ptr = reinterpret_cast<Byte*>(d_ptr);
+    m_size = wanted_size;
+  }
+}
+#endif
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 void SyncBuffers::allocIfNeeded() {
-  m_buf_bytes.resize(m_buf_estim_sz);
+  // D'abord l'hote
+  m_buf_mem[0].reallocIfNeededOnHost(m_buf_estim_sz, m_is_accelerator_available);
+
+  // Puis le device si celui-ci existe
+  if (m_is_accelerator_available) {
+#ifdef ARCANE_COMPILING_CUDA
+    m_buf_mem[1].reallocIfNeededOnDevice(m_buf_estim_sz);
+#endif
+  }
+  if (!m_is_accelerator_available) {
+    // Pour débugger, le buffer "device" se trouve dans la mémoire hôte
+    m_buf_mem[1].reallocIfNeededOnHost(m_buf_estim_sz, m_is_accelerator_available);
+  }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -275,21 +401,28 @@ MultiBufView SyncBuffers::_multiBufView(
 /*---------------------------------------------------------------------------*/
 template<typename DataType>
 MultiBufView SyncBuffers::multiBufView(
-    ConstMultiArray2View<Integer> item_idx_pn, Integer degree) {
+    ConstMultiArray2View<Integer> item_idx_pn, Integer degree, Integer imem) {
 
-  Int64 av_space = m_buf_bytes.size()-m_first_av_pos;
-  Span<Byte> buf_bytes{m_buf_bytes.subView(m_first_av_pos, av_space)};
+  auto& buf_mem = m_buf_mem[imem];
+  Byte* new_ptr = buf_mem.m_ptr+buf_mem.m_first_av_pos;
+  Int64 av_space = buf_mem.m_size-buf_mem.m_first_av_pos;
+  Span<Byte> buf_bytes(new_ptr, av_space);
+
   auto mb = _multiBufView<DataType>(item_idx_pn.dim2Sizes(), degree, buf_bytes);
+  mb.locMem() = buf_mem.m_loc_mem;
+
   auto rg{mb.rangeSpan()}; // Encapsule [beg_ptr, end_ptr[
   Byte* end_ptr = rg.data()+rg.size();
-  m_first_av_pos = (end_ptr - m_buf_bytes.data());
+  buf_mem.m_first_av_pos = (end_ptr - buf_mem.m_ptr);
   return mb;
 }
 
 /*---------------------------------------------------------------------------*/
 /* Gère les synchronisations des mailles fantômes par Message Passing        */
 /*---------------------------------------------------------------------------*/
-VarSyncMng::VarSyncMng(IMesh* mesh) {
+VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner) :
+  m_runner (runner)
+{
   IItemFamily* cell_family = mesh->cellFamily();
   IVariableSynchronizer* var_sync = cell_family->allItemsSynchronizer();
 
@@ -302,7 +435,7 @@ VarSyncMng::VarSyncMng(IMesh* mesh) {
 
   m_sync_cells = new SyncItems<Cell>(mesh,m_neigh_ranks);
   m_sync_nodes = new SyncItems<Node>(mesh,m_neigh_ranks);
-  m_sync_buffers = new SyncBuffers();
+  m_sync_buffers = new SyncBuffers(isAcceleratorAvailable());
 }
 
 VarSyncMng::~VarSyncMng() {
@@ -311,6 +444,12 @@ VarSyncMng::~VarSyncMng() {
   delete m_sync_buffers;
 }
 
+/*---------------------------------------------------------------------------*/
+/* Retourne vrai si un GPU est dispo pour exécuter les calculs               */
+/*---------------------------------------------------------------------------*/
+bool VarSyncMng::isAcceleratorAvailable() const {
+  return ax::impl::isAcceleratorPolicy(m_runner.executionPolicy());
+}
 
 /*---------------------------------------------------------------------------*/
 /* Spécialisations pour retourner l'instance de SyncItems<T> en fonction de T*/
@@ -493,8 +632,8 @@ void VarSyncMng::globalSynchronize(MeshVariableRefT var)
   m_sync_buffers->allocIfNeeded();
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception
-  auto buf_snd = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree);
-  auto buf_rcv = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree);
+  auto buf_snd = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 0);
+  auto buf_rcv = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree, 0);
 
   // L'échange proprement dit des valeurs de var
   UniqueArray<Parallel::Request> requests;
@@ -540,6 +679,210 @@ void VarSyncMng::globalSynchronize(MeshVariableRefT var)
 }
 
 /*---------------------------------------------------------------------------*/
+/* async_cpy */
+/*---------------------------------------------------------------------------*/
+void async_cpy(MultiBufView out_buf, MultiBufView in_buf, Ref<RunQueue> ref_queue) {
+  ARCANE_ASSERT(!(in_buf.locMem()==LM_DevMem && out_buf.locMem()==LM_DevMem), ("Copie de mémoire device à mémoire device non supportée"));
+
+  Span<const Byte> in_span(in_buf.rangeSpan());
+  Span<Byte>       out_span(out_buf.rangeSpan());
+  ARCANE_ASSERT(in_span.size()==out_span.size(), ("Les buffers src et dst n'ont pas la meme taille"));
+
+  if (in_buf.locMem()==LM_HostMem && out_buf.locMem()==LM_HostMem)
+  {
+    std::memcpy(out_span.data(), in_span.data(), in_span.size());
+  }
+  else
+  {
+#ifdef ARCANE_COMPILING_CUDA
+    auto* rq = ref_queue->_internalStream();
+    cudaStream_t* s = reinterpret_cast<cudaStream_t*>(rq->_internalImpl());
+
+    cudaMemcpyKind mem_kind = (in_buf.locMem()==LM_DevMem && out_buf.locMem()==LM_HostMem ?
+        cudaMemcpyDeviceToHost : cudaMemcpyHostToDevice);
+#if 0
+    static const char* str_mem_kind[5] = {"cudaMemcpyHostToHost", 
+      "cudaMemcpyHostToDevice", "cudaMemcpyDeviceToHost", 
+      "cudaMemcpyDeviceToDevice", "cudaMemcpyDefault"};
+    std::cout << str_mem_kind[mem_kind] << " : " << in_span.size() << " bytes" << std::endl;
+#endif
+    cudaMemcpyAsync(out_span.data(), in_span.data(), in_span.size(), mem_kind, *s);
+#else
+    ARCANE_ASSERT(false, ("buf_in ou buf_out est déclarée en mémoire device mais support CUDA non disponible"));
+#endif
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/* async_cpy_var2buf */
+/*---------------------------------------------------------------------------*/
+template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
+void async_cpy_var2buf(IntegerConstArrayView item_idx, 
+    MeshVarRefT<ItemType, DataType> var,
+    ArrayView<Byte> buf, Ref<RunQueue> ref_queue) 
+{
+  // Ne devrait jamais être appelé
+  ARCANE_ASSERT(false, ("async_cpy_var2buf à spécifialiser"));
+}
+
+// Spécialisation pour MeshVariable***Scalar***RefT
+template<typename ItemType, typename DataType>
+void async_cpy_var2buf(IntegerConstArrayView item_idx, 
+    MeshVariableScalarRefT<ItemType, DataType> var,
+    ArrayView<Byte> buf, Ref<RunQueue> ref_queue) 
+{
+  using ItemIdType = typename ItemType::LocalIdType;
+
+  auto command = makeCommand(ref_queue.get());
+
+  auto in_var = ax::viewIn(command, var);
+
+  Span<const Integer> in_item_idx(item_idx);
+  Span<DataType> buf_vals(MultiBufView::valBuf<DataType>(buf));
+
+  Integer nb_item_idx = item_idx.size();
+
+  command << RUNCOMMAND_LOOP1(iter, nb_item_idx) {
+    auto [i] = iter();
+    ItemIdType lid(in_item_idx[i]); 
+    buf_vals[i] = in_var[lid];
+  }; // asynchrone
+}
+
+/*---------------------------------------------------------------------------*/
+/* async_cpy_buf2var */
+/*---------------------------------------------------------------------------*/
+template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
+void async_cpy_buf2var(IntegerConstArrayView item_idx, 
+    ArrayView<Byte> buf,
+    MeshVarRefT<ItemType, DataType> var, Ref<RunQueue> ref_queue) 
+{
+  // Ne devrait jamais être appelé
+  ARCANE_ASSERT(false, ("async_cpy_var2buf à spécifialiser"));
+}
+
+// Spécialisation pour MeshVariable***Scalar***RefT
+template<typename ItemType, typename DataType>
+void async_cpy_buf2var(IntegerConstArrayView item_idx, 
+    ArrayView<Byte> buf,
+    MeshVariableScalarRefT<ItemType, DataType> var, Ref<RunQueue> ref_queue)
+{
+  using ItemIdType = typename ItemType::LocalIdType;
+
+  auto command = makeCommand(ref_queue.get());
+
+  Span<const Integer>  in_item_idx(item_idx);
+  Span<const DataType> buf_vals(MultiBufView::valBuf<DataType>(buf));
+
+  auto out_var = ax::viewOut(command, var);
+
+  Integer nb_item_idx = item_idx.size();
+
+  command << RUNCOMMAND_LOOP1(iter, nb_item_idx) {
+    auto [i] = iter();
+    ItemIdType lid(in_item_idx[i]);
+    out_var[lid] = buf_vals[i];
+  }; // asynchrone
+}
+
+/*---------------------------------------------------------------------------*/
+/* Equivalent à un var.synchronize() où var est une variable globale         */ 
+/* (i.e. non multi-mat) dont les données sont présentes sur GPU              */
+/*---------------------------------------------------------------------------*/
+template<typename MeshVariableRefT>
+void VarSyncMng::globalSynchronizeDev(MeshVariableRefT var)
+{
+  if (m_nb_nei==0) {
+    return;
+  }
+
+  using ItemType = typename MeshVariableRefT::ItemType;
+  using DataType = typename MeshVariableRefT::DataType;
+
+  SyncItems<ItemType>* sync_items = _getSyncItems<ItemType>();
+
+  auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
+  auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
+
+  // Pour un ItemType donné, combien de DataType sont utilisés ? => degree
+  Integer degree = get_var_degree(var);
+
+  m_sync_buffers->resetBuf();
+  // On prévoit une taille max du buffer qui va contenir tous les messages
+  m_sync_buffers->addEstimatedMaxSz<DataType>(owned_item_idx_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<DataType>(ghost_item_idx_pn, degree);
+  // Le buffer de tous les messages est réalloué si pas assez de place
+  m_sync_buffers->allocIfNeeded();
+
+  // On récupère les adresses et tailles des buffers d'envoi et de réception 
+  // sur l'HOTE (_h et LM_HostMem)
+  auto buf_snd_h = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 0);
+  auto buf_rcv_h = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree, 0);
+
+  // On récupère les adresses et tailles des buffers d'envoi et de réception 
+  // sur le DEVICE (_d et LM_DevMem)
+  auto buf_snd_d = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 1);
+  auto buf_rcv_d = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree, 1);
+
+  // L'échange proprement dit des valeurs de var
+  UniqueArray<Parallel::Request> requests;
+
+  // On amorce les réceptions
+  for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
+    Int32 rank_nei = m_neigh_ranks[inei]; // le rang du inei-ième voisin
+
+    // On amorce la réception sur l'HOTE
+    auto byte_buf_rcv = buf_rcv_h.byteBuf(inei); // le buffer de réception pour inei
+    auto req_rcv = m_pm->recv(byte_buf_rcv, rank_nei, /*blocking=*/false);
+    requests.add(req_rcv);
+  }
+
+  auto ref_queue = makeQueueRef(m_runner);
+  ref_queue->setAsync(true);
+
+  // On enchaine sur le device : 
+  //    copie de var_dev dans buf_dev 
+  //    puis transfert buf_dev => buf_hst
+
+  // On remplit les buffers sur le DEVICE
+  for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
+
+    // On lit les valeurs de var pour les recopier dans le buffer d'envoi
+    auto buf_snd_inei = buf_snd_d.byteBuf(inei); // buffer dans lequel on va écrire
+    // "buf_snd[inei] <= var"
+    async_cpy_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei, ref_queue);
+  }
+
+  // transfert buf_snd_d => buf_snd_h
+  async_cpy(buf_snd_h, buf_snd_d, ref_queue);
+  ref_queue->barrier(); // attendre que la copie sur l'hôte soit terminée pour envoyer les messages
+
+  // On amorce les envois sur l'HOTE
+  for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
+    Int32 rank_nei = m_neigh_ranks[inei]; // le rang du inei-ième voisin
+
+    // On amorce l'envoi
+    auto byte_buf_snd = buf_snd_h.byteBuf(inei); // le buffer d'envoi pour inei
+    auto req_snd = m_pm->send(byte_buf_snd, rank_nei, /*blocking=*/false);
+    requests.add(req_snd);
+  }
+
+  m_pm->waitAllRequests(requests);
+  requests.clear();
+
+  // transfert buf_rcv_h => buf_rcv_d
+  async_cpy(buf_rcv_d, buf_rcv_h, ref_queue);
+
+  // On recopie les valeurs reçues dans les buffers dans var sur le DEVICE
+  for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
+    auto buf_rcv_inei = buf_rcv_d.byteBuf(inei); // buffer duquel on va lire les données
+    // "var <= buf_rcv_d[inei]"
+    async_cpy_buf2var(ghost_item_idx_pn[inei], buf_rcv_inei, var, ref_queue);
+  }
+  ref_queue->barrier(); // attendre que les copies soient terminées sur GPU
+}
+
+/*---------------------------------------------------------------------------*/
 /* INSTANCIATIONS STATIQUES                                                  */
 /*---------------------------------------------------------------------------*/
 #include <arcane/utils/Real3.h>
@@ -551,3 +894,9 @@ INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(VariableCellReal);
 INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(VariableNodeReal3);
 
 INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(VariableCellArrayReal3);
+
+#define INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_DEV(__MeshVariableRefT__) \
+  template void VarSyncMng::globalSynchronizeDev(__MeshVariableRefT__ var)
+
+INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_DEV(VariableCellReal);
+INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_DEV(VariableNodeReal3);

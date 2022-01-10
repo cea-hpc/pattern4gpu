@@ -503,8 +503,6 @@ initCellArr12()
     auto vsync = m_acc_env->vsyncMng();
     vsync->globalSynchronize(m_cell_arr1);
     vsync->globalSynchronize(m_cell_arr2);
-    //  globalSynchronize(m_cell_arr1);
-    //  globalSynchronize(m_cell_arr2);
 #endif
   }
   else if (options()->getInitCellArr12Version() == IA12V_kokkos)
@@ -883,6 +881,9 @@ _computeCqsAndVector_Varcgpu_v1() {
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans _computeCqsAndVector_Varcgpu_v1";
 
+//  bool is_sync_cell_cqs=true;
+  bool is_sync_cell_cqs=false;
+  CellGroup cell_group=(is_sync_cell_cqs ? ownCells() : allCells());
   {
     auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
@@ -892,7 +893,7 @@ _computeCqsAndVector_Varcgpu_v1() {
 
     auto cnc = m_acc_env->connectivityView().cellNode();
 
-    command << RUNCOMMAND_ENUMERATE(Cell, cid, ownCells()){
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, cell_group){
       // Recopie les coordonnées locales (pour le cache)
       Real3 pos[8];
       Int32 index=0;
@@ -904,11 +905,18 @@ _computeCqsAndVector_Varcgpu_v1() {
       computeCQs(pos, out_cell_cqs[cid]);
     };
   }
+  if (is_sync_cell_cqs) {
+    PROF_ACC_BEGIN("syncCellCQs");
 #if 0
-  m_cell_cqs.synchronize();
+    m_cell_cqs.synchronize();
 #else
-  m_acc_env->vsyncMng()->globalSynchronize(m_cell_cqs);
+    m_acc_env->vsyncMng()->globalSynchronize(m_cell_cqs);
 #endif
+    PROF_ACC_END;
+  }
+  bool is_sync_node_vector=true;
+//  bool is_sync_node_vector=false;
+  NodeGroup node_group=(is_sync_node_vector ? ownNodes() : allNodes());
   {
     // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
     // Du coup, on boucle sur les Node
@@ -934,7 +942,7 @@ _computeCqsAndVector_Varcgpu_v1() {
 
     auto nc_cty = m_acc_env->connectivityView().nodeCell();
 
-    command << RUNCOMMAND_ENUMERATE(Node,nid,ownNodes()) {
+    command << RUNCOMMAND_ENUMERATE(Node,nid,node_group) {
       Int32 first_pos = nid.localId() * max_node_cell;
       Integer index = 0;
       Real3 node_vec = Real3::zero();
@@ -950,13 +958,17 @@ _computeCqsAndVector_Varcgpu_v1() {
     };
   }
 
+  if (is_sync_node_vector) {
+    PROF_ACC_BEGIN("syncNodeVector");
 #if 0
-  m_node_vector.synchronize();
+    m_node_vector.synchronize();
 #else
-  auto vsync = m_acc_env->vsyncMng();
-  vsync->globalSynchronize(m_node_vector);
-//  globalSynchronize(m_node_vector);
+    auto vsync = m_acc_env->vsyncMng();
+    //vsync->globalSynchronize(m_node_vector);
+    vsync->globalSynchronizeDev(m_node_vector);
 #endif
+  PROF_ACC_END;
+  }
 
   PROF_ACC_END;
 }
