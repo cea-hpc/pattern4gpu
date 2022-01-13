@@ -2,6 +2,12 @@ set(EXAMPLE_NAME Pattern4GPU)
 project(Pattern4GPU LANGUAGES C CXX)
 include(../samples.common.cmake)
 
+# Pour MPI
+find_package(MPI REQUIRED)
+add_definitions(-DOMPI_SKIP_MPICXX)
+include_directories(SYSTEM ${MPI_INCLUDE_PATH})
+# fin MPI
+
 add_executable(Pattern4GPU main.cc)
 target_link_libraries(Pattern4GPU PUBLIC libpattern4gpu arcane_core)
 

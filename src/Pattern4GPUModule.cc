@@ -965,7 +965,8 @@ _computeCqsAndVector_Varcgpu_v1() {
 #else
     auto vsync = m_acc_env->vsyncMng();
     //vsync->globalSynchronize(m_node_vector);
-    vsync->globalSynchronizeDev(m_node_vector);
+    //vsync->globalSynchronizeDev(m_node_vector);
+    vsync->globalSynchronizeDevThr(m_node_vector);
 #endif
   PROF_ACC_END;
   }

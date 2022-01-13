@@ -171,6 +171,10 @@ class VarSyncMng {
   template<typename MeshVariableRefT>
   void globalSynchronizeDev(MeshVariableRefT var);
 
+  // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice
+  template<typename MeshVariableRefT>
+  void globalSynchronizeDevThr(MeshVariableRefT var);
+
  protected:
 
   // Retourne l'instance de SyncItems<T> en fonction de T
