@@ -56,9 +56,13 @@ namespace ax = Arcane::Accelerator;
 class MultiAsyncRunQueue {
  public:
 
-  MultiAsyncRunQueue(ax::Runner& runner, Integer asked_nb_queue) {
-    // au plus 32 queues (32 = nb de kernels max exécutables simultanément)
-    m_nb_queue = std::min(asked_nb_queue, 32);
+  MultiAsyncRunQueue(ax::Runner& runner, Integer asked_nb_queue, bool unlimited=false) {
+    if (unlimited) {
+      m_nb_queue=asked_nb_queue;
+    } else {
+      // au plus 32 queues (32 = nb de kernels max exécutables simultanément)
+      m_nb_queue = std::min(asked_nb_queue, 32);
+    }
     m_queues.resize(m_nb_queue);
     for(Integer iq=0 ; iq<m_nb_queue ; ++iq) {
       m_queues[iq] = new ax::RunQueue(runner);

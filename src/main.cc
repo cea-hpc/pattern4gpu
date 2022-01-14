@@ -8,6 +8,8 @@ int
 main(int argc,char* argv[])
 {
   try {
+//#define USE_THREAD_MULTIPLE
+#ifdef USE_THREAD_MULTIPLE
     // On impose le niveau MPI_THREAD_MULTIPLE
     Integer provided;
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
@@ -24,6 +26,7 @@ main(int argc,char* argv[])
         std::cout << "MPI_THREAD_{SINGLE|FUNNELED}" << std::endl;
     }
     // Fin init MPI en dur
+#endif
 
     ArcaneLauncher::init(CommandLineArguments(&argc,&argv));
     ApplicationBuildInfo& app_build_info = ArcaneLauncher::applicationBuildInfo();

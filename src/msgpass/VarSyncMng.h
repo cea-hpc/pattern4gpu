@@ -194,6 +194,8 @@ class VarSyncMng {
   SyncItems<Node>* m_sync_nodes=nullptr;
 
   SyncBuffers* m_sync_buffers=nullptr;
+
+  MultiAsyncRunQueue* m_neigh_queues=nullptr;  //! Pour gérer plusieurs queues pour les voisins
 };
 
 #endif

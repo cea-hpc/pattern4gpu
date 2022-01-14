@@ -439,12 +439,14 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner) :
   m_sync_cells = new SyncItems<Cell>(mesh,m_neigh_ranks);
   m_sync_nodes = new SyncItems<Node>(mesh,m_neigh_ranks);
   m_sync_buffers = new SyncBuffers(isAcceleratorAvailable());
+  m_neigh_queues = new MultiAsyncRunQueue(m_runner, m_nb_nei, /*unlimited=*/true);
 }
 
 VarSyncMng::~VarSyncMng() {
   delete m_sync_cells;
   delete m_sync_nodes;
   delete m_sync_buffers;
+  delete m_neigh_queues;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -684,36 +686,43 @@ void VarSyncMng::globalSynchronize(MeshVariableRefT var)
 /*---------------------------------------------------------------------------*/
 /* async_cpy */
 /*---------------------------------------------------------------------------*/
-void async_cpy(MultiBufView out_buf, MultiBufView in_buf, Ref<RunQueue> ref_queue) {
-  ARCANE_ASSERT(!(in_buf.locMem()==LM_DevMem && out_buf.locMem()==LM_DevMem), ("Copie de mémoire device à mémoire device non supportée"));
+void async_cpy(Span<Byte> dst_buf, eLocMem dst_loc_mem,
+    Span<const Byte> src_buf, eLocMem src_loc_mem, RunQueue& queue) {
+  ARCANE_ASSERT(!(src_loc_mem==LM_DevMem && dst_loc_mem==LM_DevMem), ("Copie de mémoire device à mémoire device non supportée"));
 
-  Span<const Byte> in_span(in_buf.rangeSpan());
-  Span<Byte>       out_span(out_buf.rangeSpan());
-  ARCANE_ASSERT(in_span.size()==out_span.size(), ("Les buffers src et dst n'ont pas la meme taille"));
+  ARCANE_ASSERT(src_buf.size()==dst_buf.size(), ("Les buffers src et dst n'ont pas la meme taille"));
 
-  if (in_buf.locMem()==LM_HostMem && out_buf.locMem()==LM_HostMem)
+  if (src_loc_mem==LM_HostMem && dst_loc_mem==LM_HostMem)
   {
-    std::memcpy(out_span.data(), in_span.data(), in_span.size());
+    std::memcpy(dst_buf.data(), src_buf.data(), src_buf.size());
   }
   else
   {
 #ifdef ARCANE_COMPILING_CUDA
-    auto* rq = ref_queue->_internalStream();
+    auto* rq = queue._internalStream();
     cudaStream_t* s = reinterpret_cast<cudaStream_t*>(rq->_internalImpl());
 
-    cudaMemcpyKind mem_kind = (in_buf.locMem()==LM_DevMem && out_buf.locMem()==LM_HostMem ?
+    cudaMemcpyKind mem_kind = (src_loc_mem==LM_DevMem && dst_loc_mem==LM_HostMem ?
         cudaMemcpyDeviceToHost : cudaMemcpyHostToDevice);
 #if 0
     static const char* str_mem_kind[5] = {"cudaMemcpyHostToHost", 
       "cudaMemcpyHostToDevice", "cudaMemcpyDeviceToHost", 
       "cudaMemcpyDeviceToDevice", "cudaMemcpyDefault"};
-    std::cout << str_mem_kind[mem_kind] << " : " << in_span.size() << " bytes" << std::endl;
+    std::cout << str_mem_kind[mem_kind] << " : " << src_buf.size() << " bytes" << std::endl;
 #endif
-    cudaMemcpyAsync(out_span.data(), in_span.data(), in_span.size(), mem_kind, *s);
+    cudaMemcpyAsync(dst_buf.data(), src_buf.data(), src_buf.size(), mem_kind, *s);
 #else
-    ARCANE_ASSERT(false, ("buf_in ou buf_out est déclarée en mémoire device mais support CUDA non disponible"));
+    ARCANE_ASSERT(false, ("src_buf ou dst_buf est déclarée en mémoire device mais support CUDA non disponible"));
 #endif
   }
+}
+
+/*---------------------------------------------------------------------------*/
+/* async_cpy */
+/*---------------------------------------------------------------------------*/
+void async_cpy(MultiBufView out_buf, MultiBufView in_buf, RunQueue& queue) {
+  async_cpy(out_buf.rangeSpan(), out_buf.locMem(), 
+      in_buf.rangeSpan(), in_buf.locMem(), queue);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -722,7 +731,7 @@ void async_cpy(MultiBufView out_buf, MultiBufView in_buf, Ref<RunQueue> ref_queu
 template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
 void async_cpy_var2buf(IntegerConstArrayView item_idx, 
     const MeshVarRefT<ItemType, DataType>& var,
-    ArrayView<Byte> buf, Ref<RunQueue> ref_queue) 
+    ArrayView<Byte> buf, RunQueue& queue) 
 {
   // Ne devrait jamais être appelé
   ARCANE_ASSERT(false, ("async_cpy_var2buf à spécifialiser"));
@@ -732,11 +741,11 @@ void async_cpy_var2buf(IntegerConstArrayView item_idx,
 template<typename ItemType, typename DataType>
 void async_cpy_var2buf(IntegerConstArrayView item_idx, 
     const MeshVariableScalarRefT<ItemType, DataType>& var,
-    ArrayView<Byte> buf, Ref<RunQueue> ref_queue) 
+    ArrayView<Byte> buf, RunQueue& queue) 
 {
   using ItemIdType = typename ItemType::LocalIdType;
 
-  auto command = makeCommand(ref_queue.get());
+  auto command = makeCommand(queue);
 
   auto in_var = ax::viewIn(command, var);
 
@@ -758,21 +767,21 @@ void async_cpy_var2buf(IntegerConstArrayView item_idx,
 template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
 void async_cpy_buf2var(IntegerConstArrayView item_idx, 
     ArrayView<Byte> buf,
-    MeshVarRefT<ItemType, DataType> &var, Ref<RunQueue> ref_queue) 
+    MeshVarRefT<ItemType, DataType> &var, RunQueue& queue) 
 {
   // Ne devrait jamais être appelé
-  ARCANE_ASSERT(false, ("async_cpy_var2buf à spécifialiser"));
+  ARCANE_ASSERT(false, ("async_cpy_buf2var à spécifialiser"));
 }
 
 // Spécialisation pour MeshVariable***Scalar***RefT
 template<typename ItemType, typename DataType>
 void async_cpy_buf2var(IntegerConstArrayView item_idx, 
     ArrayView<Byte> buf,
-    MeshVariableScalarRefT<ItemType, DataType> &var, Ref<RunQueue> ref_queue)
+    MeshVariableScalarRefT<ItemType, DataType> &var, RunQueue& queue)
 {
   using ItemIdType = typename ItemType::LocalIdType;
 
-  auto command = makeCommand(ref_queue.get());
+  auto command = makeCommand(queue);
 
   Span<const Integer>  in_item_idx(item_idx);
   Span<const DataType> buf_vals(MultiBufView::valBuf<DataType>(buf));
@@ -840,8 +849,8 @@ void VarSyncMng::globalSynchronizeDev(MeshVariableRefT var)
     requests.add(req_rcv);
   }
 
-  auto ref_queue = makeQueueRef(m_runner);
-  ref_queue->setAsync(true);
+  auto queue = makeQueue(m_runner);
+  queue.setAsync(true);
 
   // On enchaine sur le device : 
   //    copie de var_dev dans buf_dev 
@@ -853,12 +862,12 @@ void VarSyncMng::globalSynchronizeDev(MeshVariableRefT var)
     // On lit les valeurs de var pour les recopier dans le buffer d'envoi
     auto buf_snd_inei = buf_snd_d.byteBuf(inei); // buffer dans lequel on va écrire
     // "buf_snd[inei] <= var"
-    async_cpy_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei, ref_queue);
+    async_cpy_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei, queue);
   }
 
   // transfert buf_snd_d => buf_snd_h
-  async_cpy(buf_snd_h, buf_snd_d, ref_queue);
-  ref_queue->barrier(); // attendre que la copie sur l'hôte soit terminée pour envoyer les messages
+  async_cpy(buf_snd_h, buf_snd_d, queue);
+  queue.barrier(); // attendre que la copie sur l'hôte soit terminée pour envoyer les messages
 
   // On amorce les envois sur l'HOTE
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
@@ -874,18 +883,17 @@ void VarSyncMng::globalSynchronizeDev(MeshVariableRefT var)
   requests.clear();
 
   // transfert buf_rcv_h => buf_rcv_d
-  async_cpy(buf_rcv_d, buf_rcv_h, ref_queue);
+  async_cpy(buf_rcv_d, buf_rcv_h, queue);
 
   // On recopie les valeurs reçues dans les buffers dans var sur le DEVICE
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
     auto buf_rcv_inei = buf_rcv_d.byteBuf(inei); // buffer duquel on va lire les données
     // "var <= buf_rcv_d[inei]"
-    async_cpy_buf2var(ghost_item_idx_pn[inei], buf_rcv_inei, var, ref_queue);
+    async_cpy_buf2var(ghost_item_idx_pn[inei], buf_rcv_inei, var, queue);
   }
-  ref_queue->barrier(); // attendre que les copies soient terminées sur GPU
+  queue.barrier(); // attendre que les copies soient terminées sur GPU
 }
 
-#if 1
 /*---------------------------------------------------------------------------*/
 /* Equivalent à un var.synchronize() où var est une variable globale         */ 
 /* (i.e. non multi-mat) en utilisant des comms bloquantes dans des taches    */
@@ -893,6 +901,10 @@ void VarSyncMng::globalSynchronizeDev(MeshVariableRefT var)
 template<typename MeshVariableRefT>
 void VarSyncMng::globalSynchronizeDevThr(MeshVariableRefT var)
 {
+  if (m_nb_nei==0) {
+    return;
+  }
+
   using ItemType = typename MeshVariableRefT::ItemType;
   using DataType = typename MeshVariableRefT::DataType;
 
@@ -911,14 +923,20 @@ void VarSyncMng::globalSynchronizeDevThr(MeshVariableRefT var)
   // Le buffer de tous les messages est réalloué si pas assez de place
   m_sync_buffers->allocIfNeeded();
 
-  // On récupère les adresses et tailles des buffers d'envoi et de réception
-  auto buf_snd = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 0);
-  auto buf_rcv = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree, 0);
+  // On récupère les adresses et tailles des buffers d'envoi et de réception 
+  // sur l'HOTE (_h et LM_HostMem)
+  auto buf_snd_h = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 0);
+  auto buf_rcv_h = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree, 0);
+
+  // On récupère les adresses et tailles des buffers d'envoi et de réception 
+  // sur le DEVICE (_d et LM_DevMem)
+  auto buf_snd_d = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 1);
+  auto buf_rcv_d = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree, 1);
 
 #define USE_MPI_REQUEST
 
 #ifdef USE_MPI_REQUEST
-#warning "USE_MPI_REQUEST"
+//#warning "USE_MPI_REQUEST"
   using RequestType = MPI_Request;
 #else
   using RequestType = Parallel::Request;
@@ -934,43 +952,52 @@ void VarSyncMng::globalSynchronizeDevThr(MeshVariableRefT var)
     Int32 rank_nei = m_neigh_ranks[inei]; // le rang du inei-ième voisin
 
     // On amorce la réception
-    auto byte_buf_rcv = buf_rcv.byteBuf(inei); // le buffer de réception pour inei
+    auto byte_buf_rcv_h = buf_rcv_h.byteBuf(inei); // le buffer de réception pour inei
 #ifdef USE_MPI_REQUEST
-    MPI_Irecv(byte_buf_rcv.data(), byte_buf_rcv.size(), MPI_BYTE, rank_nei, tag, 
+    MPI_Irecv(byte_buf_rcv_h.data(), byte_buf_rcv_h.size(), MPI_BYTE, rank_nei, tag, 
         MPI_COMM_WORLD, &(requests[inei]));
 #else
-    requests[inei] = m_pm->recv(byte_buf_rcv, rank_nei, /*blocking=*/false);
+    requests[inei] = m_pm->recv(byte_buf_rcv_h, rank_nei, /*blocking=*/false);
 #endif
     msg_types[inei] = inei+1; // >0 pour la réception
   }
 
   // La tâche à effectuer pour un voisin
-  auto lbd_sender = [&](Integer inei) {
+  auto lbd_sender = [&](Integer inei, RunQueue& queue) {
 
     Int32 rank_nei = m_neigh_ranks[inei]; // le rang du inei-ième voisin
 
-    auto byte_buf_snd = buf_snd.byteBuf(inei); // le buffer d'envoi pour inei
+    auto byte_buf_snd_d = buf_snd_d.byteBuf(inei); // le buffer d'envoi pour inei sur le DEVICE
+    auto byte_buf_snd_h = buf_snd_h.byteBuf(inei); // le buffer d'envoi pour inei sur l'HOTE
 
-    // "byte_buf_snd <= var"
-    cpy_var2buf(owned_item_idx_pn[inei], var, byte_buf_snd);
+    // "byte_buf_snd_d <= var"
+    async_cpy_var2buf(owned_item_idx_pn[inei], var, byte_buf_snd_d, queue);
+
+    // transfert buf_snd_d[inei] => buf_snd_h[inei]
+    async_cpy(byte_buf_snd_h, buf_snd_h.locMem(),
+        byte_buf_snd_d, buf_snd_d.locMem(), queue);
+
+    // attendre que la copie sur l'hôte soit terminée pour envoyer les messages
+    queue.barrier(); 
 
     // On amorce les envois
 #ifdef USE_MPI_REQUEST
-    MPI_Isend(byte_buf_snd.data(), byte_buf_snd.size(), MPI_BYTE, rank_nei, tag,
+    MPI_Isend(byte_buf_snd_h.data(), byte_buf_snd_h.size(), MPI_BYTE, rank_nei, tag,
         MPI_COMM_WORLD, &(requests[m_nb_nei+inei]));
 #else
-    requests[m_nb_nei+inei] = m_pm->send(byte_buf_snd, rank_nei, /*blocking=*/false);
+    requests[m_nb_nei+inei] = m_pm->send(byte_buf_snd_h, rank_nei, /*blocking=*/false);
 #endif
     msg_types[m_nb_nei+inei] = -inei-1; // <0 pour l'envoi
   };
 
-#define USE_THR_SENDER
+//#define USE_THR_SENDER
 #ifdef USE_THR_SENDER
 #warning "USE_THR_SENDER"
   UniqueArray<std::thread*> thr_sender(m_nb_nei);
 
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
-    thr_sender[inei] = new std::thread(lbd_sender, inei);
+    thr_sender[inei] = 
+      new std::thread(lbd_sender, inei, std::ref(m_neigh_queues->queue(inei)));
   }
 
   // On attend la fin de tous les threads
@@ -981,15 +1008,26 @@ void VarSyncMng::globalSynchronizeDevThr(MeshVariableRefT var)
 #else
   // On lance en SEQUENTIEL
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
-    lbd_sender(inei);
+    lbd_sender(inei, m_neigh_queues->queue(inei));
   }
 #endif
 
   // Tache qui unpack les données du buffer reçues par un voisin inei
-  auto lbd_unpacker = [&](Integer inei) {
-    auto buf_rcv_inei = buf_rcv.byteBuf(inei); // buffer duquel on va lire les données
-    // "var <= buf_rcv[inei]"
-    cpy_buf2var(ghost_item_idx_pn[inei], buf_rcv_inei, var);
+  //    copie de var_dev dans buf_dev 
+  //    puis transfert buf_dev => buf_hst
+  auto lbd_unpacker = [&](Integer inei, RunQueue& queue) {
+    auto byte_buf_rcv_h = buf_rcv_h.byteBuf(inei); // buffer des données reçues sur l'HOTE
+    auto byte_buf_rcv_d = buf_rcv_d.byteBuf(inei); // buffer des données reçues à transférer sur le DEVICE
+
+    // transfert buf_rcv_h[inei] => buf_rcv_d[inei]
+    async_cpy(byte_buf_rcv_d, buf_rcv_d.locMem(),
+        byte_buf_rcv_h, buf_rcv_h.locMem(), queue);
+
+    // "var <= buf_rcv_d[inei]"
+    async_cpy_buf2var(ghost_item_idx_pn[inei], byte_buf_rcv_d, var, queue);
+
+    // attendre que les copies soient terminées sur GPU
+    queue.barrier(); 
   };
   UniqueArray<std::thread*> thr_unpacker;
 
@@ -1048,12 +1086,14 @@ void VarSyncMng::globalSynchronizeDevThr(MeshVariableRefT var)
 
         // Maintenant qu'on a reçu le buffer pour le inei-ième voisin, 
         // on unpack les donnees dans un thread
-#define USE_THR_UNPACKER
+//#define USE_THR_UNPACKER
 #ifdef USE_THR_UNPACKER
 #warning "USE_THR_UNPACKER"
-        thr_unpacker.add(new std::thread(lbd_unpacker, inei));
+        thr_unpacker.add(
+            new std::thread(lbd_unpacker, inei, std::ref(m_neigh_queues->queue(inei)))
+            );
 #else
-        lbd_unpacker(inei);
+        lbd_unpacker(inei, m_neigh_queues->queue(inei));
 #endif
       }
       is_done_requests[idone_req] = true;
@@ -1121,7 +1161,6 @@ void VarSyncMng::globalSynchronizeDevThr(MeshVariableRefT var)
   }
 #endif
 }
-#endif
 
 /*---------------------------------------------------------------------------*/
 /* INSTANCIATIONS STATIQUES                                                  */
