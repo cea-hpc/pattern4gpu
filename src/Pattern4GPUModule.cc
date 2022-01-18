@@ -914,10 +914,8 @@ _computeCqsAndVector_Varcgpu_v1() {
 #endif
     PROF_ACC_END;
   }
-  bool is_sync_node_vector=true;
-//  bool is_sync_node_vector=false;
-  NodeGroup node_group=(is_sync_node_vector ? ownNodes() : allNodes());
-  {
+
+  auto async_node_vector_update = [&](NodeGroup node_group) -> Ref<RunQueue> {
     // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
     // Du coup, on boucle sur les Node
     // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
@@ -927,8 +925,9 @@ _computeCqsAndVector_Varcgpu_v1() {
     // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
     //   1- on initialise le vecteur à 0
     //   2- on calcule les constributions des mailles connectées au noeud uniquement si elles sont actives
-    auto queue = m_acc_env->newQueue();
-    auto command = makeCommand(queue);
+    auto ref_queue = makeQueueRef(m_acc_env->runner());
+    ref_queue->setAsync(true);
+    auto command = makeCommand(ref_queue.get());
 
     auto in_cell_arr1 = ax::viewIn(command, m_cell_arr1);
     auto in_cell_arr2 = ax::viewIn(command, m_cell_arr2);
@@ -955,8 +954,18 @@ _computeCqsAndVector_Varcgpu_v1() {
         ++index;
       }
       out_node_vector[nid] = node_vec;
-    };
-  }
+    }; // non bloquant
+
+    return ref_queue;
+  };
+
+#if 0
+  bool is_sync_node_vector=true;
+//  bool is_sync_node_vector=false;
+  NodeGroup node_group=(is_sync_node_vector ? ownNodes() : allNodes());
+
+  Ref<RunQueue> ref_queue = async_node_vector_update(node_group);
+  ref_queue->barrier();
 
   if (is_sync_node_vector) {
     PROF_ACC_BEGIN("syncNodeVector");
@@ -969,8 +978,30 @@ _computeCqsAndVector_Varcgpu_v1() {
     //vsync->globalSynchronizeDevThr(m_node_vector);
     vsync->globalSynchronizeDevQueues(m_node_vector);
 #endif
-  PROF_ACC_END;
+    PROF_ACC_END;
   }
+#else
+  auto vsync = m_acc_env->vsyncMng();
+  SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
+
+  // On amorce sur le DEVICE le calcul sur les noeuds "own" sur le bord du
+  // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
+  Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems());
+  // ici, le calcul n'est pas terminé sur le DEVICE
+
+  // On amorce sur le DEVICE le calcul des noeuds intérieurs dont ne dépendent
+  // pas les comms sur la queue ref_queue_inr (_inr = inner)
+  Ref<RunQueue> ref_queue_inr = async_node_vector_update(sync_nodes->privateItems());
+
+  // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
+  // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
+  // la queue ref_queue_bnd
+  vsync->globalSynchronizeQueue(ref_queue_bnd, m_node_vector);
+  // ici, après cet appel, ref_queue_bnd est synchronisée
+
+  // On attend la terminaison des calculs intérieurs
+  ref_queue_inr->barrier();
+#endif
 
   PROF_ACC_END;
 }

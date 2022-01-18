@@ -7,6 +7,7 @@
 #include <arcane/IParallelMng.h>
 #include <arcane/MeshVariableScalarRef.h>
 #include <arcane/MeshVariableArrayRef.h>
+#include <arcane/VariableBuildInfo.h>
 #include <arcane/accelerator/IRunQueueStream.h>
 
 #include <thread>
@@ -31,6 +32,7 @@ eItemKind get_item_kind<Node>() {
 // Retourne le groupe de tous les items d'un ItemType donné
 template<typename ItemType>
 ItemGroupT<ItemType> get_all_items(IMesh* mesh) {
+  ARCANE_ASSERT(false, ("get_all_items non implémenté pour cet ItemType"));
   return ItemGroupT<ItemType>();
 }
 
@@ -44,6 +46,39 @@ ItemGroupT<Node> get_all_items(IMesh* mesh) {
   return mesh->allNodes();
 }
 
+// Retourne le groupe des items "own" d'un ItemType donné
+template<typename ItemType>
+ItemGroupT<ItemType> get_own_items(IMesh* mesh) {
+  ARCANE_ASSERT(false, ("get_own_items non implémenté pour cet ItemType"));
+  return ItemGroupT<ItemType>();
+}
+
+template<>
+ItemGroupT<Cell> get_own_items(IMesh* mesh) {
+  return mesh->ownCells();
+}
+
+template<>
+ItemGroupT<Node> get_own_items(IMesh* mesh) {
+  return mesh->ownNodes();
+}
+
+// Retourne le nom associé ItemType donné
+template<typename ItemType>
+const char* get_string_items() {
+  ARCANE_ASSERT(false, ("get_string_items non implémenté pour cet ItemType"));
+  return "UNDEF";
+}
+
+template<>
+const char* get_string_items<Cell>() {
+  return "Cell";
+}
+
+template<>
+const char* get_string_items<Node>() {
+  return "Node";
+}
 
 /*---------------------------------------------------------------------------*/
 /* Encapsule la liste des items à envoyer/recevoir pour un type d'item donné */
@@ -93,8 +128,8 @@ SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks) :
       m_indexes_ghost_item_pn.constView(), m_nb_ghost_item_pn.constView());
 
   // On va récupérer les identifiants proprement dits
-  ItemGroupT<ItemType> item_group = get_all_items<ItemType>(mesh);
-  GroupIndexTable& lid_to_index = *item_group.localIdToIndex().get();
+  ItemGroupT<ItemType> all_items = get_all_items<ItemType>(mesh);
+  GroupIndexTable& lid_to_index = *all_items.localIdToIndex().get();
 
   auto lids2itemidx = [&](Int32ConstArrayView lids, Int32ArrayView item_idx)
   {
@@ -110,6 +145,70 @@ SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks) :
     lids2itemidx(var_sync->sharedItems(inei), owned_item_idx_pn[inei]);
     lids2itemidx(var_sync->ghostItems(inei) , ghost_item_idx_pn[inei]);
   }
+
+  // Les groupes d'items
+  using ItemIdType = typename ItemType::LocalIdType;
+  MeshVariableScalarRefT<ItemType,Integer> item_status(VariableBuildInfo(mesh, "TemporaryItemStatus"));
+  auto arr_item_status = item_status.asArray();
+  // = 0 : "private" : item intérieur qui ne participe à aucune comm
+  // > 0 : "shared" : item "own" dont les valeurs doivent être envoyées
+  // > 0 : "ghost"  : item fantôme dont on va recevoir une valeur
+  arr_item_status.fill(0);
+
+  IntegerUniqueArray all_shared_lids;
+  IntegerUniqueArray all_ghost_lids;
+
+  auto own_items = get_own_items<ItemType>(mesh);
+  all_shared_lids.reserve(own_items.size()); // on surestime
+  all_ghost_lids.reserve(all_items.size()-own_items.size());
+
+  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
+    auto shared_item_idx = owned_item_idx_pn[inei];
+    auto ghost_item_idx  = ghost_item_idx_pn[inei];
+
+    // Les "shared" items sont des items qui appartiennent à own() 
+    // (contrairement aux ghosts)
+    const Integer shared_status=inei+1; // >0
+    for(Integer idx : shared_item_idx) {
+      ItemIdType lid(idx);
+      if (arr_item_status[lid] == 0) {
+        // Ici, l'item lid n'a pas encore été traité comme un "shared" item
+        arr_item_status[lid] = shared_status;
+        all_shared_lids.add(idx); // cet item ne sera ajouté qu'une seule fois
+      }
+    }
+
+    // Les ghosts
+    const Integer ghost_status=inei-1; // <0
+    for(Integer idx : ghost_item_idx) {
+      ItemIdType lid(idx);
+      if (arr_item_status[lid] == 0) {
+        // Ici, l'item lid n'a pas encore été traité comme un "ghost" item
+        arr_item_status[lid] = ghost_status;
+        all_ghost_lids.add(idx); // cet item ne sera ajouté qu'une seule fois
+      }
+    }
+  }
+
+  IntegerUniqueArray private_item_ids;
+  private_item_ids.reserve(own_items.size()); // pour minimiser le nb d'allocations dynamiques
+
+  ENUMERATE_ITEM(iitem, own_items) {
+    if (item_status[iitem] == 0) {
+      private_item_ids.add(iitem->localId());
+    }
+  }
+
+  // Création des groupes
+  const char* str_items = get_string_items<ItemType>();
+  m_private_items= item_family->createGroup( String("Private")+str_items, private_item_ids);
+  m_shared_items = item_family->createGroup( String("Shared") +str_items, all_shared_lids);
+  m_ghost_items  = item_family->createGroup( String("Ghost")  +str_items, all_ghost_lids);
+
+  ARCANE_ASSERT(own_items.size()==(m_private_items.size()+m_shared_items.size()),
+      ("own != private+shared"));
+  ARCANE_ASSERT((all_items.size()-own_items.size())==m_ghost_items.size(),
+      ("(all-own) != ghost"));
 }
 
 /*---------------------------------------------------------------------------*/
@@ -460,12 +559,12 @@ bool VarSyncMng::isAcceleratorAvailable() const {
 /* Spécialisations pour retourner l'instance de SyncItems<T> en fonction de T*/
 /*---------------------------------------------------------------------------*/
 template<>
-SyncItems<Cell>* VarSyncMng::_getSyncItems() {
+SyncItems<Cell>* VarSyncMng::getSyncItems() {
   return m_sync_cells;
 }
 
 template<>
-SyncItems<Node>* VarSyncMng::_getSyncItems() {
+SyncItems<Node>* VarSyncMng::getSyncItems() {
   return m_sync_nodes;
 }
 
@@ -621,7 +720,7 @@ void VarSyncMng::globalSynchronize(MeshVariableRefT var)
   // Lire les buffers MPI reçus pour écrire les données dans var
   */
 
-  SyncItems<ItemType>* sync_items = _getSyncItems<ItemType>();
+  SyncItems<ItemType>* sync_items = getSyncItems<ItemType>();
 
   auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
   auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
@@ -802,7 +901,7 @@ void async_unpack_buf2var(IntegerConstArrayView item_idx,
 /* (i.e. non multi-mat) dont les données sont présentes sur GPU              */
 /*---------------------------------------------------------------------------*/
 template<typename MeshVariableRefT>
-void VarSyncMng::globalSynchronizeDev(MeshVariableRefT var)
+void VarSyncMng::globalSynchronizeQueue(Ref<RunQueue> ref_queue, MeshVariableRefT var)
 {
   if (m_nb_nei==0) {
     return;
@@ -811,7 +910,7 @@ void VarSyncMng::globalSynchronizeDev(MeshVariableRefT var)
   using ItemType = typename MeshVariableRefT::ItemType;
   using DataType = typename MeshVariableRefT::DataType;
 
-  SyncItems<ItemType>* sync_items = _getSyncItems<ItemType>();
+  SyncItems<ItemType>* sync_items = getSyncItems<ItemType>();
 
   auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
   auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
@@ -849,9 +948,6 @@ void VarSyncMng::globalSynchronizeDev(MeshVariableRefT var)
     requests.add(req_rcv);
   }
 
-  auto queue = makeQueue(m_runner);
-  queue.setAsync(true);
-
   // On enchaine sur le device : 
   //    copie de var_dev dans buf_dev 
   //    puis transfert buf_dev => buf_hst
@@ -862,12 +958,12 @@ void VarSyncMng::globalSynchronizeDev(MeshVariableRefT var)
     // On lit les valeurs de var pour les recopier dans le buffer d'envoi
     auto buf_snd_inei = buf_snd_d.byteBuf(inei); // buffer dans lequel on va écrire
     // "buf_snd[inei] <= var"
-    async_pack_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei, queue);
+    async_pack_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei, *(ref_queue.get()));
   }
 
   // transfert buf_snd_d => buf_snd_h
-  async_transfer(buf_snd_h, buf_snd_d, queue);
-  queue.barrier(); // attendre que la copie sur l'hôte soit terminée pour envoyer les messages
+  async_transfer(buf_snd_h, buf_snd_d, *(ref_queue.get()));
+  ref_queue->barrier(); // attendre que la copie sur l'hôte soit terminée pour envoyer les messages
 
   // On amorce les envois sur l'HOTE
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
@@ -883,15 +979,15 @@ void VarSyncMng::globalSynchronizeDev(MeshVariableRefT var)
   requests.clear();
 
   // transfert buf_rcv_h => buf_rcv_d
-  async_transfer(buf_rcv_d, buf_rcv_h, queue);
+  async_transfer(buf_rcv_d, buf_rcv_h, *(ref_queue.get()));
 
   // On recopie les valeurs reçues dans les buffers dans var sur le DEVICE
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
     auto buf_rcv_inei = buf_rcv_d.byteBuf(inei); // buffer duquel on va lire les données
     // "var <= buf_rcv_d[inei]"
-    async_unpack_buf2var(ghost_item_idx_pn[inei], buf_rcv_inei, var, queue);
+    async_unpack_buf2var(ghost_item_idx_pn[inei], buf_rcv_inei, var, *(ref_queue.get()));
   }
-  queue.barrier(); // attendre que les copies soient terminées sur GPU
+  ref_queue->barrier(); // attendre que les copies soient terminées sur GPU
 }
 
 /*---------------------------------------------------------------------------*/
@@ -908,7 +1004,7 @@ void VarSyncMng::globalSynchronizeDevThr(MeshVariableRefT var)
   using ItemType = typename MeshVariableRefT::ItemType;
   using DataType = typename MeshVariableRefT::DataType;
 
-  SyncItems<ItemType>* sync_items = _getSyncItems<ItemType>();
+  SyncItems<ItemType>* sync_items = getSyncItems<ItemType>();
 
   auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
   auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
@@ -1176,7 +1272,7 @@ void VarSyncMng::globalSynchronizeDevQueues(MeshVariableRefT var)
   using ItemType = typename MeshVariableRefT::ItemType;
   using DataType = typename MeshVariableRefT::DataType;
 
-  SyncItems<ItemType>* sync_items = _getSyncItems<ItemType>();
+  SyncItems<ItemType>* sync_items = getSyncItems<ItemType>();
 
   auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
   auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
@@ -1444,11 +1540,11 @@ INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(VariableNodeReal3);
 
 INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE(VariableCellArrayReal3);
 
-#define INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_DEV(__MeshVariableRefT__) \
-  template void VarSyncMng::globalSynchronizeDev(__MeshVariableRefT__ var)
+#define INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_QUEUE(__MeshVariableRefT__) \
+  template void VarSyncMng::globalSynchronizeQueue(Ref<RunQueue> ref_queue, __MeshVariableRefT__ var)
 
-INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_DEV(VariableCellReal);
-INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_DEV(VariableNodeReal3);
+INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_QUEUE(VariableCellReal);
+INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_QUEUE(VariableNodeReal3);
 
 #define INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_DEV_THR(__MeshVariableRefT__) \
   template void VarSyncMng::globalSynchronizeDevThr(__MeshVariableRefT__ var)

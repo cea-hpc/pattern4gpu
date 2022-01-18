@@ -13,6 +13,9 @@ using namespace Arcane;
 template<typename ItemType>
 class SyncItems {
  public:
+  // Le type de groupe d'items associé à ItemType
+  using ItemGroupType = ItemGroupT<ItemType>;
+ public:
   SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks);
   virtual ~SyncItems() {}
 
@@ -34,6 +37,21 @@ class SyncItems {
         m_indexes_ghost_item_pn.constView(), m_nb_ghost_item_pn.constView());
   }
 
+  // Items intérieurs qui n'interviennent pas dans les comms
+  auto privateItems() const {
+    return m_private_items;
+  }
+
+  // Items intérieurs dont les valeurs vont être envoyées
+  auto sharedItems() const {
+    return m_shared_items;
+  }
+
+  // Items fantômes dont on va recevoir des valeurs
+  auto ghostItems() const {
+    return m_ghost_items;
+  }
+
  protected:
   // "shared" ou "owned" : les items intérieurs au sous-domaine et qui doivent être envoyés
   // "ghost" : les items fantômes pour lesquels on va recevoir des informations
@@ -49,6 +67,13 @@ class SyncItems {
   IntegerUniqueArray m_buf_ghost_item_idx;
   IntegerUniqueArray m_indexes_ghost_item_pn;
   IntegerUniqueArray m_nb_ghost_item_pn;
+
+  // Les groupes d'items
+  // own() = private + shared  , private \inter shared = 0
+  // all() = own() + ghost
+  ItemGroupType m_private_items;
+  ItemGroupType m_shared_items;
+  ItemGroupType m_ghost_items;
 };
 
 /*---------------------------------------------------------------------------*/
@@ -163,13 +188,18 @@ class VarSyncMng {
   //! Retourne vrai si un GPU est dispo pour exécuter les calculs
   bool isAcceleratorAvailable() const;
 
+  // Retourne l'instance de SyncItems<T> en fonction de T
+  template<typename ItemType>
+  SyncItems<ItemType>* getSyncItems();
+
   // Equivalent à un var.synchronize() où var est une variable globale (i.e. non multi-mat)
   template<typename MeshVariableRefT>
   void globalSynchronize(MeshVariableRefT var);
 
   // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice
+  // La queue asynchrone ref_queue est synchronisé en fin d'appel
   template<typename MeshVariableRefT>
-  void globalSynchronizeDev(MeshVariableRefT var);
+  void globalSynchronizeQueue(Ref<RunQueue> ref_queue, MeshVariableRefT var);
 
   // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice
   template<typename MeshVariableRefT>
@@ -178,12 +208,6 @@ class VarSyncMng {
   // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice
   template<typename MeshVariableRefT>
   void globalSynchronizeDevQueues(MeshVariableRefT var);
-
- protected:
-
-  // Retourne l'instance de SyncItems<T> en fonction de T
-  template<typename ItemType>
-  SyncItems<ItemType>* _getSyncItems();
 
  protected:
 
