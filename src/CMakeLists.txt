@@ -42,7 +42,14 @@ target_include_directories(libaccenv PUBLIC .)
 target_link_libraries(libaccenv PUBLIC arcane_core)
 
 # Message Passing
-add_library(libmsgpass msgpass/VarSyncMng.cc)
+add_library(libmsgpass msgpass/VarSyncMng.cc 
+                       msgpass/GlobalSynchronize.cc
+                       msgpass/GlobalSynchronizeQueue.cc
+                       msgpass/GlobalSynchronizeDevThr.cc
+                       msgpass/GlobalSynchronizeDevQueues.cc
+                       msgpass/PackTransfer.cc
+                       msgpass/SyncItems.cc
+                       msgpass/SyncBuffers.cc)
 target_include_directories(libmsgpass PUBLIC .)
 target_link_libraries(libmsgpass PUBLIC arcane_core)
 
@@ -72,6 +79,13 @@ if(WANT_CUDA)
       cartesian/CartesianItemSorter.cc
       accenv/AccEnvDefaultService.cc
       msgpass/VarSyncMng.cc
+      msgpass/GlobalSynchronize.cc
+      msgpass/GlobalSynchronizeQueue.cc
+      msgpass/GlobalSynchronizeDevThr.cc
+      msgpass/GlobalSynchronizeDevQueues.cc
+      msgpass/PackTransfer.cc
+      msgpass/SyncItems.cc
+      msgpass/SyncBuffers.cc
       PROPERTIES LANGUAGE CUDA)
   target_link_libraries(libpattern4gpu PUBLIC arcane_accelerator_cuda_runtime)
   target_link_libraries(libgeomenv PUBLIC arcane_accelerator_cuda_runtime)
