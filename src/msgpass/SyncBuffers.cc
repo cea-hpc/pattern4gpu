@@ -28,6 +28,16 @@ MultiBufView::MultiBufView(const MultiBufView& rhs) :
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+MultiBufView& MultiBufView::operator=(const MultiBufView& rhs)
+{
+  m_ptrs    = rhs.m_ptrs;
+  m_sizes   = rhs.m_sizes;
+  m_loc_mem = rhs.m_loc_mem;
+  return *this;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 //! Convertit un buffer d'octets en buffer de DataType
 template<typename DataType>
 ArrayView<DataType> MultiBufView::valBuf(ArrayView<Byte> buf) {

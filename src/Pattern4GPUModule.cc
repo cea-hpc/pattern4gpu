@@ -959,15 +959,14 @@ _computeCqsAndVector_Varcgpu_v1() {
     return ref_queue;
   };
 
-#if 0
-  bool is_sync_node_vector=true;
-//  bool is_sync_node_vector=false;
-  NodeGroup node_group=(is_sync_node_vector ? ownNodes() : allNodes());
+  Integer sync_node_vector=3; // 0 = pas de synchro
+  if (sync_node_vector == 1) 
+  {
+    // Calcul sur tous les noeuds "own"
+    Ref<RunQueue> ref_queue = async_node_vector_update(ownNodes());
+    ref_queue->barrier();
 
-  Ref<RunQueue> ref_queue = async_node_vector_update(node_group);
-  ref_queue->barrier();
-
-  if (is_sync_node_vector) {
+    // Puis comms
     PROF_ACC_BEGIN("syncNodeVector");
 #if 0
     m_node_vector.synchronize();
@@ -979,29 +978,63 @@ _computeCqsAndVector_Varcgpu_v1() {
     vsync->globalSynchronizeDevQueues(m_node_vector);
 #endif
     PROF_ACC_END;
+
+  } 
+  else if (sync_node_vector == 2) 
+  {
+    auto vsync = m_acc_env->vsyncMng();
+    SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
+
+    // On amorce sur le DEVICE le calcul sur les noeuds "own" sur le bord du
+    // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
+    Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems());
+    // ici, le calcul n'est pas terminé sur le DEVICE
+
+    // On amorce sur le DEVICE le calcul des noeuds intérieurs dont ne dépendent
+    // pas les comms sur la queue ref_queue_inr (_inr = inner)
+    Ref<RunQueue> ref_queue_inr = async_node_vector_update(sync_nodes->privateItems());
+
+    // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
+    // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
+    // la queue ref_queue_bnd
+    vsync->globalSynchronizeQueue(ref_queue_bnd, m_node_vector);
+    // ici, après cet appel, ref_queue_bnd est synchronisée
+
+    // On attend la terminaison des calculs intérieurs
+    ref_queue_inr->barrier();
+  } 
+  else if (sync_node_vector == 3) 
+  {
+    auto vsync = m_acc_env->vsyncMng();
+    SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
+
+    // On amorce sur le DEVICE le calcul sur les noeuds "own" sur le bord du
+    // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
+    Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems());
+    // ici, le calcul n'est pas terminé sur le DEVICE
+    
+    // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
+    auto ref_sync_req = vsync->iGlobalSynchronizeQueue(ref_queue_bnd, m_node_vector);
+
+    // On amorce sur le DEVICE le calcul des noeuds intérieurs dont ne dépendent
+    // pas les comms sur la queue ref_queue_inr (_inr = inner)
+    Ref<RunQueue> ref_queue_inr = async_node_vector_update(sync_nodes->privateItems());
+
+    // Une fois le packing des données terminé sur ref_queue_bnd
+    // on effectue les comms MPI sur CPU, 
+    // puis unpacking des données et on synchronise la queue ref_queue_bnd
+    ref_sync_req->wait();
+    // ici, après cet appel, ref_queue_bnd est synchronisée
+
+    // On attend la terminaison des calculs intérieurs
+    ref_queue_inr->barrier();
+  } 
+  else 
+  {
+    // Pas de synchro
+    Ref<RunQueue> ref_queue = async_node_vector_update(allNodes());
+    ref_queue->barrier();
   }
-#else
-  auto vsync = m_acc_env->vsyncMng();
-  SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
-
-  // On amorce sur le DEVICE le calcul sur les noeuds "own" sur le bord du
-  // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
-  Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems());
-  // ici, le calcul n'est pas terminé sur le DEVICE
-
-  // On amorce sur le DEVICE le calcul des noeuds intérieurs dont ne dépendent
-  // pas les comms sur la queue ref_queue_inr (_inr = inner)
-  Ref<RunQueue> ref_queue_inr = async_node_vector_update(sync_nodes->privateItems());
-
-  // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
-  // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
-  // la queue ref_queue_bnd
-  vsync->globalSynchronizeQueue(ref_queue_bnd, m_node_vector);
-  // ici, après cet appel, ref_queue_bnd est synchronisée
-
-  // On attend la terminaison des calculs intérieurs
-  ref_queue_inr->barrier();
-#endif
 
   PROF_ACC_END;
 }

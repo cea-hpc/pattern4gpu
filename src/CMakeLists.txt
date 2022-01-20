@@ -47,6 +47,7 @@ add_library(libmsgpass msgpass/VarSyncMng.cc
                        msgpass/GlobalSynchronizeQueue.cc
                        msgpass/GlobalSynchronizeDevThr.cc
                        msgpass/GlobalSynchronizeDevQueues.cc
+                       msgpass/IncompleteGlobalSynchronizeQueue.cc
                        msgpass/PackTransfer.cc
                        msgpass/SyncItems.cc
                        msgpass/SyncBuffers.cc)
@@ -83,6 +84,7 @@ if(WANT_CUDA)
       msgpass/GlobalSynchronizeQueue.cc
       msgpass/GlobalSynchronizeDevThr.cc
       msgpass/GlobalSynchronizeDevQueues.cc
+      msgpass/IncompleteGlobalSynchronizeQueue.cc
       msgpass/PackTransfer.cc
       msgpass/SyncItems.cc
       msgpass/SyncBuffers.cc
