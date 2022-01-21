@@ -59,6 +59,10 @@ class Pattern4GPUModule
 
   void initMEnv() override; // InitMEnv
   void initMEnvVar() override; // InitMEnvVar
+  
+  void syncNodeVector() override; // SyncNodeVector
+  void burnConnectivity() override; // BurnConnectivity
+  void burnIsActiveCell() override; // BurnIsActiveCell
 
   void initKokkosWrapper();
 

@@ -208,6 +208,10 @@
   <entry-point method-name="initEnvOrder" name="InitEnvOrder" where="start-init" property="none" />
   <entry-point method-name="initMEnv" name="InitMEnv" where="start-init" property="none" />
   <entry-point method-name="initMEnvVar" name="InitMEnvVar" where="start-init" property="none" />
+  
+  <entry-point method-name="syncNodeVector" name="SyncNodeVector" where="start-init" property="none" />
+  <entry-point method-name="burnConnectivity" name="BurnConnectivity" where="start-init" property="none" />
+  <entry-point method-name="burnIsActiveCell" name="BurnIsActiveCell" where="start-init" property="none" />
 
   <entry-point method-name="updateTensor" name="UpdateTensor" where="compute-loop" property="none" />
   <entry-point method-name="updateVectorFromTensor" name="UpdateVectorFromTensor" where="compute-loop" property="none" />

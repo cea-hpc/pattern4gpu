@@ -422,6 +422,21 @@ initNodeVector()
 }
 
 /*---------------------------------------------------------------------------*/
+/* Synchronise les noeuds fantômes pour node_vector                          */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+syncNodeVector() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+
+  auto queue = makeQueueRef(m_acc_env->runner());
+  queue->setAsync(true);
+  auto vsync = m_acc_env->vsyncMng();
+  vsync->globalSynchronizeQueue(queue, m_node_vector);
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
@@ -624,6 +639,75 @@ initCqs1()
     };
   }
 
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Effectue un travail bidon juste pour charger les connectivités sur GPU    */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+burnConnectivity() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+  auto queue = m_acc_env->newQueue();
+  {
+    auto command = makeCommand(queue);
+
+    VariableNodeInteger tmp1(VariableBuildInfo(mesh(), "TemporaryTmp1"));
+    auto out_tmp1 = ax::viewOut(command, tmp1);
+
+    auto node_index_in_cells = m_acc_env->nodeIndexInCells();
+    const Integer max_node_cell = m_acc_env->maxNodeCell();
+    auto nc_cty = m_acc_env->connectivityView().nodeCell();
+
+    command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()) {
+      Int32 first_pos = nid.localId() * max_node_cell;
+      Integer index = 0;
+      Integer sum = 0;
+      for( CellLocalId cid : nc_cty.cells(nid) ){
+        Int16 node_index = node_index_in_cells[first_pos + index];
+        sum += node_index;
+        ++index;
+      }
+      out_tmp1[nid] = sum;
+    };
+  }
+  {
+    auto command = makeCommand(queue);
+
+    VariableCellInteger tmp2(VariableBuildInfo(mesh(), "TemporaryTmp2"));
+    auto out_tmp2 = ax::viewOut(command, tmp2);
+
+    auto cnc = m_acc_env->connectivityView().cellNode();
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      Integer index = 0;
+      for( NodeLocalId nid : cnc.nodes(cid) ){
+        ++index;
+      }
+      out_tmp2[cid] = index;
+    };
+  }
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Effectue un travail bidon juste pour charger is_active_cell sur GPU    */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+burnIsActiveCell() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+  auto queue = m_acc_env->newQueue();
+  {
+    auto command = makeCommand(queue);
+
+    VariableCellInteger tmp2(VariableBuildInfo(mesh(), "TemporaryTmp2"));
+    auto in_is_active_cell = ax::viewIn(command, m_is_active_cell);
+    auto out_tmp2 = ax::viewOut(command, tmp2);
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      out_tmp2[cid] = in_is_active_cell[cid];
+    };
+  }
   PROF_ACC_END;
 }
 
