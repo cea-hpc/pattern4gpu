@@ -28,6 +28,15 @@ namespace ax = Arcane::Accelerator;
 
 #warning "PROF_ACC : instrumentation avec nvtx"
 #include <nvtx3/nvToolsExt.h>
+#include <cuda_profiler_api.h>
+
+#ifndef PROF_ACC_START_CAPTURE
+#define PROF_ACC_START_CAPTURE cudaProfilerStart()
+#endif
+
+#ifndef PROF_ACC_STOP_CAPTURE
+#define PROF_ACC_STOP_CAPTURE cudaProfilerStop()
+#endif
 
 #ifndef PROF_ACC_BEGIN
 #define PROF_ACC_BEGIN(__name__) nvtxRangePushA(__name__)
@@ -40,6 +49,14 @@ namespace ax = Arcane::Accelerator;
 #else
 
 //#warning "Pas d'instrumentation"
+#ifndef PROF_ACC_START_CAPTURE
+#define PROF_ACC_START_CAPTURE 
+#endif
+
+#ifndef PROF_ACC_STOP_CAPTURE
+#define PROF_ACC_STOP_CAPTURE 
+#endif
+
 #ifndef PROF_ACC_BEGIN
 #define PROF_ACC_BEGIN(__name__)
 #endif
