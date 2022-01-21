@@ -16,7 +16,8 @@ class SyncItems {
   // Le type de groupe d'items associé à ItemType
   using ItemGroupType = ItemGroupT<ItemType>;
  public:
-  SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks);
+  SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks, 
+      AccMemAdviser* acc_mem_adv);
   virtual ~SyncItems() {}
 
   auto nbOwnedItemIdxPn() const {

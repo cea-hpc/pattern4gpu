@@ -63,166 +63,6 @@ accBuild()
 }
 
 /*---------------------------------------------------------------------------*/
-/* On ré-implémente le .synchronize                                          */
-/*---------------------------------------------------------------------------*/
-template<typename ItemType, typename value_type>
-void globalSynchronize(MeshVariableScalarRefT<ItemType, value_type> var)
-{
-  ItemGroup item_group = var.itemGroup();
-  IParallelMng* pm = item_group.mesh()->parallelMng();
-  //ITraceMng* tr_mng = pm->traceMng();
-  IItemFamily* item_family = item_group.itemFamily();
-  IVariableSynchronizer* var_sync = item_family->allItemsSynchronizer();
-  auto comm_ranks = var_sync->communicatingRanks();
-  GroupIndexTable& lid_to_index = *item_group.localIdToIndex().get();
-
-  Integer nb_nei = comm_ranks.size();
-#if 0
-  std::ostringstream ostr;
-  ostr << "P=" << pm->commRank()
-    << ", comm_ranks.size()=" << comm_ranks.size() << ", =[";
-  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    Int32 rank_nei = comm_ranks[inei];
-    ostr << " " << rank_nei;
-  }
-  ostr << " ]";
-  std::cout << ostr.str() << std::endl;
-#endif
-
-  // "shared" ou "owned" : les items intérieurs au sous-domaine et qui doivent être envoyés
-  // "ghost" : les items fantômes pour lesquels on va recevoir des informations
-  IntegerUniqueArray nb_owned_item_per_neigh(nb_nei);
-  IntegerUniqueArray nb_ghost_item_per_neigh(nb_nei);
-  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    nb_owned_item_per_neigh[inei] = var_sync->sharedItems(inei).size();
-    nb_ghost_item_per_neigh[inei] = var_sync->ghostItems(inei).size();
-  }
-
-  auto lids2itemidx = [&](Int32ConstArrayView lids, Int32ArrayView item_idx)
-  {
-    for(Integer ilid=0 ; ilid<lids.size() ; ++ilid) {
-      Int32 lid = lids[ilid];
-      Integer idx_in_group = lid_to_index[lid];
-      ARCANE_ASSERT(idx_in_group != -1, ("idx_in_group == -1"));
-      item_idx[ilid] = idx_in_group;
-    }
-  };
-
-  MultiArray2<Integer> owned_item_idx_per_neigh(nb_owned_item_per_neigh);
-  MultiArray2<Integer> ghost_item_idx_per_neigh(nb_ghost_item_per_neigh);
-
-  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    lids2itemidx(var_sync->sharedItems(inei), owned_item_idx_per_neigh[inei]);
-    lids2itemidx(var_sync->ghostItems(inei) , ghost_item_idx_per_neigh[inei]);
-  }
-
-  UniqueArray<Parallel::Request> requests;
-
-  // Quelques verifs
-  // On vérifie que les tailles envoyées/reçues sont cohérentes
-  IntegerUniqueArray nb_recv_item_per_neigh(nb_nei);
-  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    Int32 rank_nei = comm_ranks[inei]; // le rang du inei-ième voisin
-    
-    auto req_rcv = pm->recv(nb_recv_item_per_neigh.subView(inei,1), rank_nei, /*blocking=*/false);
-    requests.add(req_rcv);
-    
-    auto req_snd = pm->send(nb_owned_item_per_neigh.subView(inei,1), rank_nei, /*blocking=*/false);
-    requests.add(req_snd);
-  }
-
-  pm->waitAllRequests(requests);
-  requests.clear();
-
-  // Vérification proprement dite
-  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    ARCANE_ASSERT(nb_recv_item_per_neigh[inei]==nb_ghost_item_per_neigh[inei], ("Nb de valeurs à recevoir != nb d'items fantomes"));
-  }
-
-  // On va envoyer les UniqueId des items "shared" pour les comparer avec les ghosts des voisins
-  MultiArray2<UniqueIdType> owned_uid_per_neigh(nb_owned_item_per_neigh);
-  MultiArray2<UniqueIdType> ghost_uid_per_neigh(nb_ghost_item_per_neigh);
-
-  auto internal = item_family->itemsInternal().data();
-  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    Int32 rank_nei = comm_ranks[inei]; // le rang du inei-ième voisin
-
-    // On amorce la réception
-    auto req_rcv = pm->recv(ghost_uid_per_neigh[inei], rank_nei, /*blocking=*/false);
-    requests.add(req_rcv);
-     
-    // On remplit les UniqueIds
-    for(Integer i=0 ; i<nb_owned_item_per_neigh[inei] ; ++i) {
-      LocalIdType lid{owned_item_idx_per_neigh[inei][i]};
-      ItemType item(internal, lid);
-      owned_uid_per_neigh[inei][i] = item.uniqueId();
-    }
-
-    // On amorce l'envoi
-    auto req_snd = pm->send(owned_uid_per_neigh[inei], rank_nei, /*blocking=*/false);
-    requests.add(req_snd);
-  }
-
-  pm->waitAllRequests(requests);
-  requests.clear();
-
-  // Vérification proprement dite
-  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    // On relit les UniqueIds reçus et on les compare avec les UniqueIds des items ghost
-    for(Integer i=0 ; i<nb_ghost_item_per_neigh[inei] ; ++i) {
-      // Le UniqueId reçu
-      UniqueIdType uid{ghost_uid_per_neigh[inei][i]};
-      // On reconstruit l'item local qui est ghost
-      LocalIdType lid{ghost_item_idx_per_neigh[inei][i]};
-      ItemType item(internal, lid);
-      // verif
-      ARCANE_ASSERT(item.uniqueId()==uid, ("Incohérence entre unique Id reçu et celui de l'item ghost"));
-    }
-  }
-
-  // L'échange proprement dit des valeurs de var
-  auto var_arr = var.asArray();
-  // Les buffers des données à envoyer/recevoir
-  MultiArray2<value_type> owned_val_per_neigh(nb_owned_item_per_neigh);
-  MultiArray2<value_type> ghost_val_per_neigh(nb_ghost_item_per_neigh);
-
-  // On amorce les réceptions
-  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    Int32 rank_nei = comm_ranks[inei]; // le rang du inei-ième voisin
-
-    // On amorce la réception
-    auto req_rcv = pm->recv(ghost_val_per_neigh[inei], rank_nei, /*blocking=*/false);
-    requests.add(req_rcv);
-  }
-
-  // On remplit les buffers et on amorce les envois
-  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    Int32 rank_nei = comm_ranks[inei]; // le rang du inei-ième voisin
-
-    // On lit les valeurs de var pour les recopier dans le buffer d'envoi
-    for(Integer i=0 ; i<nb_owned_item_per_neigh[inei] ; ++i) {
-      LocalIdType lid{owned_item_idx_per_neigh[inei][i]};
-      owned_val_per_neigh[inei][i] = var_arr[lid];
-    }
-
-    // On amorce l'envoi
-    auto req_snd = pm->send(owned_val_per_neigh[inei], rank_nei, /*blocking=*/false);
-    requests.add(req_snd);
-  }
-
-  pm->waitAllRequests(requests);
-  requests.clear();
-
-  // On recopie les valeurs reçues dans les buffers dans var
-  for(Integer inei=0 ; inei<nb_nei ; ++inei) {
-    for(Integer i=0 ; i<nb_ghost_item_per_neigh[inei] ; ++i) {
-      LocalIdType lid{ghost_item_idx_per_neigh[inei][i]};
-      var_arr[lid] = ghost_val_per_neigh[inei][i];
-    }
-  }
-}
-
-/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
@@ -239,6 +79,8 @@ initKokkosWrapper()
 void Pattern4GPUModule::
 initP4GPU()
 {
+  PROF_ACC_START_CAPTURE; // la capture du profiling commence réellement ici
+
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans initP4GPU";
 
@@ -404,7 +246,7 @@ initNodeVector()
 
     auto in_node_coord = ax::viewIn(command, node_coord);
     auto out_node_vector = ax::viewOut(command, m_node_vector);
-
+    
     command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()) {
       const Real3 c=in_node_coord[nid];
       Real cos_th=cos(c.x+c.y+c.z); // garantit une valeur dans [-1,+1]
@@ -494,31 +336,70 @@ initCellArr12()
   }
   else if (options()->getInitCellArr12Version() == IA12V_arcgpu_v1)
   {
-    auto queue = m_acc_env->newQueue();
-    auto command = makeCommand(queue);
+    auto async_init_cell_arr12 = [&](CellGroup cell_group, bool high_priority=false) -> Ref<RunQueue> {
+      ax::RunQueueBuildInfo bi;
+      if (high_priority) {
+        // 0 = priorité par défaut
+        // Plus la valeur de priorité est faible, plus la queue sera prioritaire
+        bi.setPriority(-10); 
+      }
+      auto ref_queue = makeQueueRef(m_acc_env->runner(), bi);
+      ref_queue->setAsync(true);
+      auto command = makeCommand(ref_queue.get());
 
-    auto in_node_coord = ax::viewIn(command, node_coord);
+      auto in_node_coord = ax::viewIn(command, node_coord);
 
-    auto out_cell_arr1 = ax::viewOut(command, m_cell_arr1);
-    auto out_cell_arr2 = ax::viewOut(command, m_cell_arr2);
+      auto out_cell_arr1 = ax::viewOut(command, m_cell_arr1);
+      auto out_cell_arr2 = ax::viewOut(command, m_cell_arr2);
 
-    auto cnc = m_acc_env->connectivityView().cellNode();
+      auto cnc = m_acc_env->connectivityView().cellNode();
 
-    command << RUNCOMMAND_ENUMERATE(Cell, cid, ownCells()) {
-      NodeLocalId first_nid(cnc.nodes(cid)[0]);
-      Real3 c=in_node_coord[first_nid];
-      out_cell_arr1[cid]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
-      out_cell_arr2[cid]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
+      command << RUNCOMMAND_ENUMERATE(Cell, cid, ownCells()) {
+        NodeLocalId first_nid(cnc.nodes(cid)[0]);
+        Real3 c=in_node_coord[first_nid];
+        out_cell_arr1[cid]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
+        out_cell_arr2[cid]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
+      };
+
+      return ref_queue;
     };
 
+    Integer sync_cell_sync=2; // 0 = pas de synchro
+    if (sync_cell_sync==1)
+    {
+      // Calcul que sur les mailles intérieures
+      auto ref_queue = async_init_cell_arr12(ownCells());
+      ref_queue->barrier();
+
+      PROF_ACC_BEGIN("syncCellArr12");
 #if 0
-    m_cell_arr1.synchronize();
-    m_cell_arr2.synchronize();
+      m_cell_arr1.synchronize();
+      m_cell_arr2.synchronize();
 #else
-    auto vsync = m_acc_env->vsyncMng();
-    vsync->globalSynchronize(m_cell_arr1);
-    vsync->globalSynchronize(m_cell_arr2);
+      auto vsync = m_acc_env->vsyncMng();
+      vsync->globalSynchronize(m_cell_arr1);
+      vsync->globalSynchronize(m_cell_arr2);
 #endif
+      PROF_ACC_END;
+    }
+    else if (sync_cell_sync==2)
+    {
+      auto vsync = m_acc_env->vsyncMng();
+      SyncItems<Cell>* sync_cells = vsync->getSyncItems<Cell>();
+
+      auto ref_queue_bnd = async_init_cell_arr12(sync_cells->sharedItems(), /*high_priority=*/true);
+      auto ref_queue_inr = async_init_cell_arr12(sync_cells->privateItems());
+      // TODO : aggréger les comms de m_cell_arr1 et m_cell_arr2
+      vsync->globalSynchronizeQueue(ref_queue_bnd, m_cell_arr1);
+      vsync->globalSynchronizeQueue(ref_queue_bnd, m_cell_arr2);
+      ref_queue_inr->barrier();
+    }
+    else
+    {
+      // Pas de synchro avec les voisins
+      auto ref_queue = async_init_cell_arr12(allCells());
+      ref_queue->barrier();
+    }
   }
   else if (options()->getInitCellArr12Version() == IA12V_kokkos)
   {
@@ -999,7 +880,7 @@ _computeCqsAndVector_Varcgpu_v1() {
     PROF_ACC_END;
   }
 
-  auto async_node_vector_update = [&](NodeGroup node_group) -> Ref<RunQueue> {
+  auto async_node_vector_update = [&](NodeGroup node_group, bool high_priority=false) -> Ref<RunQueue> {
     // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
     // Du coup, on boucle sur les Node
     // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
@@ -1009,7 +890,13 @@ _computeCqsAndVector_Varcgpu_v1() {
     // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
     //   1- on initialise le vecteur à 0
     //   2- on calcule les constributions des mailles connectées au noeud uniquement si elles sont actives
-    auto ref_queue = makeQueueRef(m_acc_env->runner());
+    ax::RunQueueBuildInfo bi;
+    if (high_priority) {
+      // 0 = priorité par défaut
+      // Plus la valeur de priorité est faible, plus la queue sera prioritaire
+      bi.setPriority(-10); 
+    }
+    auto ref_queue = makeQueueRef(m_acc_env->runner(), bi);
     ref_queue->setAsync(true);
     auto command = makeCommand(ref_queue.get());
 
@@ -1043,7 +930,7 @@ _computeCqsAndVector_Varcgpu_v1() {
     return ref_queue;
   };
 
-  Integer sync_node_vector=3; // 0 = pas de synchro
+  Integer sync_node_vector=2; // 0 = pas de synchro
   if (sync_node_vector == 1) 
   {
     // Calcul sur tous les noeuds "own"
@@ -1071,7 +958,7 @@ _computeCqsAndVector_Varcgpu_v1() {
 
     // On amorce sur le DEVICE le calcul sur les noeuds "own" sur le bord du
     // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
-    Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems());
+    Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems(), /*high_priority=*/true);
     // ici, le calcul n'est pas terminé sur le DEVICE
 
     // On amorce sur le DEVICE le calcul des noeuds intérieurs dont ne dépendent
@@ -1094,7 +981,7 @@ _computeCqsAndVector_Varcgpu_v1() {
 
     // On amorce sur le DEVICE le calcul sur les noeuds "own" sur le bord du
     // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
-    Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems());
+    Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems(), /*high_priority=*/true);
     // ici, le calcul n'est pas terminé sur le DEVICE
     
     // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données

@@ -8,6 +8,7 @@
 #include "arcane/accelerator/Accelerator.h"
 #include "arcane/accelerator/RunCommandLoop.h"
 #include "arcane/accelerator/RunCommandEnumerate.h"
+#include "arcane/accelerator/core/RunQueueBuildInfo.h"
 
 /*---------------------------------------------------------------------------*/
 /* Pour les accélérateurs                                                    */

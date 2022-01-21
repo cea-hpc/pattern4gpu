@@ -8,7 +8,7 @@
 /*---------------------------------------------------------------------------*/
 /* Gère les synchronisations des mailles fantômes par Message Passing        */
 /*---------------------------------------------------------------------------*/
-VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner) :
+VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_adv) :
   m_runner (runner)
 {
   IItemFamily* cell_family = mesh->cellFamily();
@@ -21,10 +21,12 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner) :
   m_neigh_ranks = var_sync->communicatingRanks();
   m_nb_nei = m_neigh_ranks.size();
 
-  m_sync_cells = new SyncItems<Cell>(mesh,m_neigh_ranks);
-  m_sync_nodes = new SyncItems<Node>(mesh,m_neigh_ranks);
+  m_sync_cells = new SyncItems<Cell>(mesh,m_neigh_ranks, acc_mem_adv);
+  m_sync_nodes = new SyncItems<Node>(mesh,m_neigh_ranks, acc_mem_adv);
   m_sync_buffers = new SyncBuffers(isAcceleratorAvailable());
   m_neigh_queues = new MultiAsyncRunQueue(m_runner, m_nb_nei, /*unlimited=*/true);
+
+  _preAllocBuffers();
 }
 
 VarSyncMng::~VarSyncMng() {
@@ -52,6 +54,27 @@ SyncItems<Cell>* VarSyncMng::getSyncItems() {
 template<>
 SyncItems<Node>* VarSyncMng::getSyncItems() {
   return m_sync_nodes;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Effectue une première allocation des buffers pour les communications      */
+/* Ceci est une pré-allocation pour miniser le nb de réallocations           */
+/*---------------------------------------------------------------------------*/
+void VarSyncMng::_preAllocBuffers() {
+  auto sync_items = getSyncItems<Cell>();
+  
+  auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
+  auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
+
+  // Alloue pour un buffer de 24 Real3 par maille
+  Integer degree = 24;
+
+  m_sync_buffers->resetBuf();
+  // On prévoit une taille max du buffer qui va contenir tous les messages
+  m_sync_buffers->addEstimatedMaxSz<Real3>(owned_item_idx_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<Real3>(ghost_item_idx_pn, degree);
+  // Le buffer de tous les messages est réalloué si pas assez de place
+  m_sync_buffers->allocIfNeeded();
 }
 
 /*---------------------------------------------------------------------------*/

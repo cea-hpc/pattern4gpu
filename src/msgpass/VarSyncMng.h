@@ -54,7 +54,7 @@ class GlobalSyncRequest {
 /*---------------------------------------------------------------------------*/
 class VarSyncMng {
  public:
-  VarSyncMng(IMesh* mesh, ax::Runner& runner);
+  VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_adv);
   virtual ~VarSyncMng();
 
   //! Retourne vrai si un GPU est dispo pour exécuter les calculs
@@ -84,6 +84,11 @@ class VarSyncMng {
   // Amorce un globalSynchronizeQueue
   template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
   Ref<GlobalSyncRequest<ItemType, DataType, MeshVarRefT> > iGlobalSynchronizeQueue(Ref<RunQueue> ref_queue, MeshVarRefT<ItemType, DataType> var);
+
+ protected:
+  
+  // Pré-allocation des buffers de communication pour miniser le nb de réallocations
+  void _preAllocBuffers();
 
  protected:
 

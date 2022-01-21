@@ -78,7 +78,8 @@ const char* get_string_items<Node>() {
 /* Encapsule la liste des items à envoyer/recevoir pour un type d'item donné */
 /*---------------------------------------------------------------------------*/
 template<typename ItemType>
-SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks) :
+SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks,
+    AccMemAdviser* acc_mem_adv) :
   m_buf_owned_item_idx    (platform::getAcceleratorHostMemoryAllocator()),
   m_indexes_owned_item_pn (platform::getAcceleratorHostMemoryAllocator()),
   m_nb_owned_item_pn      (platform::getAcceleratorHostMemoryAllocator()),
@@ -203,6 +204,19 @@ SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks) :
       ("own != private+shared"));
   ARCANE_ASSERT((all_items.size()-own_items.size())==m_ghost_items.size(),
       ("(all-own) != ghost"));
+
+  // "Conseil" mémoire
+  acc_mem_adv->setReadMostly(m_buf_owned_item_idx   .view());
+  acc_mem_adv->setReadMostly(m_indexes_owned_item_pn.view());
+  acc_mem_adv->setReadMostly(m_nb_owned_item_pn     .view());
+  acc_mem_adv->setReadMostly(m_buf_ghost_item_idx   .view());
+  acc_mem_adv->setReadMostly(m_indexes_ghost_item_pn.view());
+  acc_mem_adv->setReadMostly(m_nb_ghost_item_pn     .view());
+
+  // "Conseil" mémoire pour les groupes d'items
+  acc_mem_adv->setReadMostly(m_private_items.view().localIds());
+  acc_mem_adv->setReadMostly(m_shared_items .view().localIds());
+  acc_mem_adv->setReadMostly(m_ghost_items  .view().localIds());
 }
 
 /*---------------------------------------------------------------------------*/
