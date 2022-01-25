@@ -50,6 +50,29 @@ class GlobalSyncRequest {
 };
 
 /*---------------------------------------------------------------------------*/
+/* Encapsule un événement sur le DEVICE                                      */
+/*---------------------------------------------------------------------------*/
+class AcceleratorEvent {
+ public:
+  AcceleratorEvent();
+  virtual ~AcceleratorEvent();
+
+  // Enregistre l'événement au sein d'une RunQueue
+  void record(ax::RunQueue& queue);
+
+  // Attend l'occurence de l'événement
+  void wait();
+
+  // Bloque les kernels suivant sur la queue tant que l'événement n'arrive pas
+  void queueWait(ax::RunQueue& queue);
+
+ protected:
+#ifdef ARCANE_COMPILING_CUDA
+  cudaEvent_t m_event;
+#endif  
+};
+
+/*---------------------------------------------------------------------------*/
 /* Gère les synchronisations des mailles fantômes par Message Passing        */
 /*---------------------------------------------------------------------------*/
 class VarSyncMng {
@@ -81,6 +104,10 @@ class VarSyncMng {
   template<typename MeshVariableRefT>
   void globalSynchronizeDevQueues(MeshVariableRefT var);
 
+  // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice
+  template<typename MeshVariableRefT>
+  void globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariableRefT var);
+
   // Amorce un globalSynchronizeQueue
   template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
   Ref<GlobalSyncRequest<ItemType, DataType, MeshVarRefT> > iGlobalSynchronizeQueue(Ref<RunQueue> ref_queue, MeshVarRefT<ItemType, DataType> var);
@@ -105,6 +132,10 @@ class VarSyncMng {
   SyncBuffers* m_sync_buffers=nullptr;
 
   MultiAsyncRunQueue* m_neigh_queues=nullptr;  //! Pour gérer plusieurs queues pour les voisins
+
+  Ref<ax::RunQueue> m_ref_queue_data;  //! Référence sur une queue prioritaire pour le transfert des données
+  UniqueArray<AcceleratorEvent*> m_pack_events;  //! Les evenements pour le packing des données
+  UniqueArray<AcceleratorEvent*> m_transfer_events;  //! Les evenements pour le transfert des données
 };
 
 /*---------------------------------------------------------------------------*/

@@ -968,7 +968,8 @@ _computeCqsAndVector_Varcgpu_v1() {
     // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
     // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
     // la queue ref_queue_bnd
-    vsync->globalSynchronizeQueue(ref_queue_bnd, m_node_vector);
+//    vsync->globalSynchronizeQueue(ref_queue_bnd, m_node_vector);
+    vsync->globalSynchronizeQueueEvent(ref_queue_bnd, m_node_vector);
     // ici, après cet appel, ref_queue_bnd est synchronisée
 
     // On attend la terminaison des calculs intérieurs

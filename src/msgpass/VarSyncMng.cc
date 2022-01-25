@@ -27,6 +27,22 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
   m_neigh_queues = new MultiAsyncRunQueue(m_runner, m_nb_nei, /*unlimited=*/true);
 
   _preAllocBuffers();
+
+  m_pack_events.resize(m_nb_nei);
+  m_transfer_events.resize(m_nb_nei);
+  for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
+    if (isAcceleratorAvailable()) {
+      m_pack_events[inei] = new AcceleratorEvent();
+      m_transfer_events[inei] = new AcceleratorEvent();
+    } else {
+      m_pack_events[inei] = nullptr;
+      m_transfer_events[inei] = nullptr;
+    }
+  }
+  ax::RunQueueBuildInfo bi;
+  bi.setPriority(-10); // la priorité doit être la même que celle de la queue qui servira au pack/unpack des buffers de comms
+  m_ref_queue_data = makeQueueRef(m_runner, bi);
+  m_ref_queue_data->setAsync(true);
 }
 
 VarSyncMng::~VarSyncMng() {
@@ -34,6 +50,11 @@ VarSyncMng::~VarSyncMng() {
   delete m_sync_nodes;
   delete m_sync_buffers;
   delete m_neigh_queues;
+
+  for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
+    delete m_pack_events[inei];
+    delete m_transfer_events[inei];
+  }
 }
 
 /*---------------------------------------------------------------------------*/

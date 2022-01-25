@@ -45,6 +45,7 @@ target_link_libraries(libaccenv PUBLIC arcane_core)
 add_library(libmsgpass msgpass/VarSyncMng.cc 
                        msgpass/GlobalSynchronize.cc
                        msgpass/GlobalSynchronizeQueue.cc
+                       msgpass/GlobalSynchronizeQueueEvent.cc
                        msgpass/GlobalSynchronizeDevThr.cc
                        msgpass/GlobalSynchronizeDevQueues.cc
                        msgpass/IncompleteGlobalSynchronizeQueue.cc
@@ -82,6 +83,7 @@ if(WANT_CUDA)
       msgpass/VarSyncMng.cc
       msgpass/GlobalSynchronize.cc
       msgpass/GlobalSynchronizeQueue.cc
+      msgpass/GlobalSynchronizeQueueEvent.cc
       msgpass/GlobalSynchronizeDevThr.cc
       msgpass/GlobalSynchronizeDevQueues.cc
       msgpass/IncompleteGlobalSynchronizeQueue.cc
