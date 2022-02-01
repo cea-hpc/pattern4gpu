@@ -2,6 +2,8 @@ set(EXAMPLE_NAME Pattern4GPU)
 project(Pattern4GPU LANGUAGES C CXX)
 include(../samples.common.cmake)
 
+arcane_accelerator_enable()
+
 add_executable(Pattern4GPU Pattern4GPUModule.cc
                            Pattern4GPUupdateTensor.cc 
                            Pattern4GPUTestCartesian.cc 
@@ -11,6 +13,8 @@ add_executable(Pattern4GPU Pattern4GPUModule.cc
                            Pattern4GPUMultiEnv.cc 
                            main 
                            Pattern4GPU_axl.h)
+
+arcane_accelerator_add_to_target(Pattern4GPU)
 
 # Module GeomEnv
 add_library(geomenv geomenv/GeomEnvModule.cc)
@@ -36,9 +40,7 @@ target_link_libraries(Pattern4GPU PRIVATE geomenv cartesian accenv)
 
 # Pour la gestion des accélérateurs et des sources à compiler avec le
 # compilateur pour accélérateur
-if(WANT_CUDA)
-  enable_language(CUDA)
-  find_package(CUDAToolkit REQUIRED)
+if(ARCANE_HAS_CUDA)
   set_source_files_properties(Pattern4GPUModule.cc 
       Pattern4GPUupdateTensor.cc 
       Pattern4GPUTestCartesian.cc 
@@ -60,6 +62,8 @@ if(WANT_CUDA)
   target_link_libraries(cartesian PUBLIC arcane_accelerator_cuda_runtime)
   target_link_libraries(accenv PUBLIC arcane_accelerator_cuda_runtime)
 endif()
+
+#arcane_accelerator_add_source_files(main.cc)
 
 # Pour la gestion du profiling sur accélérateur
 option(WANT_PROF_ACC "Active le profiling des points d'entrées pour accélérateur" FALSE)

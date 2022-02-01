@@ -5,6 +5,8 @@
 #include <arcane/materials/MeshMaterialVariableRef.h>
 #include <arcane/materials/CellToAllEnvCellConverter.h>
 #include <arcane/cea/ICartesianMesh.h>
+#include <arcane/utils/NumArray.h>
+#include <arcane/utils/Real3.h>
 #include "cartesian/ICartesianMesh.h"
 #include "cartesian/interface/ICartesianMesh.h"
 
@@ -137,6 +139,13 @@ class Pattern4GPUModule
 
   // Pour l'utilisation des accélérateurs
   IAccEnv* m_acc_env=nullptr;
+
+  Arcane::NumArray<Arcane::Real3,2>* m_numarray_cqs = nullptr;
+
+ public:
+  void _computeCqsAndVector_Varcgpu_v1_v2();
+  void _computeCqsAndVector_Varcgpu_v1_v3();
+  void _computeCqsAndVector_Varcgpu_v1_v5();
 };
 
 #endif
