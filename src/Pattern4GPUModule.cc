@@ -17,6 +17,9 @@
 #include "msgpass/VarSyncMng.h"
 #include <arcane/IVariableSynchronizer.h>
 
+#define P4GPU_PROFILING // Pour activer le profiling
+#include "P4GPUTimer.h"
+
 #include "Pattern4GPU4Kokkos.h"
 
 using namespace Arcane;
@@ -669,6 +672,7 @@ _computeCqsAndVector_Vori() {
 
   CellGroup active_cells = defaultMesh()->cellFamily()->findGroup("active_cells");
 
+  P4GPU_DECLARE_TIMER(subDomain(), ComputeCqs); P4GPU_START_TIMER(ComputeCqs);
   UniqueArray<Real3> pos(8);
   ENUMERATE_CELL (cell_i,  allCells()) {
     for (Integer ii = 0; ii < 8; ++ii) {
@@ -684,7 +688,9 @@ _computeCqsAndVector_Vori() {
     m_cell_cqs[cell_i][6] = -k025*math::vecMul(pos[5]-pos[2], pos[7]-pos[2]);
     m_cell_cqs[cell_i][7] = -k025*math::vecMul(pos[6]-pos[3], pos[4]-pos[3]);
   }
+  P4GPU_STOP_TIMER(ComputeCqs);
 
+  P4GPU_DECLARE_TIMER(subDomain(), NodeVectorUpdate); P4GPU_START_TIMER(NodeVectorUpdate);
   ENUMERATE_NODE (node_i, allNodes()) {
     m_node_vector[node_i].assign(0., 0., 0.);
   }
@@ -696,6 +702,9 @@ _computeCqsAndVector_Vori() {
         m_cell_cqs[cell_i][node_i.index()];
     }
   }
+
+  m_node_vector.synchronize();
+  P4GPU_STOP_TIMER(NodeVectorUpdate);
 
   PROF_ACC_END;
 }
@@ -846,6 +855,7 @@ _computeCqsAndVector_Varcgpu_v1() {
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans _computeCqsAndVector_Varcgpu_v1";
 
+  P4GPU_DECLARE_TIMER(subDomain(), ComputeCqs); P4GPU_START_TIMER(ComputeCqs);
 //  bool is_sync_cell_cqs=true;
   bool is_sync_cell_cqs=false;
   CellGroup cell_group=(is_sync_cell_cqs ? ownCells() : allCells());
@@ -879,6 +889,9 @@ _computeCqsAndVector_Varcgpu_v1() {
 #endif
     PROF_ACC_END;
   }
+  P4GPU_STOP_TIMER(ComputeCqs);
+
+  P4GPU_DECLARE_TIMER(subDomain(), NodeVectorUpdate); P4GPU_START_TIMER(NodeVectorUpdate);
 
   auto async_node_vector_update = [&](NodeGroup node_group, bool high_priority=false) -> Ref<RunQueue> {
     // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
@@ -944,9 +957,9 @@ _computeCqsAndVector_Varcgpu_v1() {
 #else
     auto vsync = m_acc_env->vsyncMng();
     //vsync->globalSynchronize(m_node_vector);
-    //vsync->globalSynchronizeDev(m_node_vector);
+    vsync->globalSynchronizeQueue(ref_queue, m_node_vector);
     //vsync->globalSynchronizeDevThr(m_node_vector);
-    vsync->globalSynchronizeDevQueues(m_node_vector);
+    //vsync->globalSynchronizeDevQueues(m_node_vector);
 #endif
     PROF_ACC_END;
 
@@ -1008,6 +1021,7 @@ _computeCqsAndVector_Varcgpu_v1() {
     ref_queue->barrier();
   }
 
+  P4GPU_STOP_TIMER(NodeVectorUpdate);
   PROF_ACC_END;
 }
 

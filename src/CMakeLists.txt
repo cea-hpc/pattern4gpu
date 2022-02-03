@@ -65,7 +65,8 @@ target_link_libraries(libpattern4gpu PUBLIC libgeomenv libcartesian libaccenv li
 if(WANT_CUDA)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
-  set_source_files_properties(Pattern4GPUModule.cc 
+  set_source_files_properties(
+      Pattern4GPUModule.cc 
       Pattern4GPUupdateTensor.cc 
       Pattern4GPUTestCartesian.cc 
       Pattern4GPUBenchCartesian.cc 
