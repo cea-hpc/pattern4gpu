@@ -61,7 +61,7 @@ VarSyncMng::~VarSyncMng() {
 /* Retourne vrai si un GPU est dispo pour exécuter les calculs               */
 /*---------------------------------------------------------------------------*/
 bool VarSyncMng::isAcceleratorAvailable() const {
-  return ax::impl::isAcceleratorPolicy(m_runner.executionPolicy());
+  return AcceleratorUtils::isAvailable(m_runner);
 }
 
 /*---------------------------------------------------------------------------*/

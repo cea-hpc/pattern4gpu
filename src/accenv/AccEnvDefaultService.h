@@ -3,6 +3,9 @@
 
 #include "accenv/IAccEnv.h"
 #include "arcane/materials/MeshMaterialVariableRef.h"
+
+// Ce fichier doit être inclu avant AccEnvDefault_axl.h
+#include "accenv/AccEnvDefaultOptions.h"
 #include "accenv/AccEnvDefault_axl.h"
 
 using namespace Arcane;

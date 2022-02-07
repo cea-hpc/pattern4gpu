@@ -69,6 +69,16 @@ namespace ax = Arcane::Accelerator;
 #endif
 
 /*---------------------------------------------------------------------------*/
+/* Disponibilité d'un accélérateur associé à un runner                       */
+/*---------------------------------------------------------------------------*/
+class AcceleratorUtils {
+ public:
+  static bool isAvailable(const ax::Runner& runner) {
+    return ax::impl::isAcceleratorPolicy(runner.executionPolicy());
+  }
+};
+
+/*---------------------------------------------------------------------------*/
 /* Pour gérer un nombre dynamique de RunQueue asynchrones                    */
 /*---------------------------------------------------------------------------*/
 class MultiAsyncRunQueue {
