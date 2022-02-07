@@ -10,6 +10,7 @@
 
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
 #include <arcane/IParallelMng.h>
+#include <arcane/IParallelTopology.h>
 
 using namespace Arcane;
 
@@ -42,15 +43,23 @@ initAcc()
   initializeRunner(m_runner,traceMng(),app->acceleratorRuntimeInitialisationInfo());
 
 #ifdef ARCANE_COMPILING_CUDA
+  IParallelMng* pm = mesh()->parallelMng();
+  // Attention, createTopology() est une opération collective
+  IParallelTopology* pt = pm->createTopology();
+  auto node_ranks = pt->machineRanks();
+  // Attention, createSubParallelMng() est une opération collective
+  Ref<IParallelMng> pm_node = pm->createSubParallelMngRef(node_ranks);
+
   Integer device_count=0;
   cudaGetDeviceCount(&device_count);
   if (device_count>0) {
-    Integer rank = mesh()->parallelMng()->commRank();
+    Integer rank = pm_node->commRank();
     Integer device=rank%device_count;
     cudaSetDevice(device);
     pinfo() << "Processus " << rank 
       << " : Device " << device << " (pour " << device_count << " device(s))";
   }
+  delete pt;
 #endif
 }
 

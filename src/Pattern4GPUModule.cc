@@ -367,25 +367,27 @@ initCellArr12()
       return ref_queue;
     };
 
-    Integer sync_cell_sync=2; // 0 = pas de synchro
-    if (sync_cell_sync==1)
+    if (options()->getIca12SyncVersion()==ICA12_SV_bulksync_std ||
+        options()->getIca12SyncVersion()==ICA12_SV_bulksync_sync)
     {
       // Calcul que sur les mailles intérieures
       auto ref_queue = async_init_cell_arr12(ownCells());
       ref_queue->barrier();
 
       PROF_ACC_BEGIN("syncCellArr12");
-#if 0
-      m_cell_arr1.synchronize();
-      m_cell_arr2.synchronize();
-#else
-      auto vsync = m_acc_env->vsyncMng();
-      vsync->globalSynchronize(m_cell_arr1);
-      vsync->globalSynchronize(m_cell_arr2);
-#endif
+      if (options()->getIca12SyncVersion()==ICA12_SV_bulksync_std) {
+        m_cell_arr1.synchronize();
+        m_cell_arr2.synchronize();
+      } else {
+        ARCANE_ASSERT(options()->getIca12SyncVersion()==ICA12_SV_bulksync_sync,
+            ("Ici, ICA12_SV_bulksync_sync"));
+        auto vsync = m_acc_env->vsyncMng();
+        vsync->globalSynchronize(m_cell_arr1);
+        vsync->globalSynchronize(m_cell_arr2);
+      }
       PROF_ACC_END;
     }
-    else if (sync_cell_sync==2)
+    else if (options()->getIca12SyncVersion()==ICA12_SV_overlap1)
     {
       auto vsync = m_acc_env->vsyncMng();
       SyncItems<Cell>* sync_cells = vsync->getSyncItems<Cell>();
@@ -399,6 +401,8 @@ initCellArr12()
     }
     else
     {
+      ARCANE_ASSERT(options()->getIca12SyncVersion()==ICA12_SV_nosync,
+          ("Pas de synchro normalement"));
       // Pas de synchro avec les voisins
       auto ref_queue = async_init_cell_arr12(allCells());
       ref_queue->barrier();
@@ -856,8 +860,8 @@ _computeCqsAndVector_Varcgpu_v1() {
   debug() << "Dans _computeCqsAndVector_Varcgpu_v1";
 
   P4GPU_DECLARE_TIMER(subDomain(), ComputeCqs); P4GPU_START_TIMER(ComputeCqs);
-//  bool is_sync_cell_cqs=true;
-  bool is_sync_cell_cqs=false;
+
+  bool is_sync_cell_cqs=!(options()->getCcavCqsSyncVersion() == CCAV_CS_nosync);
   CellGroup cell_group=(is_sync_cell_cqs ? ownCells() : allCells());
   {
     auto queue = m_acc_env->newQueue();
@@ -882,11 +886,13 @@ _computeCqsAndVector_Varcgpu_v1() {
   }
   if (is_sync_cell_cqs) {
     PROF_ACC_BEGIN("syncCellCQs");
-#if 0
-    m_cell_cqs.synchronize();
-#else
-    m_acc_env->vsyncMng()->globalSynchronize(m_cell_cqs);
-#endif
+    if (options()->getCcavCqsSyncVersion() == CCAV_CS_bulksync_std) {
+      m_cell_cqs.synchronize();
+    } else {
+      ARCANE_ASSERT(options()->getCcavCqsSyncVersion() == CCAV_CS_bulksync_sync,
+          ("CCAV_CS_bulksync_sync obligatoire"));
+      m_acc_env->vsyncMng()->globalSynchronize(m_cell_cqs);
+    }
     PROF_ACC_END;
   }
   P4GPU_STOP_TIMER(ComputeCqs);
@@ -943,8 +949,8 @@ _computeCqsAndVector_Varcgpu_v1() {
     return ref_queue;
   };
 
-  Integer sync_node_vector=2; // 0 = pas de synchro
-  if (sync_node_vector == 1) 
+  if (options()->getCcavVectorSyncVersion() == CCAV_VS_bulksync_std ||
+      options()->getCcavVectorSyncVersion() == CCAV_VS_bulksync_queue) 
   {
     // Calcul sur tous les noeuds "own"
     Ref<RunQueue> ref_queue = async_node_vector_update(ownNodes());
@@ -952,19 +958,21 @@ _computeCqsAndVector_Varcgpu_v1() {
 
     // Puis comms
     PROF_ACC_BEGIN("syncNodeVector");
-#if 0
-    m_node_vector.synchronize();
-#else
-    auto vsync = m_acc_env->vsyncMng();
-    //vsync->globalSynchronize(m_node_vector);
-    vsync->globalSynchronizeQueue(ref_queue, m_node_vector);
-    //vsync->globalSynchronizeDevThr(m_node_vector);
-    //vsync->globalSynchronizeDevQueues(m_node_vector);
-#endif
+    if (options()->getCcavVectorSyncVersion() == CCAV_VS_bulksync_std) {
+      m_node_vector.synchronize();
+    } else {
+      ARCANE_ASSERT(options()->getCcavVectorSyncVersion()==CCAV_VS_bulksync_queue,
+          ("Ici, option differente de bulksync_queue"));
+      auto vsync = m_acc_env->vsyncMng();
+      //vsync->globalSynchronize(m_node_vector);
+      vsync->globalSynchronizeQueue(ref_queue, m_node_vector);
+      //vsync->globalSynchronizeDevThr(m_node_vector);
+      //vsync->globalSynchronizeDevQueues(m_node_vector);
+    }
     PROF_ACC_END;
 
   } 
-  else if (sync_node_vector == 2) 
+  else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue) 
   {
     auto vsync = m_acc_env->vsyncMng();
     SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
@@ -988,7 +996,7 @@ _computeCqsAndVector_Varcgpu_v1() {
     // On attend la terminaison des calculs intérieurs
     ref_queue_inr->barrier();
   } 
-  else if (sync_node_vector == 3) 
+  else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_iqueue) 
   {
     auto vsync = m_acc_env->vsyncMng();
     SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
@@ -1014,8 +1022,10 @@ _computeCqsAndVector_Varcgpu_v1() {
     // On attend la terminaison des calculs intérieurs
     ref_queue_inr->barrier();
   } 
-  else 
+  else
   {
+    ARCANE_ASSERT(options()->getCcavVectorSyncVersion()==CCAV_VS_nosync,
+        ("Ici, pas de synchro"));
     // Pas de synchro
     Ref<RunQueue> ref_queue = async_node_vector_update(allNodes());
     ref_queue->barrier();
