@@ -91,7 +91,30 @@ initAcc()
 {
   info() << "Using accelerator";
   IApplication* app = subDomain()->application();
-  initializeRunner(m_runner,traceMng(),app->acceleratorRuntimeInitialisationInfo());
+  if (options()->getHeterogPartition() == HP_none) 
+  {
+    initializeRunner(m_runner,traceMng(),app->acceleratorRuntimeInitialisationInfo());
+  }
+  else if (options()->getHeterogPartition() == HP_heterog1)
+  {
+    Integer rank = mesh()->parallelMng()->commRank();
+    bool is_host_only = (rank > 0);
+    if (is_host_only) {
+      std::ostringstream ostr;
+      ostr << "(Host) P=" << mesh()->parallelMng()->commRank();
+      if (TaskFactory::isActive()) {
+        ostr << " using Task runtime";
+        m_runner.initialize(ax::eExecutionPolicy::Thread);
+      } else {
+        ostr << " using Sequential runtime";
+        m_runner.initialize(ax::eExecutionPolicy::Sequential);
+      }
+      pinfo() << ostr.str();
+    } else {
+      // Initialisation classique : accelerateur ou pas
+      initializeRunner(m_runner,traceMng(),app->acceleratorRuntimeInitialisationInfo());
+    }
+  }
 
   bool is_acc_av = AcceleratorUtils::isAvailable(m_runner);
 #ifdef ARCANE_COMPILING_CUDA
@@ -109,10 +132,8 @@ initAcc()
         << " : Device " << device << " (pour " << device_count << " device(s))";
     }
   }
-  if (is_acc_av && options()->getDeviceAffinity() == DA_cu_node_rank) 
+  if (options()->getDeviceAffinity() == DA_cu_node_rank) 
   {
-    info() << "Placement GPU : device =  node_rank%cuda_device_count";
-
     IParallelMng* pm = mesh()->parallelMng();
     // Attention, createTopology() est une opération collective
     IParallelTopology* pt = pm->createTopology();
@@ -120,15 +141,19 @@ initAcc()
     // Attention, createSubParallelMng() est une opération collective
     Ref<IParallelMng> pm_node = pm->createSubParallelMngRef(node_ranks);
 
-    Integer device_count=0;
-    cudaGetDeviceCount(&device_count);
-    if (device_count>0) {
-      Integer rank = pm->commRank();
-      Integer node_rank = pm_node->commRank();
-      Integer device=node_rank%device_count;
-      cudaSetDevice(device);
-      pinfo() << "Processus " << rank  << " (node_rank=" << node_rank << ")"
-        << " : Device " << device << " (pour " << device_count << " device(s))";
+    if (is_acc_av) {
+      info() << "Placement GPU : device =  node_rank%cuda_device_count";
+
+      Integer device_count=0;
+      cudaGetDeviceCount(&device_count);
+      if (device_count>0) {
+        Integer rank = pm->commRank();
+        Integer node_rank = pm_node->commRank();
+        Integer device=node_rank%device_count;
+        cudaSetDevice(device);
+        pinfo() << "Processus " << rank  << " (node_rank=" << node_rank << ")"
+          << " : Device " << device << " (pour " << device_count << " device(s))";
+      }
     }
     delete pt;
   }
