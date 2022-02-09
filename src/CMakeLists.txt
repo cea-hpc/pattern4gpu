@@ -37,7 +37,8 @@ target_include_directories(libcartesian PUBLIC .)
 target_link_libraries(libcartesian PUBLIC arcane_core)
 
 # Services communs pour les accélérateurs
-add_library(libaccenv accenv/AccEnvDefaultService.cc)
+add_library(libaccenv accenv/AccEnvDefaultService.cc
+                      accenv/AcceleratorEvent.cc)
 target_include_directories(libaccenv PUBLIC .)
 ## Pour HWLOC (en attendant un FindHWLOC.cmake)
 #set(ENV_HWLOC_INCDIR "$ENV{HWLOC_INCDIR}")
@@ -91,6 +92,7 @@ if(WANT_CUDA)
       cartesian/NodeDirectionMng.cc
       cartesian/CartesianItemSorter.cc
       accenv/AccEnvDefaultService.cc
+      accenv/AcceleratorEvent.cc
       msgpass/VarSyncMng.cc
       msgpass/GlobalSynchronize.cc
       msgpass/GlobalSynchronizeQueue.cc

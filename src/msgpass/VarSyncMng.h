@@ -8,6 +8,7 @@
 
 #include "msgpass/SyncItems.h"
 #include "msgpass/SyncBuffers.h"
+#include "accenv/AcceleratorEvent.h"
 
 using namespace Arcane;
 
@@ -47,29 +48,6 @@ class GlobalSyncRequest {
 
   Ref<RunQueue> m_ref_queue;  //! la queue sur laquelle effectuer les opérations sur GPU
   MeshVarRefT<ItemType, DataType> m_var;  //! variable Arcane dont il faut mettre les items fantômes à jour
-};
-
-/*---------------------------------------------------------------------------*/
-/* Encapsule un événement sur le DEVICE                                      */
-/*---------------------------------------------------------------------------*/
-class AcceleratorEvent {
- public:
-  AcceleratorEvent();
-  virtual ~AcceleratorEvent();
-
-  // Enregistre l'événement au sein d'une RunQueue
-  void record(ax::RunQueue& queue);
-
-  // Attend l'occurence de l'événement
-  void wait();
-
-  // Bloque les kernels suivant sur la queue tant que l'événement n'arrive pas
-  void queueWait(ax::RunQueue& queue);
-
- protected:
-#ifdef ARCANE_COMPILING_CUDA
-  cudaEvent_t m_event;
-#endif  
 };
 
 /*---------------------------------------------------------------------------*/
