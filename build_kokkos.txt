@@ -1,0 +1,9 @@
+# Build commandes pour creer la lib kokkos puis le pattern4gpu avec derivation Kokkos
+# Remplacer les paths d'installation...
+
+# --- Build Kokkos, backends OpenMP et CUDA pour inti-amd A100 ---
+cmake ../kokkos-src/ -DCMAKE_CXX_COMPILER=/ccc/home/cont001/ocre/letiercef/kokkos/kokkos-src/bin/nvcc_wrapper -DKokkos_CXX_STANDARD=17 -DCMAKE_INSTALL_PREFIX=/ccc/home/cont001/ocre/letiercef/kokkos/kokkos-install-pattern4gpu -DKokkos_ENABLE_OPENMP=On -DKokkos_ENABLE_HWLOC=On -DKokkos_ENABLE_CUDA=On -DKokkos_ENABLE_CUDA_LAMBDA=On -DBUILD_SHARED_LIBS=On -DCMAKE_POSITION_INDEPENDENT_CODE=On -DKokkos_ARCH_AMPERE80=On -DKokkos_ARCH_ZEN2=On
+cmake --build . --target install
+
+# --- Build Pattern4GPU4Kokkos ---
+mkdir build;cd build;cmake -S .. -DArcane_ROOT=/ccc/home/cont001/ocre/letiercef/Arcane/release/install -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_INIT="-g" -DWANT_CUDA=TRUE -DWANT_KOKKOS=TRUE -DKokkos_ROOT=/ccc/home/cont001/ocre/letiercef/kokkos/kokkos-install-pattern4gpu/lib64/cmake/Kokkos

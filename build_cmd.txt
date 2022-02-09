@@ -1,1 +1,0 @@
-mkdir build;cd build;cmake -S .. -DArcane_ROOT=/ccc/home/cont001/ocre/letiercef/Arcane/release/install -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_INIT="-g" -DWANT_CUDA=TRUE -DWANT_KOKKOS=TRUE -DKokkos_ROOT=/ccc/home/cont001/ocre/letiercef/kokkos/kokkos-install-pattern4gpu/lib64/cmake/Kokkos
