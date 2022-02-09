@@ -37,9 +37,15 @@
     <geom-scene>env5m3</geom-scene>
   </geom-env>
 
+  <!-- Configuration du service AccEnvDefault -->
+  <acc-env-default>
+    <acc-mem-advise>true</acc-mem-advise>
+    <device-affinity>cu_node_rank</device-affinity>
+    <!-- <heterog-partition>none</heterog-partition> -->
+  </acc-env-default>
+
   <!-- Configuration du module Pattern4GPU -->
   <pattern4-g-p-u>
-    <acc-mem-advise>true</acc-mem-advise>
 
     <init-cqs-version>arcgpu_v5</init-cqs-version>
     <init-node-vector-version>arcgpu_v1</init-node-vector-version>

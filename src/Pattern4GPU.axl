@@ -227,9 +227,6 @@
 </entry-points>
 
 <options>
-  <!-- - - - - - acc-mem-advise - - - - -->
-  <simple name="acc-mem-advise" type="bool" default="true"><description>Active/désactive tous les conseils mémoire (ie tous les appels à cudaMemAdvise).</description></simple>
-
   <!-- - - - - - kokkos test - - - - -->
   <simple name="with-kokkos" type="bool" default="false"><description>Active/désactive l'exécution des kernels GPU via Kokkos.</description></simple>
 
