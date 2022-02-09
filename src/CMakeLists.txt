@@ -39,16 +39,16 @@ target_link_libraries(libcartesian PUBLIC arcane_core)
 # Services communs pour les accélérateurs
 add_library(libaccenv accenv/AccEnvDefaultService.cc)
 target_include_directories(libaccenv PUBLIC .)
-# Pour HWLOC (en attendant un FindHWLOC.cmake)
-set(ENV_HWLOC_INCDIR "$ENV{HWLOC_INCDIR}")
-set(ENV_HWLOC_LIBDIR "$ENV{HWLOC_LIBDIR}")
-if (WANT_CUDA AND ENV_HWLOC_INCDIR AND ENV_HWLOC_LIBDIR)
-  target_compile_definitions(libaccenv PRIVATE ACCENV_HWLOC)
-  target_include_directories(libaccenv PRIVATE "${ENV_HWLOC_INCDIR}")
-  target_link_libraries(libaccenv PRIVATE "-L${ENV_HWLOC_LIBDIR} -lhwloc")
-  target_link_libraries(libaccenv PRIVATE cuda)
-endif()
-# fin HWLOC
+## Pour HWLOC (en attendant un FindHWLOC.cmake)
+#set(ENV_HWLOC_INCDIR "$ENV{HWLOC_INCDIR}")
+#set(ENV_HWLOC_LIBDIR "$ENV{HWLOC_LIBDIR}")
+#if (WANT_CUDA AND ENV_HWLOC_INCDIR AND ENV_HWLOC_LIBDIR)
+#  target_compile_definitions(libaccenv PRIVATE ACCENV_HWLOC)
+#  target_include_directories(libaccenv PRIVATE "${ENV_HWLOC_INCDIR}")
+#  target_link_libraries(libaccenv PRIVATE "-L${ENV_HWLOC_LIBDIR} -lhwloc")
+#  target_link_libraries(libaccenv PRIVATE cuda)
+#endif()
+## fin HWLOC
 target_link_libraries(libaccenv PUBLIC arcane_core)
 
 # Message Passing

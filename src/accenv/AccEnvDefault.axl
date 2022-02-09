@@ -17,13 +17,13 @@
   <!-- - - - - - acc-mem-advise - - - - -->
   <simple name="acc-mem-advise" type="bool" default="true"><description>Active/désactive tous les conseils mémoire (ie tous les appels à cudaMemAdvise).</description></simple>
 
-  <!-- - - - - device-selector - - - - -->
-  <enumeration name="device-selector" type="eDeviceSelector" default="cu_hwloc">
+  <!-- - - - - device-affinity - - - - -->
+  <enumeration name="device-affinity" type="eDeviceAffinity" default="cu_node_rank">
     <description>Manière de choisir le device attaché au processus</description>
-    <enumvalue name="none" genvalue="DS_none" />
-    <enumvalue name="cu_world_rank" genvalue="DS_cu_world_rank" />
-    <enumvalue name="cu_node_rank" genvalue="DS_cu_node_rank" />
-    <enumvalue name="cu_hwloc" genvalue="DS_cu_hwloc" />
+    <enumvalue name="none" genvalue="DA_none" />
+    <enumvalue name="cu_world_rank" genvalue="DA_cu_world_rank" />
+    <enumvalue name="cu_node_rank" genvalue="DA_cu_node_rank" />
+    <!-- <enumvalue name="cu_hwloc" genvalue="DA_cu_hwloc" /> -->
   </enumeration>
 
 	</options>

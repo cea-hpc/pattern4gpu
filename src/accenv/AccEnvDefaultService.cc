@@ -95,7 +95,7 @@ initAcc()
 
   bool is_acc_av = AcceleratorUtils::isAvailable(m_runner);
 #ifdef ARCANE_COMPILING_CUDA
-  if (is_acc_av && options()->getDeviceSelector() == DS_cu_world_rank) 
+  if (is_acc_av && options()->getDeviceAffinity() == DA_cu_world_rank) 
   {
     info() << "Placement GPU : device =  world_rank%cuda_device_count";
 
@@ -109,7 +109,7 @@ initAcc()
         << " : Device " << device << " (pour " << device_count << " device(s))";
     }
   }
-  if (is_acc_av && options()->getDeviceSelector() == DS_cu_node_rank) 
+  if (is_acc_av && options()->getDeviceAffinity() == DA_cu_node_rank) 
   {
     info() << "Placement GPU : device =  node_rank%cuda_device_count";
 
@@ -133,7 +133,7 @@ initAcc()
     delete pt;
   }
 #ifdef ACCENV_HWLOC
-  if (is_acc_av && options()->getDeviceSelector() == DS_cu_hwloc) 
+  if (is_acc_av && options()->getDeviceAffinity() == DA_cu_hwloc) 
   {
     info() << "Placement GPU avec hwloc";
     // Code issu de https://www.open-mpi.org/faq/?category=runcuda
@@ -181,7 +181,6 @@ initAcc()
     /* Now find all the GPUs on this NUMA node and put them into an array */
     find_gpus(topology, bridge, NULL, &gpuIndex, gpus);
 
-    ABORT_ON_ERROR(cuInit(0)); // TODO FIXME
     /* Now select the first GPU that we find */
     if (gpus[0] == 0) {
       printf("No GPU found\n");
