@@ -18,7 +18,7 @@
 #include <stdexcept>
 #include <vector>
  
-#ifdef FOR_KOKKOS
+#ifdef WITH_KOKKOS
 #define __COMPILE_FLAG__ KOKKOS_INLINE_FUNCTION
 #else
 #define __COMPILE_FLAG__

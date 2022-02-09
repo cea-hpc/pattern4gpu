@@ -73,7 +73,7 @@ if(WANT_KOKKOS)
   find_package(Kokkos COMPONENTS separable_compilation REQUIRED)
   add_library(libpattern4gpu4kokkos Pattern4GPU4Kokkos.cc)
   kokkos_compilation(TARGET libpattern4gpu4kokkos)
-  target_compile_definitions(libpattern4gpu4kokkos PUBLIC KOKKOS_IMPL_HALF_TYPE_DEFINED)
+  target_compile_definitions(libpattern4gpu4kokkos PUBLIC KOKKOS_IMPL_HALF_TYPE_DEFINED WITH_KOKKOS)
   target_compile_options(libpattern4gpu4kokkos PUBLIC --expt-relaxed-constexpr -g)  # ajouter -G pour le debug
   target_link_libraries(libpattern4gpu4kokkos PUBLIC Kokkos::kokkos arcane_core)
   target_link_libraries(libpattern4gpu PRIVATE libpattern4gpu4kokkos)

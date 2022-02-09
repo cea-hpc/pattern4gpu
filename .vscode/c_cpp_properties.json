@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/letiercef/Arcane/release/include/",
+                "/home/letiercef/kokkos/kokkos-install-pattern4gpu/include/",
+                "/opt/nvidia/hpc_sdk/Linux_x86_64/21.5/cuda/include/"
+            ],
+            "defines": ["WITH_KOKKOS"],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu17",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}

@@ -1,6 +1,14 @@
+#ifdef WITH_KOKKOS
+
 #include "Pattern4GPU4Kokkos.h"
 
-void KokkosWrapper::init(const Arcane::CellGroup& all_cells, const Arcane::NodeGroup& all_nodes, const Arcane::VariableCellByte& is_active_cell, const Arcane::Span<const Arcane::Int16>& node_index_in_cells)
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void KokkosWrapper::init(const Arcane::CellGroup& all_cells,
+                         const Arcane::NodeGroup& all_nodes,
+                         const Arcane::VariableCellByte& is_active_cell,
+                         const Arcane::Span<const Arcane::Int16>& node_index_in_cells)
 {
   Kokkos::initialize();
   
@@ -12,10 +20,14 @@ void KokkosWrapper::init(const Arcane::CellGroup& all_cells, const Arcane::NodeG
   Kokkos::resize(m_is_active_cell, m_nb_cells);
   Kokkos::resize(m_node_index_in_cells, m_nb_nodes*8);
 
-  Kokkos::View<Arcane::Int32*[8], TargetMem>::HostMirror cell_node_id_host = Kokkos::create_mirror_view(m_cell_node_id);
-  Kokkos::View<SentinelArray<Arcane::Int32, 8>*, TargetMem>::HostMirror node_cell_id_host = Kokkos::create_mirror_view(m_node_cell_id);
-  Kokkos::View<Arcane::Int16*, TargetMem>::HostMirror is_active_cell_host = Kokkos::create_mirror_view(m_is_active_cell);
-  Kokkos::View<Arcane::Int16*, TargetMem>::HostMirror node_index_in_cells_host = Kokkos::create_mirror_view(m_node_index_in_cells);
+  Kokkos::View<Arcane::Int32*[8], TargetMem>::HostMirror cell_node_id_host =
+    Kokkos::create_mirror_view(m_cell_node_id);
+  Kokkos::View<SentinelArray<Arcane::Int32, 8>*, TargetMem>::HostMirror node_cell_id_host =
+    Kokkos::create_mirror_view(m_node_cell_id);
+  Kokkos::View<Arcane::Int16*, TargetMem>::HostMirror is_active_cell_host =
+    Kokkos::create_mirror_view(m_is_active_cell);
+  Kokkos::View<Arcane::Int16*, TargetMem>::HostMirror node_index_in_cells_host =
+    Kokkos::create_mirror_view(m_node_index_in_cells);
   
   ENUMERATE_CELL(icell, all_cells) {
     cell_node_id_host(icell->localId(), 0) = icell->node(0).localId();
@@ -30,84 +42,68 @@ void KokkosWrapper::init(const Arcane::CellGroup& all_cells, const Arcane::NodeG
     is_active_cell_host(icell->localId()) = is_active_cell[icell];
   }
   
-  std::ofstream f("KokkosNodeConnectivity.txt");
-  f << "NodeId -> ConnectedCellsIds" << std::endl;
-
   ENUMERATE_NODE(inode, all_nodes) {
-    f << "[" << inode->localId() << "] -> ";
-    
-    node_cell_id_host(inode->localId()) = SentinelArray<Arcane::Int32, 8>(inode->cells().localIds().begin(),
-                                                                          inode->cells().localIds().end());
-    for (auto i : node_cell_id_host(inode->localId()))
-      f << i << ", ";
-    f << std::endl;
+    node_cell_id_host(inode->localId()) =
+      SentinelArray<Arcane::Int32, 8>(inode->cells().localIds().begin(),
+                                      inode->cells().localIds().end());
   }
-  
-  f << "\n ===== Active cells (via m_is_active_cell):=====" << std::endl;
-  for (auto i(0); i < is_active_cell_host.size(); ++i) {
-    f << is_active_cell_host(i) << ", ";
-  }
-  f << std::endl;
-
   
   for (int i(0); i < node_index_in_cells.size(); ++i)
     node_index_in_cells_host(i) = node_index_in_cells[i];
   
-  Kokkos::deep_copy(m_cell_node_id, cell_node_id_host);  // copy host -> dev
-  Kokkos::deep_copy(m_node_cell_id, node_cell_id_host);  // copy host -> dev
-  Kokkos::deep_copy(m_is_active_cell, is_active_cell_host);  // copy host -> dev
-  Kokkos::deep_copy(m_node_index_in_cells, node_index_in_cells_host);  // copy host -> dev
+  Kokkos::deep_copy(m_cell_node_id, cell_node_id_host);  // H2D
+  Kokkos::deep_copy(m_node_cell_id, node_cell_id_host);  // H2D
+  Kokkos::deep_copy(m_is_active_cell, is_active_cell_host);  // H2D
+  Kokkos::deep_copy(m_node_index_in_cells, node_index_in_cells_host);  // H2D
 }
 
-// void KokkosWrapper::initNodeVector(const Arcane::ConstArrayView<Arcane::Real3>& node_coord)
-void KokkosWrapper::initNodeVector(const Arcane::VariableNodeReal3& node_coord, const Arcane::NodeGroup& all_nodes)
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void KokkosWrapper::initNodeVector(const Arcane::VariableNodeReal3& node_coord,
+                                   const Arcane::NodeGroup& all_nodes)
 {
   Kokkos::resize(m_node_vector, m_nb_nodes);
   // Create host mirror of node_vector
-  Kokkos::View<Arcane::Real3*, TargetMem>::HostMirror node_vector_host = Kokkos::create_mirror_view(m_node_vector);
-  
-/*
-  for (Arcane::Integer i(0); i < node_coord.size(); ++i) {
-    const Arcane::Real3& c = node_coord[i];
-    Arcane::Real cos_th = cos(c.x + c.y + c.z); // garantit une valeur dans [-1,+1]
-    Arcane::Real sin_th = Arcane::math::sqrt(1 - cos_th * cos_th); // garantit une valeur dans [0,+1]
-    Arcane::Real phi = (c.x + 1) * (c.y + 1) * (c.z + 1);
-    node_vector_host(i) = Arcane::Real3(sin_th * cos(phi), sin_th * sin(phi), cos_th);
-  }
-*/
+  Kokkos::View<Arcane::Real3*, TargetMem>::HostMirror node_vector_host =
+    Kokkos::create_mirror_view(m_node_vector);
   
   ENUMERATE_NODE(node_i, all_nodes) {
     const Arcane::Real3& c=node_coord[node_i];
-    Arcane::Real cos_th=cos(c.x+c.y+c.z); // garantit une valeur dans [-1,+1]
-    Arcane::Real sin_th=Arcane::math::sqrt(1-cos_th*cos_th); // garantit une valeur dans [0,+1]
+    Arcane::Real cos_th=cos(c.x+c.y+c.z);  // garantit une valeur dans [-1,+1]
+    Arcane::Real sin_th=Arcane::math::sqrt(1-cos_th*cos_th);  // garantit une valeur dans [0,+1]
     Arcane::Real phi=(c.x+1)*(c.y+1)*(c.z+1);
     node_vector_host(node_i->localId())=Arcane::Real3(sin_th*cos(phi), sin_th*sin(phi),cos_th);
   }
 
-  Kokkos::deep_copy(m_node_vector, node_vector_host);  // copy host -> dev
+  Kokkos::deep_copy(m_node_vector, node_vector_host);  // H2D
 }
 
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
 //TODO: essayez de copier la var arcane qui reside deja en device directement, sans hostmirror
-//void KokkosWrapper::initNodeCoordBis(const Arcane::ConstArrayView<Arcane::Real3>& node_coord)
 void KokkosWrapper::initNodeCoordBis(const Arcane::VariableNodeReal3& node_coord, const Arcane::NodeGroup& all_nodes)
 {
   Kokkos::resize(m_node_coord_bis, m_nb_nodes);
-  Kokkos::View<Arcane::Real3*, TargetMem>::HostMirror node_coord_bis_host = Kokkos::create_mirror_view(m_node_coord_bis);
+  Kokkos::View<Arcane::Real3*, TargetMem>::HostMirror node_coord_bis_host =
+    Kokkos::create_mirror_view(m_node_coord_bis);
   
-/*  for (Arcane::Integer i(0); i < node_coord.size(); ++i)
-    node_coord_bis_host(i) = node_coord[i];
-*/
   ENUMERATE_NODE(node_i, all_nodes) {
     node_coord_bis_host(node_i->localId()) = node_coord[node_i];
   }
 
-  Kokkos::deep_copy(m_node_coord_bis, node_coord_bis_host);  // copy host -> dev
+  Kokkos::deep_copy(m_node_coord_bis, node_coord_bis_host);  // H2D
 }
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 
 void KokkosWrapper::initCqs()
 {
   Kokkos::resize(m_cell_cqs, m_nb_cells);
-  Kokkos::View<Arcane::Real3*[8], TargetMem>::HostMirror cell_cqs_host = Kokkos::create_mirror_view(m_cell_cqs);
+  Kokkos::View<Arcane::Real3*[8], TargetMem>::HostMirror cell_cqs_host =
+    Kokkos::create_mirror_view(m_cell_cqs);
 
   for (Arcane::Integer icell(0); icell < m_nb_cells; ++icell) {
     for(Arcane::Integer inode(0) ; inode < 8 ; ++inode) {
@@ -115,27 +111,38 @@ void KokkosWrapper::initCqs()
     }
   }
 
-  Kokkos::deep_copy(m_cell_cqs, cell_cqs_host);  // copy host -> dev
+  Kokkos::deep_copy(m_cell_cqs, cell_cqs_host);  // H2D
 }
 
-void KokkosWrapper::initCellArr12(const Arcane::CellGroup& all_cells, const Arcane::VariableNodeReal3& node_coord)
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void KokkosWrapper::initCellArr12(const Arcane::CellGroup& all_cells,
+                                  const Arcane::VariableNodeReal3& node_coord)
 {
   Kokkos::resize(m_cell_arr1, m_nb_cells);
   Kokkos::resize(m_cell_arr2, m_nb_cells);
   
-  Kokkos::View<Arcane::Real*, TargetMem>::HostMirror cell_arr1_host = Kokkos::create_mirror_view(m_cell_arr1);
-  Kokkos::View<Arcane::Real*, TargetMem>::HostMirror cell_arr2_host = Kokkos::create_mirror_view(m_cell_arr2);
+  Kokkos::View<Arcane::Real*, TargetMem>::HostMirror cell_arr1_host =
+    Kokkos::create_mirror_view(m_cell_arr1);
+  Kokkos::View<Arcane::Real*, TargetMem>::HostMirror cell_arr2_host =
+    Kokkos::create_mirror_view(m_cell_arr2);
 
   ENUMERATE_CELL(icell, all_cells) {
-    const Arcane::Node& first_node=(*icell).node(0);
-    const Arcane::Real3& c=node_coord[first_node];
-    cell_arr1_host[icell->localId()]=1.+Arcane::math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
-    cell_arr2_host[icell->localId()]=2.+Arcane::math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
+    const Arcane::Node& first_node = (*icell).node(0);
+    const Arcane::Real3& c = node_coord[first_node];
+    cell_arr1_host[icell->localId()] =
+      1. + Arcane::math::abs(sin(c.x + 1) * cos(c.y + 1) * sin(c.z + 2));
+    cell_arr2_host[icell->localId()] =
+      2. + Arcane::math::abs(cos(c.x + 2) * sin(c.y + 1) * cos(c.z + 1));
   }
   
-  Kokkos::deep_copy(m_cell_arr1, cell_arr1_host);  // copy host -> dev
-  Kokkos::deep_copy(m_cell_arr2, cell_arr2_host);  // copy host -> dev
+  Kokkos::deep_copy(m_cell_arr1, cell_arr1_host);  // H2D
+  Kokkos::deep_copy(m_cell_arr2, cell_arr2_host);  // H2D
 }
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 
 void KokkosWrapper::computeCqsAndVector()
 {
@@ -164,8 +171,8 @@ void KokkosWrapper::computeCqsAndVector()
     m_node_vector(node_i) = Arcane::Real3(0., 0., 0.);
   });
   
+  // Useless ?
   Kokkos::fence();
-
 
   // /!\ Pas correct en parallèle à cause des accès en écriture qui peuvent être concurrents => data race condition
 
@@ -181,11 +188,15 @@ void KokkosWrapper::computeCqsAndVector()
   });
 }
 
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
 void KokkosWrapper::syncHostData(const Arcane::CellGroup& all_cells, const Arcane::NodeGroup& all_nodes,
                                  Arcane::VariableNodeReal3 node_vector, Arcane::VariableNodeReal3 node_coord_bis,
                                  Arcane::VariableCellArrayReal3 cell_cqs, Arcane::VariableCellReal cell_arr1,
                                  Arcane::VariableCellReal cell_arr2)
 {
+  // Ancienne version, empeche le basculement simple d'execution policy
 /*
   Kokkos::View<Arcane::Real3*, TargetMem>::HostMirror node_vector_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), m_node_vector);
   Kokkos::View<Arcane::Real3*, TargetMem>::HostMirror node_coord_bis_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), m_node_coord_bis);
@@ -194,12 +205,17 @@ void KokkosWrapper::syncHostData(const Arcane::CellGroup& all_cells, const Arcan
   Kokkos::View<Arcane::Real*, TargetMem>::HostMirror cell_arr2_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), m_cell_arr2);
 */
 
-  Kokkos::View<Arcane::Real3*, TargetMem>::HostMirror node_vector_host = Kokkos::create_mirror_view(m_node_vector);
-  Kokkos::View<Arcane::Real3*, TargetMem>::HostMirror node_coord_bis_host = Kokkos::create_mirror_view(m_node_coord_bis);
-  Kokkos::View<Arcane::Real3*[8], TargetMem>::HostMirror cell_cqs_host = Kokkos::create_mirror_view(m_cell_cqs);
-  Kokkos::View<Arcane::Real*, TargetMem>::HostMirror cell_arr1_host = Kokkos::create_mirror_view(m_cell_arr1);
-  Kokkos::View<Arcane::Real*, TargetMem>::HostMirror cell_arr2_host = Kokkos::create_mirror_view(m_cell_arr2);
-  // copy dev -> host
+  Kokkos::View<Arcane::Real3*, TargetMem>::HostMirror node_vector_host =
+    Kokkos::create_mirror_view(m_node_vector);
+  Kokkos::View<Arcane::Real3*, TargetMem>::HostMirror node_coord_bis_host =
+    Kokkos::create_mirror_view(m_node_coord_bis);
+  Kokkos::View<Arcane::Real3*[8], TargetMem>::HostMirror cell_cqs_host =
+    Kokkos::create_mirror_view(m_cell_cqs);
+  Kokkos::View<Arcane::Real*, TargetMem>::HostMirror cell_arr1_host =
+    Kokkos::create_mirror_view(m_cell_arr1);
+  Kokkos::View<Arcane::Real*, TargetMem>::HostMirror cell_arr2_host =
+    Kokkos::create_mirror_view(m_cell_arr2);
+  // copy D2H
   Kokkos::deep_copy(node_vector_host, m_node_vector);
   Kokkos::deep_copy(node_coord_bis_host, m_node_coord_bis);
   Kokkos::deep_copy(cell_cqs_host, m_cell_cqs);
@@ -219,6 +235,8 @@ void KokkosWrapper::syncHostData(const Arcane::CellGroup& all_cells, const Arcan
   }
 }
 
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 
 void KokkosWrapper::computeCqsAndVectorV2()
 {
@@ -244,8 +262,10 @@ void KokkosWrapper::computeCqsAndVectorV2()
     m_cell_cqs(cell_i, 7) = -k025 * Arcane::math::cross(pos[6] - pos[3], pos[4] - pos[3]);
 	});
 
+  // Useless ?
   Kokkos::fence();
 
+// Version pas tout a fait identique que celle arcgpu, du coup, on l'enleve
 /*
   Kokkos::parallel_for(m_nb_nodes, KOKKOS_CLASS_LAMBDA(const size_t& node_i)  // allnodes
   {
@@ -260,14 +280,14 @@ void KokkosWrapper::computeCqsAndVectorV2()
             break;
           }
         }
-        if (node_idx_in_cell >7) {Kokkos::abort("FUCK!");}
-        if (node_idx_in_cell ==-1) {Kokkos::abort("FUCK!");}
+        if (node_idx_in_cell >7) {Kokkos::abort("DAMN");}
+        if (node_idx_in_cell ==-1) {Kokkos::abort("DAMN");}
         m_node_vector(node_i) += (m_cell_arr1(cell_i) + m_cell_arr2(cell_i)) * m_cell_cqs(cell_i, node_idx_in_cell);
       }
     }
   });
 */
-  // Rebelote avec les index in cells truc moche inbitable
+  // Rebelote avec les horreurs de index in cells
   // Kokkos::parallel_for(m_nb_nodes, KOKKOS_CLASS_LAMBDA(const size_t& nid)  // allnodes
   Kokkos::RangePolicy<TargetExec, int> all_nodes_range(0, m_nb_nodes);  // equivalent
   Kokkos::parallel_for(all_nodes_range, KOKKOS_CLASS_LAMBDA(const size_t& nid)  // allnodes
@@ -285,3 +305,8 @@ void KokkosWrapper::computeCqsAndVectorV2()
     m_node_vector(nid) = node_vec;
   });
 }
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+#endif  // WITH_KOKKOS

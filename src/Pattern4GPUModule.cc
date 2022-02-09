@@ -11,7 +11,6 @@
 #include <arcane/IItemFamily.h>
 #include <arcane/utils/ArcaneGlobal.h>
 #include <arcane/utils/StringBuilder.h>
-
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
 #include <arcane/ServiceBuilder.h>
 
@@ -784,7 +783,7 @@ _computeCqsAndVector_Vkokkos() {
   PROF_ACC_END;
 
   // A decommenter pour effectuer les comparaisons numeriques STDENV_VERIF=WRITE / READ
-  m_kokkos_wrapper->syncHostData(allCells(), allNodes(), m_node_vector, m_node_coord_bis, m_cell_cqs, m_cell_arr1, m_cell_arr2);
+  // m_kokkos_wrapper->syncHostData(allCells(), allNodes(), m_node_vector, m_node_coord_bis, m_cell_cqs, m_cell_arr1, m_cell_arr2);
 }
 
 /*---------------------------------------------------------------------------*/
