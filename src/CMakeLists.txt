@@ -2,37 +2,43 @@ set(EXAMPLE_NAME Pattern4GPU)
 project(Pattern4GPU LANGUAGES C CXX)
 include(../samples.common.cmake)
 
-add_executable(Pattern4GPU Pattern4GPUModule.cc
+add_executable(Pattern4GPU main.cc)
+target_link_libraries(Pattern4GPU PUBLIC libpattern4gpu arcane_core)
+
+add_library(libpattern4gpu Pattern4GPUModule.cc
                            Pattern4GPUupdateTensor.cc 
                            Pattern4GPUTestCartesian.cc 
                            Pattern4GPUBenchCartesian.cc 
                            Pattern4GPUCartesian.cc 
                            Pattern4GPUEnvOrder.cc 
                            Pattern4GPUMultiEnv.cc 
-                           main 
                            Pattern4GPU_axl.h)
+target_include_directories(libpattern4gpu PUBLIC . ${CMAKE_CURRENT_BINARY_DIR})
 
 # Module GeomEnv
-add_library(geomenv geomenv/GeomEnvModule.cc)
-target_include_directories(geomenv PUBLIC .)
-target_link_libraries(geomenv PUBLIC arcane_core)
+add_library(libgeomenv geomenv/GeomEnvModule.cc)
+target_include_directories(libgeomenv PUBLIC .)
+target_link_libraries(libgeomenv PUBLIC arcane_core)
 
 # Cartesian
-add_library(cartesian cartesian/CartesianConnectivity.cc
-                      cartesian/CartesianMesh.cc
-                      cartesian/CellDirectionMng.cc
-                      cartesian/FaceDirectionMng.cc
-                      cartesian/NodeDirectionMng.cc
-                      cartesian/CartesianItemSorter.cc)
-target_include_directories(cartesian PUBLIC .)
-target_link_libraries(cartesian PUBLIC arcane_core)
+add_library(libcartesian cartesian/CartesianConnectivity.cc
+                         cartesian/CartesianMesh.cc
+                         cartesian/CellDirectionMng.cc
+                         cartesian/FaceDirectionMng.cc
+                         cartesian/NodeDirectionMng.cc
+                         cartesian/CartesianItemSorter.cc)
+target_include_directories(libcartesian PUBLIC .)
+target_link_libraries(libcartesian PUBLIC arcane_core)
 
 # Services communs pour les accélérateurs
-add_library(accenv accenv/AccEnvDefaultService.cc)
-target_include_directories(accenv PUBLIC .)
-target_link_libraries(accenv PUBLIC arcane_core)
+add_library(libaccenv accenv/AccEnvDefaultService.cc)
+target_include_directories(libaccenv PUBLIC .)
+target_link_libraries(libaccenv PUBLIC arcane_core)
 
-target_link_libraries(Pattern4GPU PRIVATE geomenv cartesian accenv)
+if(WANT_KOKKOS)
+target_compile_options(libpattern4gpu PUBLIC -fopenmp)
+endif()
+target_link_libraries(libpattern4gpu PUBLIC libgeomenv libcartesian libaccenv)
 
 # Pour la gestion des accélérateurs et des sources à compiler avec le
 # compilateur pour accélérateur
@@ -55,25 +61,38 @@ if(WANT_CUDA)
       cartesian/CartesianItemSorter.cc
       accenv/AccEnvDefaultService.cc
       PROPERTIES LANGUAGE CUDA)
-  target_link_libraries(Pattern4GPU PUBLIC arcane_accelerator_cuda_runtime)
-  target_link_libraries(geomenv PUBLIC arcane_accelerator_cuda_runtime)
-  target_link_libraries(cartesian PUBLIC arcane_accelerator_cuda_runtime)
-  target_link_libraries(accenv PUBLIC arcane_accelerator_cuda_runtime)
+  target_link_libraries(libpattern4gpu PUBLIC arcane_accelerator_cuda_runtime)
+  target_link_libraries(libgeomenv PUBLIC arcane_accelerator_cuda_runtime)
+  target_link_libraries(libcartesian PUBLIC arcane_accelerator_cuda_runtime)
+  target_link_libraries(libaccenv PUBLIC arcane_accelerator_cuda_runtime)
 endif()
+
+# Kokkos
+# a regarder pour transformer ca en external project
+if(WANT_KOKKOS)
+  find_package(Kokkos COMPONENTS separable_compilation REQUIRED)
+  add_library(libpattern4gpu4kokkos Pattern4GPU4Kokkos.cc)
+  kokkos_compilation(TARGET libpattern4gpu4kokkos)
+  target_compile_definitions(libpattern4gpu4kokkos PUBLIC KOKKOS_IMPL_HALF_TYPE_DEFINED)
+  target_compile_options(libpattern4gpu4kokkos PUBLIC --expt-relaxed-constexpr -g)  # ajouter -G pour le debug
+  target_link_libraries(libpattern4gpu4kokkos PUBLIC Kokkos::kokkos arcane_core)
+  target_link_libraries(libpattern4gpu PRIVATE libpattern4gpu4kokkos)
+endif()
+
 
 # Pour la gestion du profiling sur accélérateur
 option(WANT_PROF_ACC "Active le profiling des points d'entrées pour accélérateur" FALSE)
 if (WANT_PROF_ACC)
-  target_compile_definitions(Pattern4GPU PRIVATE PROF_ACC)
-  target_compile_definitions(geomenv PRIVATE PROF_ACC)
-  target_compile_definitions(cartesian PRIVATE PROF_ACC)
-  target_compile_definitions(accenv PRIVATE PROF_ACC)
+  target_compile_definitions(libpattern4gpu PRIVATE PROF_ACC)
+  target_compile_definitions(libgeomenv PRIVATE PROF_ACC)
+  target_compile_definitions(libcartesian PRIVATE PROF_ACC)
+  target_compile_definitions(libaccenv PRIVATE PROF_ACC)
 endif()
 
 # Les axl
 arcane_generate_axl(Pattern4GPU)
-arcane_target_add_axl(geomenv geomenv/GeomEnv)
-arcane_target_add_axl(accenv accenv/AccEnvDefault)
+arcane_target_add_axl(libgeomenv geomenv/GeomEnv)
+arcane_target_add_axl(libaccenv accenv/AccEnvDefault)
 
 configure_file(Pattern4GPU.config ${CMAKE_CURRENT_BINARY_DIR} @ONLY)
 #configure_file(${EXAMPLE_NAME}.arc ${CMAKE_CURRENT_BINARY_DIR} @ONLY)
