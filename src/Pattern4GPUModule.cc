@@ -11,9 +11,10 @@
 #include <arcane/IItemFamily.h>
 #include <arcane/utils/ArcaneGlobal.h>
 #include <arcane/utils/StringBuilder.h>
-
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
 #include <arcane/ServiceBuilder.h>
+
+#include "Pattern4GPU4Kokkos.h"
 
 using namespace Arcane;
 using namespace Arcane::Materials;
@@ -30,13 +31,18 @@ Pattern4GPUModule(const ModuleBuildInfo& mbi)
         m_mesh_material_mng, "Compxy", IVariable::PTemporary | IVariable::PExecutionDepend)),
   m_compyy(MaterialVariableBuildInfo(
         m_mesh_material_mng, "Compyy", IVariable::PTemporary | IVariable::PExecutionDepend)),
-  m_tmp1(VariableBuildInfo(mesh(), "Tmp1", IVariable::PTemporary | IVariable::PExecutionDepend))
+  m_tmp1(VariableBuildInfo(mesh(), "Tmp1", IVariable::PTemporary | IVariable::PExecutionDepend)),
+  m_kokkos_wrapper(nullptr)
 {
 }
 
 Pattern4GPUModule::
 ~Pattern4GPUModule() {
   delete m_allenvcell_converter;
+  if (m_kokkos_wrapper) {
+    delete m_kokkos_wrapper;
+    KokkosWrapper::end();
+  }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -57,6 +63,17 @@ accBuild()
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
+initKokkosWrapper()
+{
+  // Tout est déporté dans le wrapper pour s'assurer de la séparation de l'environnement Kokkos et de l'environnement Arcane
+  m_kokkos_wrapper = new KokkosWrapper();
+  m_kokkos_wrapper->init(allCells(), allNodes(), m_is_active_cell, m_acc_env->nodeIndexInCells());
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
 initP4GPU()
 {
   PROF_ACC_BEGIN(__FUNCTION__);
@@ -71,6 +88,10 @@ initP4GPU()
 
   // Pour accélérateur
   m_acc_env->initMesh(mesh());
+
+  // init kokkos
+  if (options()->getWithKokkos())
+    initKokkosWrapper();
 
   PROF_ACC_END;
 }
@@ -229,6 +250,10 @@ initNodeVector()
       out_node_vector[nid]=Real3(sin_th*cos(phi), sin_th*sin(phi),cos_th);
     };
   }
+  else if (options()->getInitNodeVectorVersion() == INVV_kokkos)
+  {
+    m_kokkos_wrapper->initNodeVector(node_coord, allNodes());
+  }
 
   PROF_ACC_END;
 }
@@ -261,6 +286,10 @@ initNodeCoordBis()
     command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()) {
       out_node_coord_bis[nid]=in_node_coord[nid];
     };
+  }
+  else if (options()->getInitNodeCoordBisVersion() == INCBV_kokkos)
+  {
+    m_kokkos_wrapper->initNodeCoordBis(node_coord, allNodes());
   }
 
   PROF_ACC_END;
@@ -304,6 +333,11 @@ initCellArr12()
       out_cell_arr2[cid]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
     };
   }
+  else if (options()->getInitCellArr12Version() == IA12V_kokkos)
+  {
+    m_kokkos_wrapper->initCellArr12(allCells(), defaultMesh()->nodesCoordinates());
+  }
+
   PROF_ACC_END;
 }
 
@@ -341,6 +375,10 @@ initCqs()
         out_cell_cqs[cid][inode] = Real3::zero();
       }
     };
+  }
+  else if (options()->getInitCqsVersion() == ICQV_kokkos)
+  {
+    m_kokkos_wrapper->initCqs();
   }
 
   PROF_ACC_END;
@@ -732,6 +770,23 @@ _computeCqsAndVector_Varcgpu_v1() {
 }
 
 /*---------------------------------------------------------------------------*/
+/* Implémentation Kokkos                                                     */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+_computeCqsAndVector_Vkokkos() {
+
+  PROF_ACC_BEGIN(__FUNCTION__);
+  debug() << "Dans _computeCqsAndVector_Vkokkos";
+
+  m_kokkos_wrapper->computeCqsAndVectorV2();
+
+  PROF_ACC_END;
+
+  // A decommenter pour effectuer les comparaisons numeriques STDENV_VERIF=WRITE / READ
+  // m_kokkos_wrapper->syncHostData(allCells(), allNodes(), m_node_vector, m_node_coord_bis, m_cell_cqs, m_cell_arr1, m_cell_arr2);
+}
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
@@ -744,6 +799,8 @@ computeCqsAndVector() {
     case CCVV_mt: _computeCqsAndVector_Vmt(); break;
     case CCVV_mt_v2: _computeCqsAndVector_Vmt_v2(); break;
     case CCVV_arcgpu_v1: _computeCqsAndVector_Varcgpu_v1(); break;
+    case CCVV_kokkos: _computeCqsAndVector_Vkokkos(); break;
+    default: break;
   };
 
   PROF_ACC_END;

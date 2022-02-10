@@ -13,21 +13,24 @@ enum eInitTensorVersion {
 enum eInitNodeVectorVersion {
   INVV_ori = 0, //! Version CPU d'origine
   INVV_mt, //! Version CPU multi-thread
-  INVV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+  INVV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
+  INVV_kokkos  //! Implémentation Kokkos
 };
 
 /*! \brief Définit les implémentations de InitNodeCoordBis
  */
 enum eInitNodeCoordBisVersion {
   INCBV_ori = 0, //! Version CPU d'origine
-  INCBV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+  INCBV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
+  INCBV_kokkos //! Implémentation Kokkos
 };
 
 /*! \brief Définit les implémentations de InitCqs
  */
 enum eInitCqsVersion {
   ICQV_ori = 0, //! Version CPU d'origine
-  ICQV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+  ICQV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
+  ICQV_kokkos //! Implémentation Kokkos
 };
 
 /*! \brief Définit les implémentations de InitCqs1
@@ -41,7 +44,8 @@ enum eInitCqs1Version {
  */
 enum eInitCellArr12Version {
   IA12V_ori = 0, //! Version CPU d'origine
-  IA12V_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+  IA12V_arcgpu_v1, //! Implémentation API GPU Arcane version 1
+  IA12V_kokkos //! Implémentation Kokkos
 };
 
 /*! \brief Définit les implémentations de UpdateVectorFromTensor
@@ -69,7 +73,8 @@ enum eComputeCqsVectorVersion {
   CCVV_ori = 0, //! Version CPU d'origine
   CCVV_mt, //! Implémentation CPU Arcane multi-thread
   CCVV_mt_v2, //! Implémentation CPU Arcane multi-thread version 2
-  CCVV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+  CCVV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
+  CCVV_kokkos //! Implémentation Kokkos
 };
 
 /*! \brief Définit les implémentations de InitMEnvVar

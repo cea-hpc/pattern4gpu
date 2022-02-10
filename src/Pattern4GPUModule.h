@@ -18,6 +18,8 @@
 
 #include "Pattern4GPU_axl.h"
 
+#include "Pattern4GPU4Kokkos.h"
+
 using namespace Arcane;
 using namespace Arcane::Materials;
 
@@ -56,6 +58,7 @@ class Pattern4GPUModule
   void initMEnv() override; // InitMEnv
   void initMEnvVar() override; // InitMEnvVar
 
+  void initKokkosWrapper();
 
   //! points d'entrée "compute-loop"
   void updateTensor() override; // UpdateTensor
@@ -81,6 +84,7 @@ class Pattern4GPUModule
   void _computeCqsAndVector_Vmt();
   void _computeCqsAndVector_Vmt_v2();
   void _computeCqsAndVector_Varcgpu_v1();
+  void _computeCqsAndVector_Vkokkos();
 
   void _testCell2Cell();
   void _testNode2Node();
@@ -137,6 +141,9 @@ class Pattern4GPUModule
 
   // Pour l'utilisation des accélérateurs
   IAccEnv* m_acc_env=nullptr;
+
+  // Encapsulation pour Kokkos
+  KokkosWrapper* m_kokkos_wrapper;
 };
 
 #endif
