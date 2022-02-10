@@ -335,6 +335,7 @@
     <enumvalue name="bulksync_std"    genvalue="CCAV_VS_bulksync_std" />
     <enumvalue name="bulksync_queue"  genvalue="CCAV_VS_bulksync_queue" />
     <enumvalue name="overlap_evqueue" genvalue="CCAV_VS_overlap_evqueue" />
+    <enumvalue name="overlap_evqueue_d" genvalue="CCAV_VS_overlap_evqueue_d" />
     <enumvalue name="overlap_iqueue"  genvalue="CCAV_VS_overlap_iqueue" />
   </enumeration>
 

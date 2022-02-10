@@ -972,7 +972,8 @@ _computeCqsAndVector_Varcgpu_v1() {
     PROF_ACC_END;
 
   } 
-  else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue) 
+  else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue ||
+      options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue_d) 
   {
     auto vsync = m_acc_env->vsyncMng();
     SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
@@ -990,7 +991,10 @@ _computeCqsAndVector_Varcgpu_v1() {
     // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
     // la queue ref_queue_bnd
 //    vsync->globalSynchronizeQueue(ref_queue_bnd, m_node_vector);
-    vsync->globalSynchronizeQueueEvent(ref_queue_bnd, m_node_vector);
+    if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue)
+      vsync->globalSynchronizeQueueEvent(ref_queue_bnd, m_node_vector);
+    else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue_d)
+      vsync->globalSynchronizeQueueEventD(ref_queue_bnd, m_node_vector);
     // ici, après cet appel, ref_queue_bnd est synchronisée
 
     // On attend la terminaison des calculs intérieurs

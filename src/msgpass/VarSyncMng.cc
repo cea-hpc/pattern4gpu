@@ -5,12 +5,17 @@
 #include <arcane/IItemFamily.h>
 #include <arcane/IParallelMng.h>
 
+// Définie ailleurs
+bool is_comm_device_aware();
+
 /*---------------------------------------------------------------------------*/
 /* Gère les synchronisations des mailles fantômes par Message Passing        */
 /*---------------------------------------------------------------------------*/
 VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_adv) :
   m_runner (runner)
 {
+  m_is_device_aware = is_comm_device_aware();
+
   IItemFamily* cell_family = mesh->cellFamily();
   IVariableSynchronizer* var_sync = cell_family->allItemsSynchronizer();
 
@@ -62,6 +67,13 @@ VarSyncMng::~VarSyncMng() {
 /*---------------------------------------------------------------------------*/
 bool VarSyncMng::isAcceleratorAvailable() const {
   return AcceleratorUtils::isAvailable(m_runner);
+}
+
+/*---------------------------------------------------------------------------*/
+/* Retourne vrai si on peut utiliser les adresses dans DEVICE pour les comms */
+/*---------------------------------------------------------------------------*/
+bool VarSyncMng::isDeviceAware() const {
+  return m_is_device_aware;
 }
 
 /*---------------------------------------------------------------------------*/

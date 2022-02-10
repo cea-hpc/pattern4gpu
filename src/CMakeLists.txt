@@ -2,12 +2,6 @@ set(EXAMPLE_NAME Pattern4GPU)
 project(Pattern4GPU LANGUAGES C CXX)
 include(../samples.common.cmake)
 
-# Pour MPI
-find_package(MPI REQUIRED)
-add_definitions(-DOMPI_SKIP_MPICXX)
-include_directories(SYSTEM ${MPI_INCLUDE_PATH})
-# fin MPI
-
 add_executable(Pattern4GPU main.cc)
 target_link_libraries(Pattern4GPU PUBLIC libpattern4gpu arcane_core)
 
@@ -57,14 +51,29 @@ add_library(libmsgpass msgpass/VarSyncMng.cc
                        msgpass/GlobalSynchronize.cc
                        msgpass/GlobalSynchronizeQueue.cc
                        msgpass/GlobalSynchronizeQueueEvent.cc
+                       msgpass/GlobalSynchronizeQueueEventD.cc
                        msgpass/GlobalSynchronizeDevThr.cc
                        msgpass/GlobalSynchronizeDevQueues.cc
                        msgpass/IncompleteGlobalSynchronizeQueue.cc
+                       msgpass/IsCommDeviceAware.cc
+                       msgpass/MsgPassInit.cc
                        msgpass/PackTransfer.cc
                        msgpass/SyncItems.cc
                        msgpass/SyncBuffers.cc)
 target_include_directories(libmsgpass PUBLIC .)
 target_link_libraries(libmsgpass PUBLIC arcane_core)
+# Pour MPI
+find_package(MPI)
+if(MPI_FOUND)
+  target_compile_definitions(libmsgpass PRIVATE OMPI_SKIP_MPICXX)
+  target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI)
+  target_include_directories(libmsgpass PRIVATE "${MPI_INCLUDE_PATH}")
+  find_path(P4GPU_MPI_EXT NAMES "mpi-ext.h" PATHS "${MPI_C_HEADER_DIR}")
+  if(P4GPU_MPI_EXT)
+    target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI_EXT)
+  endif()
+endif()
+# fin MPI
 
 if(WANT_KOKKOS)
 target_compile_options(libpattern4gpu PUBLIC -fopenmp)
@@ -97,9 +106,12 @@ if(WANT_CUDA)
       msgpass/GlobalSynchronize.cc
       msgpass/GlobalSynchronizeQueue.cc
       msgpass/GlobalSynchronizeQueueEvent.cc
+      msgpass/GlobalSynchronizeQueueEventD.cc
       msgpass/GlobalSynchronizeDevThr.cc
       msgpass/GlobalSynchronizeDevQueues.cc
       msgpass/IncompleteGlobalSynchronizeQueue.cc
+      msgpass/IsCommDeviceAware.cc
+      msgpass/MsgPassInit.cc
       msgpass/PackTransfer.cc
       msgpass/SyncItems.cc
       msgpass/SyncBuffers.cc

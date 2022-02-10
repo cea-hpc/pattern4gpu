@@ -61,6 +61,9 @@ class VarSyncMng {
   //! Retourne vrai si un GPU est dispo pour exécuter les calculs
   bool isAcceleratorAvailable() const;
 
+  //! Retourne vrai si on peut utiliser les adresses dans DEVICE pour les comms
+  bool isDeviceAware() const;
+
   // Retourne l'instance de SyncItems<T> en fonction de T
   template<typename ItemType>
   SyncItems<ItemType>* getSyncItems();
@@ -86,6 +89,10 @@ class VarSyncMng {
   template<typename MeshVariableRefT>
   void globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariableRefT var);
 
+  // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice et les comms se font avec les adresses du DEVICE
+  template<typename MeshVariableRefT>
+  void globalSynchronizeQueueEventD(Ref<RunQueue> ref_queue, MeshVariableRefT var);
+
   // Amorce un globalSynchronizeQueue
   template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
   Ref<GlobalSyncRequest<ItemType, DataType, MeshVarRefT> > iGlobalSynchronizeQueue(Ref<RunQueue> ref_queue, MeshVarRefT<ItemType, DataType> var);
@@ -98,6 +105,8 @@ class VarSyncMng {
  protected:
 
   ax::Runner& m_runner;
+
+  bool m_is_device_aware=false; //! Vrai si l'on peut effectuer les comms avec adresses sur GPU
 
   IParallelMng* m_pm;  //! pour effectuer les send/receive proprement dit
 
