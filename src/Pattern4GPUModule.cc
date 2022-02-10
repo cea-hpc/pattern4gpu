@@ -735,14 +735,15 @@ using namespace Arcane;
 class Real3_View8
 {
  public:
-  Real3_View8(NumArray<Real3,2>& v) : m_ptr(v.to1DSpan().data()){}
+  Real3_View8(NumArray<Real3,2>& v) : m_ptr(v.to1DSpan().data()), nb_cell(v.dim2Size()) {}
  public:
   ARCCORE_HOST_DEVICE Real3& operator()(int node_index,int cell_index) const
   {
-    return m_ptr[node_index*8+cell_index];
+    return m_ptr[node_index*nb_cell + cell_index];
   }
  private:
   Real3* m_ptr;
+  Int32 nb_cell;
 };
 
 /*---------------------------------------------------------------------------*/
@@ -1001,10 +1002,10 @@ void Pattern4GPUModule::
 computeCqsAndVector()
 {
   if (is_first){
-    info() << "DO V5";
+    info() << "DO V5 good";
     is_first = false;
   }
-  bool use_device = true;
+  bool use_device = false;
   if (!m_numarray_cqs){
     if (use_device){
       auto v = new NumArray<MyReal3Pod,2>(eMemoryRessource::Device);
