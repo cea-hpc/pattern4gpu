@@ -262,31 +262,10 @@ void KokkosWrapper::computeCqsAndVectorV2()
     m_cell_cqs(cell_i, 7) = -k025 * Arcane::math::cross(pos[6] - pos[3], pos[4] - pos[3]);
 	});
 
-  // Useless ?
+  // Useless ? Pas sûr, si je l'enlève, les stats d'execution diffèrent
+  // (mais le temps global reste quasiment identique)
   Kokkos::fence();
 
-// Version pas tout a fait identique que celle arcgpu, du coup, on l'enleve
-/*
-  Kokkos::parallel_for(m_nb_nodes, KOKKOS_CLASS_LAMBDA(const size_t& node_i)  // allnodes
-  {
-    m_node_vector(node_i) = Arcane::Real3(0., 0., 0.);
-    
-    for (auto cell_i : m_node_cell_id(node_i)) {
-      if (m_is_active_cell(cell_i)) {
-        int node_idx_in_cell(-1);
-        for (int ii = 0; ii < 8; ++ii) {
-          if (m_cell_node_id(cell_i, ii) == node_i) {
-            node_idx_in_cell = ii;
-            break;
-          }
-        }
-        if (node_idx_in_cell >7) {Kokkos::abort("DAMN");}
-        if (node_idx_in_cell ==-1) {Kokkos::abort("DAMN");}
-        m_node_vector(node_i) += (m_cell_arr1(cell_i) + m_cell_arr2(cell_i)) * m_cell_cqs(cell_i, node_idx_in_cell);
-      }
-    }
-  });
-*/
   // Rebelote avec les horreurs de index in cells
   // Kokkos::parallel_for(m_nb_nodes, KOKKOS_CLASS_LAMBDA(const size_t& nid)  // allnodes
   Kokkos::RangePolicy<TargetExec, int> all_nodes_range(0, m_nb_nodes);  // equivalent
@@ -304,6 +283,31 @@ void KokkosWrapper::computeCqsAndVectorV2()
     }
     m_node_vector(nid) = node_vec;
   });
+
+/*
+// Version moins optimale car il y a une boucle de recherche d'idx des noeuds
+// c'est presque 30% plus lent que de stocker la table d'idx des noeuds
+  Kokkos::RangePolicy<TargetExec, int> all_nodes_range(0, m_nb_nodes);  // equivalent
+  Kokkos::parallel_for(all_nodes_range, KOKKOS_CLASS_LAMBDA(const size_t& node_i)  // allnodes
+  {
+    m_node_vector(node_i) = Arcane::Real3(0., 0., 0.);
+    
+    for (auto cell_i : m_node_cell_id(node_i)) {
+      if (m_is_active_cell(cell_i)) {
+        int node_idx_in_cell(-1);
+        for (int ii = 0; ii < 8; ++ii) {
+          if (m_cell_node_id(cell_i, ii) == node_i) {
+            node_idx_in_cell = ii;
+            break;
+          }
+        }
+        // if (node_idx_in_cell >7) {Kokkos::abort("DAMN");}
+        // if (node_idx_in_cell ==-1) {Kokkos::abort("DAMN");}
+        m_node_vector(node_i) += (m_cell_arr1(cell_i) + m_cell_arr2(cell_i)) * m_cell_cqs(cell_i, node_idx_in_cell);
+      }
+    }
+  });
+*/
 }
 
 /*---------------------------------------------------------------------------*/

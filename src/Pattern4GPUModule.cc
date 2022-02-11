@@ -376,6 +376,11 @@ initCqs()
       }
     };
   }
+  else if (options()->getInitCqsVersion() == ICQV_arcgpu_v5)
+  {
+      m_numarray_cqs = new NumArray<Real3,2>();
+      m_numarray_cqs->resize(8,allCells().size());
+  }
   else if (options()->getInitCqsVersion() == ICQV_kokkos)
   {
     m_kokkos_wrapper->initCqs();
@@ -770,6 +775,89 @@ _computeCqsAndVector_Varcgpu_v1() {
 }
 
 /*---------------------------------------------------------------------------*/
+/* Implémentation API GPU Arcane version 5 par GG                            */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+_computeCqsAndVector_Varcgpu_v5()
+{
+  constexpr Arcane::Real k025 = 0.25;
+
+  auto queue = m_acc_env->newQueue();
+  const Integer nb_cell = allCells().size();
+  const Integer nb_node = allNodes().size();
+  {
+    auto command = makeCommand(queue);
+
+    auto in_node_coord_bis = viewIn(command,m_node_coord_bis);
+    //auto out_cell_cqs = viewInOut(command,m_numarray_cqs);
+    auto out_cell_cqs = Real3_View8(*m_numarray_cqs);
+
+    auto cnc = m_acc_env->connectivityView().cellNode();
+
+    command << RUNCOMMAND_LOOP1(iter,nb_cell){
+      auto [cell_i] = iter();
+      CellLocalId cid{(Int32)cell_i};//Int32 cell_i = cid.localId();
+      std::array<Real3,8> pos;
+      auto nodes = cnc.nodes(cid);
+      for( Integer index = 0; index<8; ++index ){
+        pos[index] = in_node_coord_bis[nodes[index]];
+      }
+
+      out_cell_cqs(0, cell_i) = -k025 * Arcane::math::cross(pos[4] - pos[3], pos[1] - pos[3]);
+      out_cell_cqs(1, cell_i) = -k025 * Arcane::math::cross(pos[0] - pos[2], pos[5] - pos[2]);
+      out_cell_cqs(2, cell_i) = -k025 * Arcane::math::cross(pos[1] - pos[3], pos[6] - pos[3]);
+      out_cell_cqs(3, cell_i) = -k025 * Arcane::math::cross(pos[7] - pos[2], pos[0] - pos[2]);
+      out_cell_cqs(4, cell_i) = -k025 * Arcane::math::cross(pos[5] - pos[7], pos[0] - pos[7]);
+      out_cell_cqs(5, cell_i) = -k025 * Arcane::math::cross(pos[1] - pos[6], pos[4] - pos[6]);
+      out_cell_cqs(6, cell_i) = -k025 * Arcane::math::cross(pos[5] - pos[2], pos[7] - pos[2]);
+      out_cell_cqs(7, cell_i) = -k025 * Arcane::math::cross(pos[6] - pos[3], pos[4] - pos[3]);
+    };
+  }
+  {
+    // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
+    // Du coup, on boucle sur les Node
+    // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
+    // Mais ici, on a pré-construit un tableau global au mailles qui indique si une maille fait partie
+    // du groupe active_cells ou pas (m_is_active_cell)
+    // Rem : en décomp. de dom., pour la plupart des sous-dom. on aura : active_cells = allCells
+    // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
+    //   1- on initialise le vecteur à 0
+    //   2- on calcule les constributions des mailles connectées au noeud uniquement si elles sont actives
+    auto command = makeCommand(queue);
+
+    auto in_cell_arr1 = viewIn(command, m_cell_arr1);
+    auto in_cell_arr2 = viewIn(command, m_cell_arr2);
+    //auto in_cell_cqs  = viewIn(command, m_numarray_cqs);
+    auto in_cell_cqs = Real3_View8(*m_numarray_cqs);
+    auto in_is_active_cell = viewIn(command, m_is_active_cell);
+
+    auto out_node_vector = ax::viewOut(command, m_node_vector);
+
+    auto node_index_in_cells = m_acc_env->nodeIndexInCells();
+    const Integer max_node_cell = m_acc_env->maxNodeCell();
+
+    auto nc_cty = m_acc_env->connectivityView().nodeCell();
+
+    command << RUNCOMMAND_LOOP1(iter,nb_node){
+      auto [node_i] = iter();
+      NodeLocalId nid{(Int32)node_i};
+      Int32 first_pos = node_i * 8;
+      Real3 node_vec;
+      auto cells = nc_cty.cells(nid);
+      for( Integer index = 0; index<8; ++index ){
+        Int32 cid_as_int = cells[index];
+        CellLocalId cid { cid_as_int };
+        if (in_is_active_cell[cid]) { // la maille ne contribue que si elle est active
+          Int16 node_index = node_index_in_cells[first_pos + index];
+          node_vec += (in_cell_arr1[cid]+in_cell_arr2[cid]) * in_cell_cqs(node_index,cid_as_int);
+        }
+      }
+      out_node_vector[nid] = node_vec;
+    };
+  }
+}
+
+/*---------------------------------------------------------------------------*/
 /* Implémentation Kokkos                                                     */
 /*---------------------------------------------------------------------------*/
 void Pattern4GPUModule::
@@ -799,6 +887,7 @@ computeCqsAndVector() {
     case CCVV_mt: _computeCqsAndVector_Vmt(); break;
     case CCVV_mt_v2: _computeCqsAndVector_Vmt_v2(); break;
     case CCVV_arcgpu_v1: _computeCqsAndVector_Varcgpu_v1(); break;
+    case CCVV_arcgpu_v5: _computeCqsAndVector_Varcgpu_v5(); break;
     case CCVV_kokkos: _computeCqsAndVector_Vkokkos(); break;
     default: break;
   };

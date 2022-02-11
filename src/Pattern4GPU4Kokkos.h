@@ -94,7 +94,7 @@ struct KokkosWrapper {
 /*---------------------------------------------------------------------------*/
 
 #else
-// Empty placeholder to build Pattern4GPUModule
+// Empty placeholder to build Pattern4GPUModule without Kokkos
 struct KokkosWrapper {
   void init(const Arcane::CellGroup& all_cells, const Arcane::NodeGroup& all_nodes,
             const Arcane::VariableCellByte& is_active_cell,
