@@ -452,9 +452,10 @@ _computeCqsAndVector_Varcgpu_v5()
       auto [node_i] = iter();
       NodeLocalId nid{(Int32)node_i};
       Int32 first_pos = node_i * 8;
-      Real3 node_vec;
+      Real3 node_vec = Real3::zero();
       auto cells = nc_cty.cells(nid);
-      for( Integer index = 0; index<8; ++index ){
+      Integer ncells = cells.size();
+      for( Integer index = 0; index<ncells; ++index ){
         Int32 cid_as_int = cells[index];
         CellLocalId cid { cid_as_int };
         if (in_is_active_cell[cid]) { // la maille ne contribue que si elle est active
