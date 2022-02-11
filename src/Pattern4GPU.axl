@@ -316,6 +316,7 @@
     <enumvalue name="mt" genvalue="CCVV_mt" />
     <enumvalue name="mt_v2" genvalue="CCVV_mt_v2" />
     <enumvalue name="arcgpu_v1" genvalue="CCVV_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2" genvalue="CCVV_arcgpu_v2" />
     <enumvalue name="arcgpu_v5" genvalue="CCVV_arcgpu_v5" />
     <enumvalue name="kokkos" genvalue="CCVV_kokkos" />
   </enumeration>

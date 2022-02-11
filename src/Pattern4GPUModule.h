@@ -90,8 +90,10 @@ class Pattern4GPUModule
   void _computeCqsAndVector_Vmt();
   void _computeCqsAndVector_Vmt_v2();
   void _computeCqsAndVector_Varcgpu_v1();
+  void _computeCqsAndVector_Varcgpu_v2();  // Arcane GPU optimisé par GG
   void _computeCqsAndVector_Varcgpu_v5();  // Arcane GPU optimisé par GG
   void _computeCqsAndVector_Vkokkos();
+  void _dumpNumArrayCqs();
 
   void _testCell2Cell();
   void _testNode2Node();
