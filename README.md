@@ -59,3 +59,23 @@ nsys profile --stats=true --force-overwrite true -o p4gpu /chemin/vers/build/src
 nvprof --print-api-trace --print-gpu-trace --normalized-time-unit col --log-file p4gpu.lognvprof /chemin/vers/build/src/Pattern4GPU -A,AcceleratorRuntime=cuda Test.arc
 ```
 
+### Exécution avec plusieurs accélérateurs (via ccc_mprun)
+Veillez à ce que le code n'impose pas son affinité (dans fichier `.arc`) :
+```
+  <!-- Configuration du service AccEnvDefault -->
+  <acc-env-default>
+    <device-affinity>none</device-affinity>
+  </acc-env-default>
+
+```
+Le wrapper `wrapper_mgpu.bash` ne fonctionne que dans la condition suivante : autant de processus MPI que de GPUs pour un noeud.
+```
+ccc_mprun -p<partition> -N<nNodes> -n<nNodes*nGPUs1Node> -c<nCpus1GPU> /chemin/vers/sources/bin/wrapper_mgpu.bash /chemin/vers/build/src/Pattern4GPU -A,AcceleratorRuntime=cuda Test.arc
+```
+Avec :
+- `<nNodes>` : nombre total de noeuds à utiliser ;
+- `<nGPUs1Node>` : nombre de GPUs pour 1 noeud ;
+- `<nCpus1GPU>` : nombre de CPUs pour 1 GPU = nombre total de coeurs d'un noeud / `<nGPUs1Node>`.
+
+TODO : installer `wrapper_mgpu.bash` dans `/chemin/vers/build/bin` via cmake
+
