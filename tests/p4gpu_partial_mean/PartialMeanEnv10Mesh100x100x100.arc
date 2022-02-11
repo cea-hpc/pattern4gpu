@@ -27,9 +27,15 @@
     <nested-ndiams>9</nested-ndiams>
   </geom-env>
 
+  <!-- Configuration du service AccEnvDefault -->
+  <acc-env-default>
+    <acc-mem-advise>true</acc-mem-advise>
+    <device-affinity>cu_node_rank</device-affinity>
+    <!-- <heterog-partition>none</heterog-partition> -->
+  </acc-env-default>
+
   <!-- Configuration du module Pattern4GPU -->
   <pattern4-g-p-u>
-    <acc-mem-advise>true</acc-mem-advise>
 
     <visu-m-env-var>false</visu-m-env-var>
     <!-- <init-menv-var-version>ori</init-menv-var-version> -->

@@ -208,6 +208,10 @@
   <entry-point method-name="initEnvOrder" name="InitEnvOrder" where="start-init" property="none" />
   <entry-point method-name="initMEnv" name="InitMEnv" where="start-init" property="none" />
   <entry-point method-name="initMEnvVar" name="InitMEnvVar" where="start-init" property="none" />
+  
+  <entry-point method-name="syncNodeVector" name="SyncNodeVector" where="start-init" property="none" />
+  <entry-point method-name="burnConnectivity" name="BurnConnectivity" where="start-init" property="none" />
+  <entry-point method-name="burnIsActiveCell" name="BurnIsActiveCell" where="start-init" property="none" />
 
   <entry-point method-name="updateTensor" name="UpdateTensor" where="compute-loop" property="none" />
   <entry-point method-name="updateVectorFromTensor" name="UpdateVectorFromTensor" where="compute-loop" property="none" />
@@ -223,9 +227,6 @@
 </entry-points>
 
 <options>
-  <!-- - - - - - acc-mem-advise - - - - -->
-  <simple name="acc-mem-advise" type="bool" default="true"><description>Active/désactive tous les conseils mémoire (ie tous les appels à cudaMemAdvise).</description></simple>
-
   <!-- - - - - - kokkos test - - - - -->
   <simple name="with-kokkos" type="bool" default="false"><description>Active/désactive l'exécution des kernels GPU via Kokkos.</description></simple>
 
@@ -280,6 +281,15 @@
     <enumvalue name="kokkos" genvalue="IA12V_kokkos" />
   </enumeration>
 
+  <!-- - - - - ica12-sync-version - - - - -->
+  <enumeration name="ica12-sync-version" type="eIca12SyncVersion" default="overlap1">
+    <description>Choix version implémentation de la synchronisation de cell_arr1 et cell_arr2 dans InitCellArr12 </description>
+    <enumvalue name="nosync" genvalue="ICA12_SV_nosync" />
+    <enumvalue name="bulksync_std" genvalue="ICA12_SV_bulksync_std" />
+    <enumvalue name="bulksync_sync" genvalue="ICA12_SV_bulksync_sync" />
+    <enumvalue name="overlap1" genvalue="ICA12_SV_overlap1" />
+  </enumeration>
+
   <!-- - - - - update-vector-from-tensor-version - - - - -->
   <enumeration name="update-vector-from-tensor-version" type="eUpdateVectorFromTensorVersion" default="ori">
     <description>Choix version implémentation UpdateVectorFromTensor </description>
@@ -308,6 +318,25 @@
     <enumvalue name="arcgpu_v1" genvalue="CCVV_arcgpu_v1" />
     <enumvalue name="arcgpu_v5" genvalue="CCVV_arcgpu_v5" />
     <enumvalue name="kokkos" genvalue="CCVV_kokkos" />
+  </enumeration>
+
+  <!-- - - - - ccav-cqs-sync-version - - - - -->
+  <enumeration name="ccav-cqs-sync-version" type="eCcavCqsSyncVersion" default="nosync">
+    <description>Choix version implémentation synchronisation de cell_cqs dans ComputeCqsAndVector </description>
+    <enumvalue name="nosync"          genvalue="CCAV_CS_nosync" />
+    <enumvalue name="bulksync_std"    genvalue="CCAV_CS_bulksync_std" />
+    <enumvalue name="bulksync_sync"   genvalue="CCAV_CS_bulksync_sync" />
+  </enumeration>
+
+  <!-- - - - - ccav-vector-sync-version - - - - -->
+  <enumeration name="ccav-vector-sync-version" type="eCcavVectorSyncVersion" default="overlap_evqueue">
+    <description>Choix version implémentation synchronisation de node_vector dans ComputeCqsAndVector </description>
+    <enumvalue name="nosync"          genvalue="CCAV_VS_nosync" />
+    <enumvalue name="bulksync_std"    genvalue="CCAV_VS_bulksync_std" />
+    <enumvalue name="bulksync_queue"  genvalue="CCAV_VS_bulksync_queue" />
+    <enumvalue name="overlap_evqueue" genvalue="CCAV_VS_overlap_evqueue" />
+    <enumvalue name="overlap_evqueue_d" genvalue="CCAV_VS_overlap_evqueue_d" />
+    <enumvalue name="overlap_iqueue"  genvalue="CCAV_VS_overlap_iqueue" />
   </enumeration>
 
   <!-- - - - - init-menv-var-version - - - - -->

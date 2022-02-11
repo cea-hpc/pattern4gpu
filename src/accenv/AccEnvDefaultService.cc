@@ -9,6 +9,59 @@
 #include "arcane/materials/ComponentPartItemVectorView.h"
 
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
+#include <arcane/IParallelMng.h>
+#include <arcane/IParallelTopology.h>
+
+#if defined(ACCENV_HWLOC) && defined(ARCANE_COMPILING_CUDA)
+#warning "HWLOC présent pour placement GPUs"
+// Code issu de https://www.open-mpi.org/faq/?category=runcuda
+#include <cuda.h>
+#include <mpi.h>
+#include <hwloc.h>
+
+#define ABORT_ON_ERROR(func)                          \
+  { CUresult res;                                     \
+    res = func;                                       \
+    if (CUDA_SUCCESS != res) {                        \
+        printf("%s returned error=%d\n", #func, res); \
+        abort();                                      \
+    }                                                 \
+  }
+
+#define ABORT_ON_HWLOC_ERROR(func)                    \
+  { int res;                                          \
+    res = func;                                       \
+    if (0 != res) {                                   \
+        printf("%s returned error=%d\n", #func, res); \
+        abort();                                      \
+    }                                                 \
+  }
+
+/**
+ * This function searches for all the GPUs that are hanging off a NUMA
+ * node.  It walks through each of the PCI devices and looks for ones
+ * with the NVIDIA vendor ID.  It then stores them into an array.
+ * Note that there can be more than one GPU on the NUMA node.
+ */
+ 
+void find_gpus(hwloc_topology_t topology, hwloc_obj_t parent, hwloc_obj_t child,
+    int* gpuIndex, hwloc_obj_t gpus[]) {
+  hwloc_obj_t pcidev;
+  pcidev = hwloc_get_next_child(topology, parent, child);
+  if (NULL == pcidev) {
+    return;
+  } else if (0 != pcidev->arity) {
+    /* This device has children so need to look recursively at them */
+    find_gpus(topology, pcidev, NULL, gpuIndex, gpus);
+    find_gpus(topology, parent, pcidev, gpuIndex, gpus);
+  } else {
+    if (pcidev->attr->pcidev.vendor_id == 0x10de) {
+      gpus[(*gpuIndex)++] = pcidev;
+    }
+    find_gpus(topology, parent, pcidev, gpuIndex, gpus);
+  }
+}
+#endif
 
 using namespace Arcane;
 
@@ -27,6 +80,7 @@ AccEnvDefaultService::~AccEnvDefaultService() {
   delete m_acc_mem_adv;
   delete m_menv_cell;
   delete m_menv_queue;
+  delete m_vsync_mng;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -37,7 +91,142 @@ initAcc()
 {
   info() << "Using accelerator";
   IApplication* app = subDomain()->application();
-  initializeRunner(m_runner,traceMng(),app->acceleratorRuntimeInitialisationInfo());
+  if (options()->getHeterogPartition() == HP_none) 
+  {
+    initializeRunner(m_runner,traceMng(),app->acceleratorRuntimeInitialisationInfo());
+  }
+  else if (options()->getHeterogPartition() == HP_heterog1)
+  {
+    Integer rank = mesh()->parallelMng()->commRank();
+    bool is_host_only = (rank > 0);
+    if (is_host_only) {
+      std::ostringstream ostr;
+      ostr << "(Host) P=" << mesh()->parallelMng()->commRank();
+      if (TaskFactory::isActive()) {
+        ostr << " using Task runtime";
+        m_runner.initialize(ax::eExecutionPolicy::Thread);
+      } else {
+        ostr << " using Sequential runtime";
+        m_runner.initialize(ax::eExecutionPolicy::Sequential);
+      }
+      pinfo() << ostr.str();
+    } else {
+      // Initialisation classique : accelerateur ou pas
+      initializeRunner(m_runner,traceMng(),app->acceleratorRuntimeInitialisationInfo());
+    }
+  }
+
+  bool is_acc_av = AcceleratorUtils::isAvailable(m_runner);
+#ifdef ARCANE_COMPILING_CUDA
+  if (is_acc_av && options()->getDeviceAffinity() == DA_cu_world_rank) 
+  {
+    info() << "Placement GPU : device =  world_rank%cuda_device_count";
+
+    Integer device_count=0;
+    cudaGetDeviceCount(&device_count);
+    if (device_count>0) {
+      Integer rank = mesh()->parallelMng()->commRank();
+      Integer device=rank%device_count;
+      cudaSetDevice(device);
+      pinfo() << "Processus " << rank  
+        << " : Device " << device << " (pour " << device_count << " device(s))";
+    }
+  }
+  if (options()->getDeviceAffinity() == DA_cu_node_rank) 
+  {
+    IParallelMng* pm = mesh()->parallelMng();
+    // Attention, createTopology() est une opération collective
+    IParallelTopology* pt = pm->createTopology();
+    auto node_ranks = pt->machineRanks();
+    // Attention, createSubParallelMng() est une opération collective
+    Ref<IParallelMng> pm_node = pm->createSubParallelMngRef(node_ranks);
+
+    if (is_acc_av) {
+      info() << "Placement GPU : device =  node_rank%cuda_device_count";
+
+      Integer device_count=0;
+      cudaGetDeviceCount(&device_count);
+      if (device_count>0) {
+        Integer rank = pm->commRank();
+        Integer node_rank = pm_node->commRank();
+        Integer device=node_rank%device_count;
+        cudaSetDevice(device);
+        pinfo() << "Processus " << rank  << " (node_rank=" << node_rank << ")"
+          << " : Device " << device << " (pour " << device_count << " device(s))";
+      }
+    }
+    delete pt;
+  }
+#ifdef ACCENV_HWLOC
+  if (is_acc_av && options()->getDeviceAffinity() == DA_cu_hwloc) 
+  {
+    info() << "Placement GPU avec hwloc";
+    // Code issu de https://www.open-mpi.org/faq/?category=runcuda
+    //
+#if 0
+    const unsigned long flags = HWLOC_TOPOLOGY_FLAG_IO_DEVICES | HWLOC_TOPOLOGY_FLAG_IO_BRIDGES;
+#endif
+    hwloc_cpuset_t newset;
+    hwloc_obj_t node, bridge;
+    char pciBusId[16];
+    CUdevice dev;
+    char devName[256];
+    hwloc_topology_t topology = NULL;
+    int gpuIndex = 0;
+    hwloc_obj_t gpus[16] = {0};
+
+    /* Now decide which GPU to pick.  This requires hwloc to work properly.
+     * We first see which CPU we are bound to, then try and find a GPU nearby.
+     */
+    ABORT_ON_HWLOC_ERROR( hwloc_topology_init(&topology) );
+#if 0
+    ABORT_ON_HWLOC_ERROR( hwloc_topology_set_flags(topology, flags) );
+#else
+    ABORT_ON_HWLOC_ERROR( hwloc_topology_set_io_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_IMPORTANT) );
+#endif
+    ABORT_ON_HWLOC_ERROR( hwloc_topology_load(topology) );
+    newset = hwloc_bitmap_alloc();
+    ABORT_ON_HWLOC_ERROR( hwloc_get_last_cpu_location(topology, newset, 0) );
+
+    /* Get the object that contains the cpuset */
+    node = hwloc_get_first_largest_obj_inside_cpuset(topology, newset);
+
+    /* Climb up from that object until we find the HWLOC_OBJ_NODE */
+    while (node->type != HWLOC_OBJ_NODE) {
+      node = node->parent;
+    }
+
+    /* Now look for the HWLOC_OBJ_BRIDGE.  All PCI busses hanging off the
+     * node will have one of these */
+    bridge = hwloc_get_next_child(topology, node, NULL);
+    while (bridge->type != HWLOC_OBJ_BRIDGE) {
+      bridge = hwloc_get_next_child(topology, node, bridge);
+    }
+
+    /* Now find all the GPUs on this NUMA node and put them into an array */
+    find_gpus(topology, bridge, NULL, &gpuIndex, gpus);
+
+    /* Now select the first GPU that we find */
+    if (gpus[0] == 0) {
+      printf("No GPU found\n");
+      exit(1);
+    } else {
+      sprintf(pciBusId, "%.2x:%.2x:%.2x.%x", gpus[0]->attr->pcidev.domain, gpus[0]->attr->pcidev.bus,
+          gpus[0]->attr->pcidev.dev, gpus[0]->attr->pcidev.func);
+      ABORT_ON_ERROR(cuDeviceGetByPCIBusId(&dev, pciBusId));
+      ABORT_ON_ERROR(cuDeviceGetName(devName, 256, dev));
+
+      // Affichage
+      Integer device, device_count;
+      cudaGetDevice(&device_count);
+      cudaGetDevice(&device);
+      pinfo() << "Processus " << mesh()->parallelMng()->commRank()
+        << " : Device " << device << " (pour " << device_count << " device(s))"
+        << " (Selected GPU=" << pciBusId << ", name=" << devName << ")";
+    }
+  }
+#endif // ACCENV_HWLOC
+#endif // ARCANE_COMPILING_CUDA
 }
 
 /*---------------------------------------------------------------------------*/
@@ -102,6 +291,8 @@ initMesh(IMesh* mesh)
   // FaceLocalId
   m_acc_mem_adv->setReadMostly(allFaces().view().localIds());
   m_acc_mem_adv->setReadMostly(ownFaces().view().localIds());
+
+  m_vsync_mng = new VarSyncMng(mesh, m_runner, m_acc_mem_adv);
 }
 
 /*---------------------------------------------------------------------------*/

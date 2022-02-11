@@ -8,6 +8,7 @@
 #include "arcane/accelerator/Accelerator.h"
 #include "arcane/accelerator/RunCommandLoop.h"
 #include "arcane/accelerator/RunCommandEnumerate.h"
+#include "arcane/accelerator/core/RunQueueBuildInfo.h"
 
 /*---------------------------------------------------------------------------*/
 /* Pour les accélérateurs                                                    */
@@ -28,6 +29,15 @@ namespace ax = Arcane::Accelerator;
 
 #warning "PROF_ACC : instrumentation avec nvtx"
 #include <nvtx3/nvToolsExt.h>
+#include <cuda_profiler_api.h>
+
+#ifndef PROF_ACC_START_CAPTURE
+#define PROF_ACC_START_CAPTURE cudaProfilerStart()
+#endif
+
+#ifndef PROF_ACC_STOP_CAPTURE
+#define PROF_ACC_STOP_CAPTURE cudaProfilerStop()
+#endif
 
 #ifndef PROF_ACC_BEGIN
 #define PROF_ACC_BEGIN(__name__) nvtxRangePushA(__name__)
@@ -40,6 +50,14 @@ namespace ax = Arcane::Accelerator;
 #else
 
 //#warning "Pas d'instrumentation"
+#ifndef PROF_ACC_START_CAPTURE
+#define PROF_ACC_START_CAPTURE 
+#endif
+
+#ifndef PROF_ACC_STOP_CAPTURE
+#define PROF_ACC_STOP_CAPTURE 
+#endif
+
 #ifndef PROF_ACC_BEGIN
 #define PROF_ACC_BEGIN(__name__)
 #endif
@@ -51,14 +69,28 @@ namespace ax = Arcane::Accelerator;
 #endif
 
 /*---------------------------------------------------------------------------*/
+/* Disponibilité d'un accélérateur associé à un runner                       */
+/*---------------------------------------------------------------------------*/
+class AcceleratorUtils {
+ public:
+  static bool isAvailable(const ax::Runner& runner) {
+    return ax::impl::isAcceleratorPolicy(runner.executionPolicy());
+  }
+};
+
+/*---------------------------------------------------------------------------*/
 /* Pour gérer un nombre dynamique de RunQueue asynchrones                    */
 /*---------------------------------------------------------------------------*/
 class MultiAsyncRunQueue {
  public:
 
-  MultiAsyncRunQueue(ax::Runner& runner, Integer asked_nb_queue) {
-    // au plus 32 queues (32 = nb de kernels max exécutables simultanément)
-    m_nb_queue = std::min(asked_nb_queue, 32);
+  MultiAsyncRunQueue(ax::Runner& runner, Integer asked_nb_queue, bool unlimited=false) {
+    if (unlimited) {
+      m_nb_queue=asked_nb_queue;
+    } else {
+      // au plus 32 queues (32 = nb de kernels max exécutables simultanément)
+      m_nb_queue = std::min(asked_nb_queue, 32);
+    }
     m_queues.resize(m_nb_queue);
     for(Integer iq=0 ; iq<m_nb_queue ; ++iq) {
       m_queues[iq] = new ax::RunQueue(runner);

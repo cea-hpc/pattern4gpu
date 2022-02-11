@@ -14,6 +14,12 @@
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
 #include <arcane/ServiceBuilder.h>
 
+#include "msgpass/VarSyncMng.h"
+#include <arcane/IVariableSynchronizer.h>
+
+#define P4GPU_PROFILING // Pour activer le profiling
+#include "P4GPUTimer.h"
+
 #include "Pattern4GPU4Kokkos.h"
 
 using namespace Arcane;
@@ -76,6 +82,8 @@ initKokkosWrapper()
 void Pattern4GPUModule::
 initP4GPU()
 {
+  PROF_ACC_START_CAPTURE; // la capture du profiling commence réellement ici
+
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans initP4GPU";
 
@@ -241,7 +249,7 @@ initNodeVector()
 
     auto in_node_coord = ax::viewIn(command, node_coord);
     auto out_node_vector = ax::viewOut(command, m_node_vector);
-
+    
     command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()) {
       const Real3 c=in_node_coord[nid];
       Real cos_th=cos(c.x+c.y+c.z); // garantit une valeur dans [-1,+1]
@@ -254,6 +262,21 @@ initNodeVector()
   {
     m_kokkos_wrapper->initNodeVector(node_coord, allNodes());
   }
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Synchronise les noeuds fantômes pour node_vector                          */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+syncNodeVector() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+
+  auto queue = makeQueueRef(m_acc_env->runner());
+  queue->setAsync(true);
+  auto vsync = m_acc_env->vsyncMng();
+  vsync->globalSynchronizeQueue(queue, m_node_vector);
 
   PROF_ACC_END;
 }
@@ -316,22 +339,74 @@ initCellArr12()
   }
   else if (options()->getInitCellArr12Version() == IA12V_arcgpu_v1)
   {
-    auto queue = m_acc_env->newQueue();
-    auto command = makeCommand(queue);
+    auto async_init_cell_arr12 = [&](CellGroup cell_group, bool high_priority=false) -> Ref<RunQueue> {
+      ax::RunQueueBuildInfo bi;
+      if (high_priority) {
+        // 0 = priorité par défaut
+        // Plus la valeur de priorité est faible, plus la queue sera prioritaire
+        bi.setPriority(-10); 
+      }
+      auto ref_queue = makeQueueRef(m_acc_env->runner(), bi);
+      ref_queue->setAsync(true);
+      auto command = makeCommand(ref_queue.get());
 
-    auto in_node_coord = ax::viewIn(command, node_coord);
+      auto in_node_coord = ax::viewIn(command, node_coord);
 
-    auto out_cell_arr1 = ax::viewOut(command, m_cell_arr1);
-    auto out_cell_arr2 = ax::viewOut(command, m_cell_arr2);
+      auto out_cell_arr1 = ax::viewOut(command, m_cell_arr1);
+      auto out_cell_arr2 = ax::viewOut(command, m_cell_arr2);
 
-    auto cnc = m_acc_env->connectivityView().cellNode();
+      auto cnc = m_acc_env->connectivityView().cellNode();
 
-    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
-      NodeLocalId first_nid(cnc.nodes(cid)[0]);
-      Real3 c=in_node_coord[first_nid];
-      out_cell_arr1[cid]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
-      out_cell_arr2[cid]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
+      command << RUNCOMMAND_ENUMERATE(Cell, cid, ownCells()) {
+        NodeLocalId first_nid(cnc.nodes(cid)[0]);
+        Real3 c=in_node_coord[first_nid];
+        out_cell_arr1[cid]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
+        out_cell_arr2[cid]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
+      };
+
+      return ref_queue;
     };
+
+    if (options()->getIca12SyncVersion()==ICA12_SV_bulksync_std ||
+        options()->getIca12SyncVersion()==ICA12_SV_bulksync_sync)
+    {
+      // Calcul que sur les mailles intérieures
+      auto ref_queue = async_init_cell_arr12(ownCells());
+      ref_queue->barrier();
+
+      PROF_ACC_BEGIN("syncCellArr12");
+      if (options()->getIca12SyncVersion()==ICA12_SV_bulksync_std) {
+        m_cell_arr1.synchronize();
+        m_cell_arr2.synchronize();
+      } else {
+        ARCANE_ASSERT(options()->getIca12SyncVersion()==ICA12_SV_bulksync_sync,
+            ("Ici, ICA12_SV_bulksync_sync"));
+        auto vsync = m_acc_env->vsyncMng();
+        vsync->globalSynchronize(m_cell_arr1);
+        vsync->globalSynchronize(m_cell_arr2);
+      }
+      PROF_ACC_END;
+    }
+    else if (options()->getIca12SyncVersion()==ICA12_SV_overlap1)
+    {
+      auto vsync = m_acc_env->vsyncMng();
+      SyncItems<Cell>* sync_cells = vsync->getSyncItems<Cell>();
+
+      auto ref_queue_bnd = async_init_cell_arr12(sync_cells->sharedItems(), /*high_priority=*/true);
+      auto ref_queue_inr = async_init_cell_arr12(sync_cells->privateItems());
+      // TODO : aggréger les comms de m_cell_arr1 et m_cell_arr2
+      vsync->globalSynchronizeQueue(ref_queue_bnd, m_cell_arr1);
+      vsync->globalSynchronizeQueue(ref_queue_bnd, m_cell_arr2);
+      ref_queue_inr->barrier();
+    }
+    else
+    {
+      ARCANE_ASSERT(options()->getIca12SyncVersion()==ICA12_SV_nosync,
+          ("Pas de synchro normalement"));
+      // Pas de synchro avec les voisins
+      auto ref_queue = async_init_cell_arr12(allCells());
+      ref_queue->barrier();
+    }
   }
   else if (options()->getInitCellArr12Version() == IA12V_kokkos)
   {
@@ -456,6 +531,75 @@ initCqs1()
 }
 
 /*---------------------------------------------------------------------------*/
+/* Effectue un travail bidon juste pour charger les connectivités sur GPU    */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+burnConnectivity() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+  auto queue = m_acc_env->newQueue();
+  {
+    auto command = makeCommand(queue);
+
+    VariableNodeInteger tmp1(VariableBuildInfo(mesh(), "TemporaryTmp1"));
+    auto out_tmp1 = ax::viewOut(command, tmp1);
+
+    auto node_index_in_cells = m_acc_env->nodeIndexInCells();
+    const Integer max_node_cell = m_acc_env->maxNodeCell();
+    auto nc_cty = m_acc_env->connectivityView().nodeCell();
+
+    command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()) {
+      Int32 first_pos = nid.localId() * max_node_cell;
+      Integer index = 0;
+      Integer sum = 0;
+      for( CellLocalId cid : nc_cty.cells(nid) ){
+        Int16 node_index = node_index_in_cells[first_pos + index];
+        sum += node_index;
+        ++index;
+      }
+      out_tmp1[nid] = sum;
+    };
+  }
+  {
+    auto command = makeCommand(queue);
+
+    VariableCellInteger tmp2(VariableBuildInfo(mesh(), "TemporaryTmp2"));
+    auto out_tmp2 = ax::viewOut(command, tmp2);
+
+    auto cnc = m_acc_env->connectivityView().cellNode();
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      Integer index = 0;
+      for( NodeLocalId nid : cnc.nodes(cid) ){
+        ++index;
+      }
+      out_tmp2[cid] = index;
+    };
+  }
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Effectue un travail bidon juste pour charger is_active_cell sur GPU    */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+burnIsActiveCell() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+  auto queue = m_acc_env->newQueue();
+  {
+    auto command = makeCommand(queue);
+
+    VariableCellInteger tmp2(VariableBuildInfo(mesh(), "TemporaryTmp2"));
+    auto in_is_active_cell = ax::viewIn(command, m_is_active_cell);
+    auto out_tmp2 = ax::viewOut(command, tmp2);
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      out_tmp2[cid] = in_is_active_cell[cid];
+    };
+  }
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
 void Pattern4GPUModule::
@@ -532,6 +676,7 @@ _computeCqsAndVector_Vori() {
 
   CellGroup active_cells = defaultMesh()->cellFamily()->findGroup("active_cells");
 
+  P4GPU_DECLARE_TIMER(subDomain(), ComputeCqs); P4GPU_START_TIMER(ComputeCqs);
   UniqueArray<Real3> pos(8);
   ENUMERATE_CELL (cell_i,  allCells()) {
     for (Integer ii = 0; ii < 8; ++ii) {
@@ -547,7 +692,9 @@ _computeCqsAndVector_Vori() {
     m_cell_cqs[cell_i][6] = -k025*math::vecMul(pos[5]-pos[2], pos[7]-pos[2]);
     m_cell_cqs[cell_i][7] = -k025*math::vecMul(pos[6]-pos[3], pos[4]-pos[3]);
   }
+  P4GPU_STOP_TIMER(ComputeCqs);
 
+  P4GPU_DECLARE_TIMER(subDomain(), NodeVectorUpdate); P4GPU_START_TIMER(NodeVectorUpdate);
   ENUMERATE_NODE (node_i, allNodes()) {
     m_node_vector[node_i].assign(0., 0., 0.);
   }
@@ -559,6 +706,9 @@ _computeCqsAndVector_Vori() {
         m_cell_cqs[cell_i][node_i.index()];
     }
   }
+
+  m_node_vector.synchronize();
+  P4GPU_STOP_TIMER(NodeVectorUpdate);
 
   PROF_ACC_END;
 }
@@ -709,6 +859,10 @@ _computeCqsAndVector_Varcgpu_v1() {
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans _computeCqsAndVector_Varcgpu_v1";
 
+  P4GPU_DECLARE_TIMER(subDomain(), ComputeCqs); P4GPU_START_TIMER(ComputeCqs);
+
+  bool is_sync_cell_cqs=!(options()->getCcavCqsSyncVersion() == CCAV_CS_nosync);
+  CellGroup cell_group=(is_sync_cell_cqs ? ownCells() : allCells());
   {
     auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
@@ -718,7 +872,7 @@ _computeCqsAndVector_Varcgpu_v1() {
 
     auto cnc = m_acc_env->connectivityView().cellNode();
 
-    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()){
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, cell_group){
       // Recopie les coordonnées locales (pour le cache)
       Real3 pos[8];
       Int32 index=0;
@@ -730,7 +884,22 @@ _computeCqsAndVector_Varcgpu_v1() {
       computeCQs(pos, out_cell_cqs[cid]);
     };
   }
-  {
+  if (is_sync_cell_cqs) {
+    PROF_ACC_BEGIN("syncCellCQs");
+    if (options()->getCcavCqsSyncVersion() == CCAV_CS_bulksync_std) {
+      m_cell_cqs.synchronize();
+    } else {
+      ARCANE_ASSERT(options()->getCcavCqsSyncVersion() == CCAV_CS_bulksync_sync,
+          ("CCAV_CS_bulksync_sync obligatoire"));
+      m_acc_env->vsyncMng()->globalSynchronize(m_cell_cqs);
+    }
+    PROF_ACC_END;
+  }
+  P4GPU_STOP_TIMER(ComputeCqs);
+
+  P4GPU_DECLARE_TIMER(subDomain(), NodeVectorUpdate); P4GPU_START_TIMER(NodeVectorUpdate);
+
+  auto async_node_vector_update = [&](NodeGroup node_group, bool high_priority=false) -> Ref<RunQueue> {
     // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
     // Du coup, on boucle sur les Node
     // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
@@ -740,8 +909,15 @@ _computeCqsAndVector_Varcgpu_v1() {
     // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
     //   1- on initialise le vecteur à 0
     //   2- on calcule les constributions des mailles connectées au noeud uniquement si elles sont actives
-    auto queue = m_acc_env->newQueue();
-    auto command = makeCommand(queue);
+    ax::RunQueueBuildInfo bi;
+    if (high_priority) {
+      // 0 = priorité par défaut
+      // Plus la valeur de priorité est faible, plus la queue sera prioritaire
+      bi.setPriority(-10); 
+    }
+    auto ref_queue = makeQueueRef(m_acc_env->runner(), bi);
+    ref_queue->setAsync(true);
+    auto command = makeCommand(ref_queue.get());
 
     auto in_cell_arr1 = ax::viewIn(command, m_cell_arr1);
     auto in_cell_arr2 = ax::viewIn(command, m_cell_arr2);
@@ -755,7 +931,7 @@ _computeCqsAndVector_Varcgpu_v1() {
 
     auto nc_cty = m_acc_env->connectivityView().nodeCell();
 
-    command << RUNCOMMAND_ENUMERATE(Node,nid,allNodes()) {
+    command << RUNCOMMAND_ENUMERATE(Node,nid,node_group) {
       Int32 first_pos = nid.localId() * max_node_cell;
       Integer index = 0;
       Real3 node_vec = Real3::zero();
@@ -768,9 +944,98 @@ _computeCqsAndVector_Varcgpu_v1() {
         ++index;
       }
       out_node_vector[nid] = node_vec;
-    };
+    }; // non bloquant
+
+    return ref_queue;
+  };
+
+  if (options()->getCcavVectorSyncVersion() == CCAV_VS_bulksync_std ||
+      options()->getCcavVectorSyncVersion() == CCAV_VS_bulksync_queue) 
+  {
+    // Calcul sur tous les noeuds "own"
+    Ref<RunQueue> ref_queue = async_node_vector_update(ownNodes());
+    ref_queue->barrier();
+
+    // Puis comms
+    PROF_ACC_BEGIN("syncNodeVector");
+    if (options()->getCcavVectorSyncVersion() == CCAV_VS_bulksync_std) {
+      m_node_vector.synchronize();
+    } else {
+      ARCANE_ASSERT(options()->getCcavVectorSyncVersion()==CCAV_VS_bulksync_queue,
+          ("Ici, option differente de bulksync_queue"));
+      auto vsync = m_acc_env->vsyncMng();
+      //vsync->globalSynchronize(m_node_vector);
+      vsync->globalSynchronizeQueue(ref_queue, m_node_vector);
+      //vsync->globalSynchronizeDevThr(m_node_vector);
+      //vsync->globalSynchronizeDevQueues(m_node_vector);
+    }
+    PROF_ACC_END;
+
+  } 
+  else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue ||
+      options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue_d) 
+  {
+    auto vsync = m_acc_env->vsyncMng();
+    SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
+
+    // On amorce sur le DEVICE le calcul sur les noeuds "own" sur le bord du
+    // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
+    Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems(), /*high_priority=*/true);
+    // ici, le calcul n'est pas terminé sur le DEVICE
+
+    // On amorce sur le DEVICE le calcul des noeuds intérieurs dont ne dépendent
+    // pas les comms sur la queue ref_queue_inr (_inr = inner)
+    Ref<RunQueue> ref_queue_inr = async_node_vector_update(sync_nodes->privateItems());
+
+    // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
+    // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
+    // la queue ref_queue_bnd
+//    vsync->globalSynchronizeQueue(ref_queue_bnd, m_node_vector);
+    if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue)
+      vsync->globalSynchronizeQueueEvent(ref_queue_bnd, m_node_vector);
+    else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue_d)
+      vsync->globalSynchronizeQueueEventD(ref_queue_bnd, m_node_vector);
+    // ici, après cet appel, ref_queue_bnd est synchronisée
+
+    // On attend la terminaison des calculs intérieurs
+    ref_queue_inr->barrier();
+  } 
+  else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_iqueue) 
+  {
+    auto vsync = m_acc_env->vsyncMng();
+    SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
+
+    // On amorce sur le DEVICE le calcul sur les noeuds "own" sur le bord du
+    // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
+    Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems(), /*high_priority=*/true);
+    // ici, le calcul n'est pas terminé sur le DEVICE
+    
+    // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
+    auto ref_sync_req = vsync->iGlobalSynchronizeQueue(ref_queue_bnd, m_node_vector);
+
+    // On amorce sur le DEVICE le calcul des noeuds intérieurs dont ne dépendent
+    // pas les comms sur la queue ref_queue_inr (_inr = inner)
+    Ref<RunQueue> ref_queue_inr = async_node_vector_update(sync_nodes->privateItems());
+
+    // Une fois le packing des données terminé sur ref_queue_bnd
+    // on effectue les comms MPI sur CPU, 
+    // puis unpacking des données et on synchronise la queue ref_queue_bnd
+    ref_sync_req->wait();
+    // ici, après cet appel, ref_queue_bnd est synchronisée
+
+    // On attend la terminaison des calculs intérieurs
+    ref_queue_inr->barrier();
+  } 
+  else
+  {
+    ARCANE_ASSERT(options()->getCcavVectorSyncVersion()==CCAV_VS_nosync,
+        ("Ici, pas de synchro"));
+    // Pas de synchro
+    Ref<RunQueue> ref_queue = async_node_vector_update(allNodes());
+    ref_queue->barrier();
   }
 
+  P4GPU_STOP_TIMER(NodeVectorUpdate);
   PROF_ACC_END;
 }
 

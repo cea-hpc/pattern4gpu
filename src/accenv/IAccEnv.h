@@ -4,6 +4,7 @@
 #include <arcane/ItemTypes.h>
 #include "accenv/AcceleratorUtils.h"
 #include "accenv/MultiEnvUtils.h"
+#include "msgpass/VarSyncMng.h"
 #include "arcane/UnstructuredMeshConnectivity.h"
 #include "arcane/materials/IMeshMaterialMng.h"
 #include "arcane/IMesh.h"
@@ -40,6 +41,8 @@ class IAccEnv {
   virtual void updateMultiEnv(IMeshMaterialMng* mesh_material_mng) = 0;
 
   virtual MultiEnvCellStorage* multiEnvCellStorage() = 0;
+
+  virtual VarSyncMng* vsyncMng() = 0;
 };
 
 #endif

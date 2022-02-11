@@ -31,21 +31,62 @@ target_include_directories(libcartesian PUBLIC .)
 target_link_libraries(libcartesian PUBLIC arcane_core)
 
 # Services communs pour les accélérateurs
-add_library(libaccenv accenv/AccEnvDefaultService.cc)
+add_library(libaccenv accenv/AccEnvDefaultService.cc
+                      accenv/AcceleratorEvent.cc)
 target_include_directories(libaccenv PUBLIC .)
+## Pour HWLOC (en attendant un FindHWLOC.cmake)
+#set(ENV_HWLOC_INCDIR "$ENV{HWLOC_INCDIR}")
+#set(ENV_HWLOC_LIBDIR "$ENV{HWLOC_LIBDIR}")
+#if (WANT_CUDA AND ENV_HWLOC_INCDIR AND ENV_HWLOC_LIBDIR)
+#  target_compile_definitions(libaccenv PRIVATE ACCENV_HWLOC)
+#  target_include_directories(libaccenv PRIVATE "${ENV_HWLOC_INCDIR}")
+#  target_link_libraries(libaccenv PRIVATE "-L${ENV_HWLOC_LIBDIR} -lhwloc")
+#  target_link_libraries(libaccenv PRIVATE cuda)
+#endif()
+## fin HWLOC
 target_link_libraries(libaccenv PUBLIC arcane_core)
+
+# Message Passing
+add_library(libmsgpass msgpass/VarSyncMng.cc 
+                       msgpass/GlobalSynchronize.cc
+                       msgpass/GlobalSynchronizeQueue.cc
+                       msgpass/GlobalSynchronizeQueueEvent.cc
+                       msgpass/GlobalSynchronizeQueueEventD.cc
+                       msgpass/GlobalSynchronizeDevThr.cc
+                       msgpass/GlobalSynchronizeDevQueues.cc
+                       msgpass/IncompleteGlobalSynchronizeQueue.cc
+                       msgpass/IsCommDeviceAware.cc
+                       msgpass/MsgPassInit.cc
+                       msgpass/PackTransfer.cc
+                       msgpass/SyncItems.cc
+                       msgpass/SyncBuffers.cc)
+target_include_directories(libmsgpass PUBLIC .)
+target_link_libraries(libmsgpass PUBLIC arcane_core)
+# Pour MPI
+find_package(MPI)
+if(MPI_FOUND)
+  target_compile_definitions(libmsgpass PRIVATE OMPI_SKIP_MPICXX)
+  target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI)
+  target_include_directories(libmsgpass PRIVATE "${MPI_INCLUDE_PATH}")
+  find_path(P4GPU_MPI_EXT NAMES "mpi-ext.h" PATHS "${MPI_C_HEADER_DIR}")
+  if(P4GPU_MPI_EXT)
+    target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI_EXT)
+  endif()
+endif()
+# fin MPI
 
 if(WANT_KOKKOS)
 target_compile_options(libpattern4gpu PUBLIC -fopenmp)
 endif()
-target_link_libraries(libpattern4gpu PUBLIC libgeomenv libcartesian libaccenv)
+target_link_libraries(libpattern4gpu PUBLIC libgeomenv libcartesian libaccenv libmsgpass)
 
 # Pour la gestion des accélérateurs et des sources à compiler avec le
 # compilateur pour accélérateur
 if(WANT_CUDA)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
-  set_source_files_properties(Pattern4GPUModule.cc 
+  set_source_files_properties(
+      Pattern4GPUModule.cc 
       Pattern4GPUupdateTensor.cc 
       Pattern4GPUTestCartesian.cc 
       Pattern4GPUBenchCartesian.cc 
@@ -60,11 +101,26 @@ if(WANT_CUDA)
       cartesian/NodeDirectionMng.cc
       cartesian/CartesianItemSorter.cc
       accenv/AccEnvDefaultService.cc
+      accenv/AcceleratorEvent.cc
+      msgpass/VarSyncMng.cc
+      msgpass/GlobalSynchronize.cc
+      msgpass/GlobalSynchronizeQueue.cc
+      msgpass/GlobalSynchronizeQueueEvent.cc
+      msgpass/GlobalSynchronizeQueueEventD.cc
+      msgpass/GlobalSynchronizeDevThr.cc
+      msgpass/GlobalSynchronizeDevQueues.cc
+      msgpass/IncompleteGlobalSynchronizeQueue.cc
+      msgpass/IsCommDeviceAware.cc
+      msgpass/MsgPassInit.cc
+      msgpass/PackTransfer.cc
+      msgpass/SyncItems.cc
+      msgpass/SyncBuffers.cc
       PROPERTIES LANGUAGE CUDA)
   target_link_libraries(libpattern4gpu PUBLIC arcane_accelerator_cuda_runtime)
   target_link_libraries(libgeomenv PUBLIC arcane_accelerator_cuda_runtime)
   target_link_libraries(libcartesian PUBLIC arcane_accelerator_cuda_runtime)
   target_link_libraries(libaccenv PUBLIC arcane_accelerator_cuda_runtime)
+  target_link_libraries(libmsgpass PUBLIC arcane_accelerator_cuda_runtime)
 endif()
 
 # Kokkos
@@ -87,6 +143,7 @@ if (WANT_PROF_ACC)
   target_compile_definitions(libgeomenv PRIVATE PROF_ACC)
   target_compile_definitions(libcartesian PRIVATE PROF_ACC)
   target_compile_definitions(libaccenv PRIVATE PROF_ACC)
+  target_compile_definitions(libmsgpass PRIVATE PROF_ACC)
 endif()
 
 # Les axl
