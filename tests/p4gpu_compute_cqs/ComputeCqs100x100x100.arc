@@ -41,11 +41,11 @@
   <pattern4-g-p-u>
     <acc-mem-advise>true</acc-mem-advise>
 
-    <init-cqs-version>arcgpu_v1</init-cqs-version>
+    <init-cqs-version>arcgpu_v5</init-cqs-version>
     <init-node-vector-version>arcgpu_v1</init-node-vector-version>
     <init-node-coord-bis-version>arcgpu_v1</init-node-coord-bis-version>
     <init-cell-arr12-version>arcgpu_v1</init-cell-arr12-version>
     <!-- <compute-cqs-vector-version>ori</compute-cqs-vector-version> -->
-    <compute-cqs-vector-version>arcgpu_v1</compute-cqs-vector-version>
+    <compute-cqs-vector-version>arcgpu_v5</compute-cqs-vector-version>
   </pattern4-g-p-u>
 </case>

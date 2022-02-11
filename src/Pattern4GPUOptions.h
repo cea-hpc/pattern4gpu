@@ -30,6 +30,7 @@ enum eInitNodeCoordBisVersion {
 enum eInitCqsVersion {
   ICQV_ori = 0, //! Version CPU d'origine
   ICQV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
+  ICQV_arcgpu_v5, //! Implémentation API GPU Arcane version 5 (GG)
   ICQV_kokkos //! Implémentation Kokkos
 };
 
@@ -74,6 +75,7 @@ enum eComputeCqsVectorVersion {
   CCVV_mt, //! Implémentation CPU Arcane multi-thread
   CCVV_mt_v2, //! Implémentation CPU Arcane multi-thread version 2
   CCVV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
+  CCVV_arcgpu_v5, //! Implémentation API GPU Arcane version 5 (GG)
   CCVV_kokkos //! Implémentation Kokkos
 };
 

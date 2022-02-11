@@ -5,6 +5,8 @@
 #include <arcane/materials/MeshMaterialVariableRef.h>
 #include <arcane/materials/CellToAllEnvCellConverter.h>
 #include <arcane/cea/ICartesianMesh.h>
+#include <arcane/utils/NumArray.h>
+#include <arcane/utils/Real3.h>
 #include "cartesian/ICartesianMesh.h"
 #include "cartesian/interface/ICartesianMesh.h"
 
@@ -84,6 +86,7 @@ class Pattern4GPUModule
   void _computeCqsAndVector_Vmt();
   void _computeCqsAndVector_Vmt_v2();
   void _computeCqsAndVector_Varcgpu_v1();
+  void _computeCqsAndVector_Varcgpu_v5();  // Arcane GPU optimisé par GG
   void _computeCqsAndVector_Vkokkos();
 
   void _testCell2Cell();
@@ -141,6 +144,9 @@ class Pattern4GPUModule
 
   // Pour l'utilisation des accélérateurs
   IAccEnv* m_acc_env=nullptr;
+
+  // Pour les structures Arcane "à la Kokkos"
+  Arcane::NumArray<Arcane::Real3,2>* m_numarray_cqs = nullptr;
 
   // Encapsulation pour Kokkos
   KokkosWrapper* m_kokkos_wrapper;
