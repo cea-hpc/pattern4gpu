@@ -427,10 +427,9 @@ _computeCqsAndVector_Varcgpu_v2()
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()){
       Int32 cell_i = cid.localId();
       std::array<Real3,8> pos;
-      Int32 index=0;
-      for( NodeLocalId nid : cnc.nodes(cid) ){
-        pos[index] = in_node_coord_bis[nid];
-        ++index;
+      auto nodes = cnc.nodes(cid);
+      for( Integer index = 0; index<8; ++index ){
+        pos[index] = in_node_coord_bis[nodes[index]];
       }
 
       out_cell_cqs(0, cell_i) = -k025 * Arcane::math::cross(pos[4] - pos[3], pos[1] - pos[3]);
