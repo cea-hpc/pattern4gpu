@@ -97,17 +97,6 @@ enum eCcavCqsSyncVersion {
   CCAV_CS_bulksync_sync // "Bulk-Synchronous" avec globalSynchronize(m_cell_cqs) 
 };
 
-/*! \brief Définit les implémentations synchronisations de node_vector dans ComputeCqsAndVector
- */
-enum eCcavVectorSyncVersion {
-  CCAV_VS_nosync = 0,  // Pas de synchronisation
-  CCAV_VS_bulksync_std, // "Bulk-Synchronous" avec .synchronize() "classique" Arcane
-  CCAV_VS_bulksync_queue,  // "Bulk-Synchronous" avec packing/unpacking buf comm sur GPU
-  CCAV_VS_overlap_evqueue, // Recouvrement noeuds shared+packing/unpacking GPU+comms (en utilisant des events) par calculs noeuds private
-  CCAV_VS_overlap_evqueue_d, // Idem que CCAV_VS_overlap_evqueue mais comms avec adresses DEVICE (GPU-aware)
-  CCAV_VS_overlap_iqueue // Recouvrement : traitements shared et private concurrents et asynchrones + iGlobalSynchronizeQueue
-};
-
 /*! \brief Définit les implémentations de InitMEnvVar
  */
 enum eInitMEnvVar {

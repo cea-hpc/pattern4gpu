@@ -12,22 +12,23 @@ bool is_comm_device_aware();
 /* Gère les synchronisations des mailles fantômes par Message Passing        */
 /*---------------------------------------------------------------------------*/
 VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_adv) :
+  m_mesh   (mesh),
   m_runner (runner)
 {
   m_is_device_aware = is_comm_device_aware();
 
-  IItemFamily* cell_family = mesh->cellFamily();
+  IItemFamily* cell_family = m_mesh->cellFamily();
   IVariableSynchronizer* var_sync = cell_family->allItemsSynchronizer();
 
-  m_pm = mesh->parallelMng();
+  m_pm = m_mesh->parallelMng();
 
   // Hypothèse, la liste des voisins est la même quelle que soit le type d'item
   // Donc, je peux récupérer celle issue des mailles
   m_neigh_ranks = var_sync->communicatingRanks();
   m_nb_nei = m_neigh_ranks.size();
 
-  m_sync_cells = new SyncItems<Cell>(mesh,m_neigh_ranks, acc_mem_adv);
-  m_sync_nodes = new SyncItems<Node>(mesh,m_neigh_ranks, acc_mem_adv);
+  m_sync_cells = new SyncItems<Cell>(m_mesh,m_neigh_ranks, acc_mem_adv);
+  m_sync_nodes = new SyncItems<Node>(m_mesh,m_neigh_ranks, acc_mem_adv);
   m_sync_buffers = new SyncBuffers(isAcceleratorAvailable());
   m_neigh_queues = new MultiAsyncRunQueue(m_runner, m_nb_nei, /*unlimited=*/true);
 

@@ -15,8 +15,9 @@
 #include "accenv/AcceleratorUtils.h"
 //
 
-// Ce fichier doit être inclu avant Pattern4GPU_axl.h
+// Ces fichiers doivent être inclus avant Pattern4GPU_axl.h
 #include "Pattern4GPUOptions.h"
+#include "msgpass/VarSyncMngOptions.h"
 
 #include "Pattern4GPU_axl.h"
 

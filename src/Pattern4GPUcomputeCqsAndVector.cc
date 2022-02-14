@@ -244,141 +244,51 @@ _computeCqsAndVector_Varcgpu_v1() {
 
   P4GPU_DECLARE_TIMER(subDomain(), NodeVectorUpdate); P4GPU_START_TIMER(NodeVectorUpdate);
 
-  auto async_node_vector_update = [&](NodeGroup node_group, bool high_priority=false) -> Ref<RunQueue> {
-    // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
-    // Du coup, on boucle sur les Node
-    // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
-    // Mais ici, on a pré-construit un tableau global au mailles qui indique si une maille fait partie
-    // du groupe active_cells ou pas (m_is_active_cell)
-    // Rem : en décomp. de dom., pour la plupart des sous-dom. on aura : active_cells = allCells
-    // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
-    //   1- on initialise le vecteur à 0
-    //   2- on calcule les constributions des mailles connectées au noeud uniquement si elles sont actives
-    ax::RunQueueBuildInfo bi;
-    if (high_priority) {
-      // 0 = priorité par défaut
-      // Plus la valeur de priorité est faible, plus la queue sera prioritaire
-      bi.setPriority(-10); 
-    }
-    auto ref_queue = makeQueueRef(m_acc_env->runner(), bi);
-    ref_queue->setAsync(true);
-    auto command = makeCommand(ref_queue.get());
+  // On fait le calcul sur les noeuds "own" m_node_vector 
+  // et on synchronise les noeuds fantômes de m_node_vector
+  m_acc_env->vsyncMng()->computeAndSync(
+      [&](NodeGroup node_group, RunQueue* async_queue) {
+        // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
+        // Du coup, on boucle sur les Node
+        // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
+        // Mais ici, on a pré-construit un tableau global au mailles qui indique si une maille fait partie
+        // du groupe active_cells ou pas (m_is_active_cell)
+        // Rem : en décomp. de dom., pour la plupart des sous-dom. on aura : active_cells = allCells
+        // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
+        //   1- on initialise le vecteur à 0
+        //   2- on calcule les constributions des mailles connectées au noeud uniquement si elles sont actives
+        auto command = makeCommand(async_queue);
 
-    auto in_cell_arr1 = ax::viewIn(command, m_cell_arr1);
-    auto in_cell_arr2 = ax::viewIn(command, m_cell_arr2);
-    auto in_cell_cqs  = ax::viewIn(command, m_cell_cqs);
-    auto in_is_active_cell = ax::viewIn(command, m_is_active_cell);
+        auto in_cell_arr1 = ax::viewIn(command, m_cell_arr1);
+        auto in_cell_arr2 = ax::viewIn(command, m_cell_arr2);
+        auto in_cell_cqs  = ax::viewIn(command, m_cell_cqs);
+        auto in_is_active_cell = ax::viewIn(command, m_is_active_cell);
 
-    auto out_node_vector = ax::viewOut(command, m_node_vector);
+        auto out_node_vector = ax::viewOut(command, m_node_vector);
 
-    auto node_index_in_cells = m_acc_env->nodeIndexInCells();
-    const Integer max_node_cell = m_acc_env->maxNodeCell();
+        auto node_index_in_cells = m_acc_env->nodeIndexInCells();
+        const Integer max_node_cell = m_acc_env->maxNodeCell();
 
-    auto nc_cty = m_acc_env->connectivityView().nodeCell();
+        auto nc_cty = m_acc_env->connectivityView().nodeCell();
 
-    command << RUNCOMMAND_ENUMERATE(Node,nid,node_group) {
-      Int32 first_pos = nid.localId() * max_node_cell;
-      Integer index = 0;
-      Real3 node_vec = Real3::zero();
-      for( CellLocalId cid : nc_cty.cells(nid) ){
-        if (in_is_active_cell[cid]) { // la maille ne contribue que si elle est active
-          Int16 node_index = node_index_in_cells[first_pos + index];
-          node_vec += (in_cell_arr1[cid]+in_cell_arr2[cid]) 
-            * in_cell_cqs[cid][node_index];
-        }
-        ++index;
-      }
-      out_node_vector[nid] = node_vec;
-    }; // non bloquant
-
-    return ref_queue;
-  };
-
-  if (options()->getCcavVectorSyncVersion() == CCAV_VS_bulksync_std ||
-      options()->getCcavVectorSyncVersion() == CCAV_VS_bulksync_queue) 
-  {
-    // Calcul sur tous les noeuds "own"
-    Ref<RunQueue> ref_queue = async_node_vector_update(ownNodes());
-    ref_queue->barrier();
-
-    // Puis comms
-    PROF_ACC_BEGIN("syncNodeVector");
-    if (options()->getCcavVectorSyncVersion() == CCAV_VS_bulksync_std) {
-      m_node_vector.synchronize();
-    } else {
-      ARCANE_ASSERT(options()->getCcavVectorSyncVersion()==CCAV_VS_bulksync_queue,
-          ("Ici, option differente de bulksync_queue"));
-      auto vsync = m_acc_env->vsyncMng();
-      //vsync->globalSynchronize(m_node_vector);
-      vsync->globalSynchronizeQueue(ref_queue, m_node_vector);
-      //vsync->globalSynchronizeDevThr(m_node_vector);
-      //vsync->globalSynchronizeDevQueues(m_node_vector);
-    }
-    PROF_ACC_END;
-
-  } 
-  else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue ||
-      options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue_d) 
-  {
-    auto vsync = m_acc_env->vsyncMng();
-    SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
-
-    // On amorce sur le DEVICE le calcul sur les noeuds "own" sur le bord du
-    // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
-    Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems(), /*high_priority=*/true);
-    // ici, le calcul n'est pas terminé sur le DEVICE
-
-    // On amorce sur le DEVICE le calcul des noeuds intérieurs dont ne dépendent
-    // pas les comms sur la queue ref_queue_inr (_inr = inner)
-    Ref<RunQueue> ref_queue_inr = async_node_vector_update(sync_nodes->privateItems());
-
-    // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
-    // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
-    // la queue ref_queue_bnd
-//    vsync->globalSynchronizeQueue(ref_queue_bnd, m_node_vector);
-    if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue)
-      vsync->globalSynchronizeQueueEvent(ref_queue_bnd, m_node_vector);
-    else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_evqueue_d)
-      vsync->globalSynchronizeQueueEventD(ref_queue_bnd, m_node_vector);
-    // ici, après cet appel, ref_queue_bnd est synchronisée
-
-    // On attend la terminaison des calculs intérieurs
-    ref_queue_inr->barrier();
-  } 
-  else if (options()->getCcavVectorSyncVersion() == CCAV_VS_overlap_iqueue) 
-  {
-    auto vsync = m_acc_env->vsyncMng();
-    SyncItems<Node>* sync_nodes = vsync->getSyncItems<Node>();
-
-    // On amorce sur le DEVICE le calcul sur les noeuds "own" sur le bord du
-    // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
-    Ref<RunQueue> ref_queue_bnd = async_node_vector_update(sync_nodes->sharedItems(), /*high_priority=*/true);
-    // ici, le calcul n'est pas terminé sur le DEVICE
-    
-    // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
-    auto ref_sync_req = vsync->iGlobalSynchronizeQueue(ref_queue_bnd, m_node_vector);
-
-    // On amorce sur le DEVICE le calcul des noeuds intérieurs dont ne dépendent
-    // pas les comms sur la queue ref_queue_inr (_inr = inner)
-    Ref<RunQueue> ref_queue_inr = async_node_vector_update(sync_nodes->privateItems());
-
-    // Une fois le packing des données terminé sur ref_queue_bnd
-    // on effectue les comms MPI sur CPU, 
-    // puis unpacking des données et on synchronise la queue ref_queue_bnd
-    ref_sync_req->wait();
-    // ici, après cet appel, ref_queue_bnd est synchronisée
-
-    // On attend la terminaison des calculs intérieurs
-    ref_queue_inr->barrier();
-  } 
-  else
-  {
-    ARCANE_ASSERT(options()->getCcavVectorSyncVersion()==CCAV_VS_nosync,
-        ("Ici, pas de synchro"));
-    // Pas de synchro
-    Ref<RunQueue> ref_queue = async_node_vector_update(allNodes());
-    ref_queue->barrier();
-  }
+        command << RUNCOMMAND_ENUMERATE(Node,nid,node_group) {
+          Int32 first_pos = nid.localId() * max_node_cell;
+          Integer index = 0;
+          Real3 node_vec = Real3::zero();
+          for( CellLocalId cid : nc_cty.cells(nid) ){
+            if (in_is_active_cell[cid]) { // la maille ne contribue que si elle est active
+              Int16 node_index = node_index_in_cells[first_pos + index];
+              node_vec += (in_cell_arr1[cid]+in_cell_arr2[cid]) 
+                * in_cell_cqs[cid][node_index];
+            }
+            ++index;
+          }
+          out_node_vector[nid] = node_vec;
+        }; // non bloquant
+      }, // -------------------------------------> fin définition traitement
+      m_node_vector, // -------------------------> variable à synchroniser
+      options()->getCcavVectorSyncVersion() // --> choix de l'overlapping entre calcul et comms
+        ); 
 
   P4GPU_STOP_TIMER(NodeVectorUpdate);
   PROF_ACC_END;
@@ -412,6 +322,8 @@ _computeCqsAndVector_Varcgpu_v2()
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans _computeCqsAndVector_Varcgpu_v2";
 
+  P4GPU_DECLARE_TIMER(subDomain(), ComputeCqs); P4GPU_START_TIMER(ComputeCqs);
+
   constexpr Arcane::Real k025 = 0.25;
 
   auto queue = m_acc_env->newQueue();
@@ -442,7 +354,11 @@ _computeCqsAndVector_Varcgpu_v2()
       out_cell_cqs(7, cell_i) = -k025 * Arcane::math::cross(pos[6] - pos[3], pos[4] - pos[3]);
     };
   }
-  {
+  P4GPU_STOP_TIMER(ComputeCqs);
+
+  P4GPU_DECLARE_TIMER(subDomain(), NodeVectorUpdate); P4GPU_START_TIMER(NodeVectorUpdate);
+
+  auto async_node_vector_update = [&](NodeGroup node_group, RunQueue* async_queue) {
     // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
     // Du coup, on boucle sur les Node
     // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
@@ -452,7 +368,7 @@ _computeCqsAndVector_Varcgpu_v2()
     // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
     //   1- on initialise le vecteur à 0
     //   2- on calcule les constributions des mailles connectées au noeud uniquement si elles sont actives
-    auto command = makeCommand(queue);
+    auto command = makeCommand(async_queue);
 
     auto in_cell_arr1 = viewIn(command, m_cell_arr1);
     auto in_cell_arr2 = viewIn(command, m_cell_arr2);
@@ -467,7 +383,7 @@ _computeCqsAndVector_Varcgpu_v2()
 
     auto nc_cty = m_acc_env->connectivityView().nodeCell();
 
-    command << RUNCOMMAND_ENUMERATE(Node,nid,allNodes()) {
+    command << RUNCOMMAND_ENUMERATE(Node,nid,node_group) {
       Int32 first_pos = nid.localId() * max_node_cell;
       Integer index = 0;
       Real3 node_vec = Real3::zero();
@@ -480,8 +396,15 @@ _computeCqsAndVector_Varcgpu_v2()
         ++index;
       }
       out_node_vector[nid] = node_vec;
-    };
-  }
+    };  // non bloquant
+  };
+
+  // On fait le calcul sur les noeuds "own" m_node_vector 
+  // et on synchronise les noeuds fantômes de m_node_vector
+  m_acc_env->vsyncMng()->computeAndSync(async_node_vector_update, m_node_vector,
+      options()->getCcavVectorSyncVersion());
+
+  P4GPU_STOP_TIMER(NodeVectorUpdate);
   PROF_ACC_END;
 
 //  _dumpNumArrayCqs();

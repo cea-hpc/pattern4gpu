@@ -339,15 +339,8 @@ initCellArr12()
   }
   else if (options()->getInitCellArr12Version() == IA12V_arcgpu_v1)
   {
-    auto async_init_cell_arr12 = [&](CellGroup cell_group, bool high_priority=false) -> Ref<RunQueue> {
-      ax::RunQueueBuildInfo bi;
-      if (high_priority) {
-        // 0 = priorité par défaut
-        // Plus la valeur de priorité est faible, plus la queue sera prioritaire
-        bi.setPriority(-10); 
-      }
-      auto ref_queue = makeQueueRef(m_acc_env->runner(), bi);
-      ref_queue->setAsync(true);
+    auto async_init_cell_arr12 = [&](CellGroup cell_group, eQueuePriority qp=QP_default) -> Ref<RunQueue> {
+      auto ref_queue = m_acc_env->refQueueAsync(qp);
       auto command = makeCommand(ref_queue.get());
 
       auto in_node_coord = ax::viewIn(command, node_coord);
@@ -392,7 +385,7 @@ initCellArr12()
       auto vsync = m_acc_env->vsyncMng();
       SyncItems<Cell>* sync_cells = vsync->getSyncItems<Cell>();
 
-      auto ref_queue_bnd = async_init_cell_arr12(sync_cells->sharedItems(), /*high_priority=*/true);
+      auto ref_queue_bnd = async_init_cell_arr12(sync_cells->sharedItems(), QP_high);
       auto ref_queue_inr = async_init_cell_arr12(sync_cells->privateItems());
       // TODO : aggréger les comms de m_cell_arr1 et m_cell_arr2
       vsync->globalSynchronizeQueue(ref_queue_bnd, m_cell_arr1);

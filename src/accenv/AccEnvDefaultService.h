@@ -22,6 +22,7 @@ class AccEnvDefaultService : public ArcaneAccEnvDefaultObject
 
   ax::Runner& runner() override { return m_runner; }
   ax::RunQueue newQueue() override { return makeQueue(m_runner); }
+  Ref<ax::RunQueue> refQueueAsync(eQueuePriority qp=QP_default) override;
 
   AccMemAdviser* accMemAdv() override { return m_acc_mem_adv; }
 
