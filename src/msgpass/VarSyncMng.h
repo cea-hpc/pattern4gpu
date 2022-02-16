@@ -8,6 +8,7 @@
 
 #include "msgpass/SyncItems.h"
 #include "msgpass/SyncBuffers.h"
+#include "msgpass/VarSyncMngOptions.h"
 #include "accenv/AcceleratorEvent.h"
 
 using namespace Arcane;
@@ -97,6 +98,10 @@ class VarSyncMng {
   template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
   Ref<GlobalSyncRequest<ItemType, DataType, MeshVarRefT> > iGlobalSynchronizeQueue(Ref<RunQueue> ref_queue, MeshVarRefT<ItemType, DataType> var);
 
+  // Overlapping entre calcul et communications
+  template<typename Func, typename MeshVariableRefT>
+  void computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version=VS_overlap_evqueue);
+
  protected:
   
   // Pré-allocation des buffers de communication pour miniser le nb de réallocations
@@ -104,6 +109,7 @@ class VarSyncMng {
 
  protected:
 
+  IMesh* m_mesh=nullptr;
   ax::Runner& m_runner;
 
   bool m_is_device_aware=false; //! Vrai si l'on peut effectuer les comms avec adresses sur GPU
@@ -124,6 +130,9 @@ class VarSyncMng {
   UniqueArray<AcceleratorEvent*> m_pack_events;  //! Les evenements pour le packing des données
   UniqueArray<AcceleratorEvent*> m_transfer_events;  //! Les evenements pour le transfert des données
 };
+
+// Implementation template de computeAndSync
+#include "msgpass/ComputeAndSync.h"
 
 /*---------------------------------------------------------------------------*/
 /* Spécialisations pour retourner le nb de fois un type élémentaire DataType */

@@ -15,8 +15,9 @@
 #include "accenv/AcceleratorUtils.h"
 //
 
-// Ce fichier doit être inclu avant Pattern4GPU_axl.h
+// Ces fichiers doivent être inclus avant Pattern4GPU_axl.h
 #include "Pattern4GPUOptions.h"
+#include "msgpass/VarSyncMngOptions.h"
 
 #include "Pattern4GPU_axl.h"
 
@@ -90,8 +91,10 @@ class Pattern4GPUModule
   void _computeCqsAndVector_Vmt();
   void _computeCqsAndVector_Vmt_v2();
   void _computeCqsAndVector_Varcgpu_v1();
+  void _computeCqsAndVector_Varcgpu_v2();  // Arcane GPU optimisé par GG
   void _computeCqsAndVector_Varcgpu_v5();  // Arcane GPU optimisé par GG
   void _computeCqsAndVector_Vkokkos();
+  void _dumpNumArrayCqs();
 
   void _testCell2Cell();
   void _testNode2Node();

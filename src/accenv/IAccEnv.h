@@ -21,6 +21,7 @@ class IAccEnv {
 
   virtual ax::Runner& runner() = 0;
   virtual ax::RunQueue newQueue() = 0;
+  virtual Ref<ax::RunQueue> refQueueAsync(eQueuePriority qp=QP_default) = 0;
 
   virtual AccMemAdviser* accMemAdv() = 0;
 

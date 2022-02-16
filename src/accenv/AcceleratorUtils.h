@@ -68,6 +68,16 @@ namespace ax = Arcane::Accelerator;
 
 #endif
 
+
+/*---------------------------------------------------------------------------*/
+/* Catégorie de priorités pour création d'une queue                          */
+/*---------------------------------------------------------------------------*/
+enum eQueuePriority {
+  QP_low = 0,  //! jamais prioritaire
+  QP_default,  //! avec la même priorité qu'une queue par défaut
+  QP_high      //! toujours prioritaire
+};
+
 /*---------------------------------------------------------------------------*/
 /* Disponibilité d'un accélérateur associé à un runner                       */
 /*---------------------------------------------------------------------------*/
@@ -75,6 +85,25 @@ class AcceleratorUtils {
  public:
   static bool isAvailable(const ax::Runner& runner) {
     return ax::impl::isAcceleratorPolicy(runner.executionPolicy());
+  }
+
+  /*---------------------------------------------------------------------------*/
+  /* Référence sur une queue asynchrone créée avec un niveau de priorité       */
+  /*---------------------------------------------------------------------------*/
+  static Ref<ax::RunQueue> refQueueAsync(ax::Runner& runner, eQueuePriority qp) {
+    ax::RunQueueBuildInfo bi;
+    // 0 = priorité par défaut
+    // Plus la valeur de priorité est faible, plus la queue sera prioritaire
+    // TODO : récupérer avec Arcane les valeurs [min,max] admissibles (et non plus utiliser +-10)
+    if (qp==QP_high) {
+      bi.setPriority(-10); 
+    } else if (qp==QP_low) {
+      bi.setPriority(+10); 
+    } // else, par défaut on n'affecte pas de priorité
+    auto ref_queue = ax::makeQueueRef(runner, bi);
+    ref_queue->setAsync(true);
+
+    return ref_queue;
   }
 };
 

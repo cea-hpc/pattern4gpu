@@ -6,6 +6,8 @@ add_executable(Pattern4GPU main.cc)
 target_link_libraries(Pattern4GPU PUBLIC libpattern4gpu arcane_core)
 
 add_library(libpattern4gpu Pattern4GPUModule.cc
+                           Pattern4GPUcomputeCqsAndVector.cc 
+                           Pattern4GPUupdateVectorFromTensor.cc 
                            Pattern4GPUupdateTensor.cc 
                            Pattern4GPUTestCartesian.cc 
                            Pattern4GPUBenchCartesian.cc 
@@ -87,6 +89,8 @@ if(WANT_CUDA)
   find_package(CUDAToolkit REQUIRED)
   set_source_files_properties(
       Pattern4GPUModule.cc 
+      Pattern4GPUcomputeCqsAndVector.cc 
+      Pattern4GPUupdateVectorFromTensor.cc 
       Pattern4GPUupdateTensor.cc 
       Pattern4GPUTestCartesian.cc 
       Pattern4GPUBenchCartesian.cc 

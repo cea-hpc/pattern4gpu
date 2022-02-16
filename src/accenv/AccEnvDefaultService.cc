@@ -230,6 +230,14 @@ initAcc()
 }
 
 /*---------------------------------------------------------------------------*/
+/* Référence sur une queue asynchrone créée avec un niveau de priorité       */
+/*---------------------------------------------------------------------------*/
+Ref<ax::RunQueue> AccEnvDefaultService::
+refQueueAsync(eQueuePriority qp) {
+  return AcceleratorUtils::refQueueAsync(m_runner, qp);
+}
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 void AccEnvDefaultService::
 _computeNodeIndexInCells() {

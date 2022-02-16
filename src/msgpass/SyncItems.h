@@ -77,4 +77,12 @@ class SyncItems {
   ItemGroupType m_ghost_items;
 };
 
+/* Retourne les groupes associés aux types d'items
+ */
+template<typename ItemType>
+ItemGroupT<ItemType> get_all_items(IMesh* mesh);
+
+template<typename ItemType>
+ItemGroupT<ItemType> get_own_items(IMesh* mesh);
+
 #endif

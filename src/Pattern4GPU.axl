@@ -316,6 +316,7 @@
     <enumvalue name="mt" genvalue="CCVV_mt" />
     <enumvalue name="mt_v2" genvalue="CCVV_mt_v2" />
     <enumvalue name="arcgpu_v1" genvalue="CCVV_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2" genvalue="CCVV_arcgpu_v2" />
     <enumvalue name="arcgpu_v5" genvalue="CCVV_arcgpu_v5" />
     <enumvalue name="kokkos" genvalue="CCVV_kokkos" />
   </enumeration>
@@ -329,14 +330,14 @@
   </enumeration>
 
   <!-- - - - - ccav-vector-sync-version - - - - -->
-  <enumeration name="ccav-vector-sync-version" type="eCcavVectorSyncVersion" default="overlap_evqueue">
+  <enumeration name="ccav-vector-sync-version" type="eVarSyncVersion" default="overlap_evqueue">
     <description>Choix version implémentation synchronisation de node_vector dans ComputeCqsAndVector </description>
-    <enumvalue name="nosync"          genvalue="CCAV_VS_nosync" />
-    <enumvalue name="bulksync_std"    genvalue="CCAV_VS_bulksync_std" />
-    <enumvalue name="bulksync_queue"  genvalue="CCAV_VS_bulksync_queue" />
-    <enumvalue name="overlap_evqueue" genvalue="CCAV_VS_overlap_evqueue" />
-    <enumvalue name="overlap_evqueue_d" genvalue="CCAV_VS_overlap_evqueue_d" />
-    <enumvalue name="overlap_iqueue"  genvalue="CCAV_VS_overlap_iqueue" />
+    <enumvalue name="nosync"          genvalue="VS_nosync" />
+    <enumvalue name="bulksync_std"    genvalue="VS_bulksync_std" />
+    <enumvalue name="bulksync_queue"  genvalue="VS_bulksync_queue" />
+    <enumvalue name="overlap_evqueue" genvalue="VS_overlap_evqueue" />
+    <enumvalue name="overlap_evqueue_d" genvalue="VS_overlap_evqueue_d" />
+    <enumvalue name="overlap_iqueue"  genvalue="VS_overlap_iqueue" />
   </enumeration>
 
   <!-- - - - - init-menv-var-version - - - - -->
