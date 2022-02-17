@@ -24,7 +24,8 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
   
   ITraceMng* tm = m_mesh->traceMng();
   if (vs_version == VS_bulksync_std ||
-      vs_version == VS_bulksync_queue) 
+      vs_version == VS_bulksync_queue ||
+      vs_version == VS_bulksync_evqueue) 
   {
     // Calcul sur tous les items "own"
     auto own_items = get_own_items<ItemType>(m_mesh);
@@ -38,14 +39,17 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
     if (vs_version == VS_bulksync_std) {
       tm->debug() << "bulksync_std";
       var.synchronize();
-    } else {
-      ARCANE_ASSERT(vs_version==VS_bulksync_queue,
-          ("Ici, option differente de bulksync_queue"));
+    } else if (vs_version == VS_bulksync_queue) {
       tm->debug() << "bulksync_queue";
       //this->globalSynchronize(var);
       this->globalSynchronizeQueue(ref_queue, var);
       //this->globalSynchronizeDevThr(var);
       //this->globalSynchronizeDevQueues(var);
+    } else {
+      ARCANE_ASSERT(vs_version==VS_bulksync_evqueue,
+          ("Ici, option differente de bulksync_evqueue"));
+      tm->debug() << "bulksync_evqueue";
+      this->globalSynchronizeQueueEvent(ref_queue, var);
     }
     PROF_ACC_END;
 
