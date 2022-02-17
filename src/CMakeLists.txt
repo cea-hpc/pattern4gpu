@@ -61,7 +61,9 @@ add_library(libmsgpass msgpass/VarSyncMng.cc
                        msgpass/MsgPassInit.cc
                        msgpass/PackTransfer.cc
                        msgpass/SyncItems.cc
-                       msgpass/SyncBuffers.cc)
+                       msgpass/SyncBuffers.cc
+                       msgpass/SyncEnvIndexes.cc
+                       msgpass/MultiMatSynchronize.cc)
 target_include_directories(libmsgpass PUBLIC .)
 target_link_libraries(libmsgpass PUBLIC arcane_core)
 # Pour MPI
@@ -118,7 +120,9 @@ if(WANT_CUDA)
       msgpass/MsgPassInit.cc
       msgpass/PackTransfer.cc
       msgpass/SyncItems.cc
+      msgpass/SyncEnvIndexes.cc
       msgpass/SyncBuffers.cc
+      msgpass/MultiMatSynchronize.cc
       PROPERTIES LANGUAGE CUDA)
   target_link_libraries(libpattern4gpu PUBLIC arcane_accelerator_cuda_runtime)
   target_link_libraries(libgeomenv PUBLIC arcane_accelerator_cuda_runtime)

@@ -30,6 +30,11 @@ ArrayView<value_type> envView(CellMaterialVariableScalarRef<value_type>& var_men
 /*---------------------------------------------------------------------------*/
 class EnvVarIndex {
  public:
+  EnvVarIndex() :
+    m_array_index (-1),
+    m_value_index (-1)
+  {  }
+
   ARCCORE_HOST_DEVICE EnvVarIndex(Int32 array_index, Int32 value_index) :
     m_array_index (array_index),
     m_value_index (value_index)

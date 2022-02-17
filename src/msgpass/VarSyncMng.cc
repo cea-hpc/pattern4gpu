@@ -12,8 +12,9 @@ bool is_comm_device_aware();
 /* Gère les synchronisations des mailles fantômes par Message Passing        */
 /*---------------------------------------------------------------------------*/
 VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_adv) :
-  m_mesh   (mesh),
-  m_runner (runner)
+  m_mesh        (mesh),
+  m_acc_mem_adv (acc_mem_adv),
+  m_runner      (runner)
 {
   m_is_device_aware = is_comm_device_aware();
 
@@ -27,8 +28,8 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
   m_neigh_ranks = var_sync->communicatingRanks();
   m_nb_nei = m_neigh_ranks.size();
 
-  m_sync_cells = new SyncItems<Cell>(m_mesh,m_neigh_ranks, acc_mem_adv);
-  m_sync_nodes = new SyncItems<Node>(m_mesh,m_neigh_ranks, acc_mem_adv);
+  m_sync_cells = new SyncItems<Cell>(m_mesh,m_neigh_ranks, m_acc_mem_adv);
+  m_sync_nodes = new SyncItems<Node>(m_mesh,m_neigh_ranks, m_acc_mem_adv);
   m_sync_buffers = new SyncBuffers(isAcceleratorAvailable());
   m_neigh_queues = new MultiAsyncRunQueue(m_runner, m_nb_nei, /*unlimited=*/true);
 
@@ -45,10 +46,9 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
       m_transfer_events[inei] = nullptr;
     }
   }
-  ax::RunQueueBuildInfo bi;
-  bi.setPriority(-10); // la priorité doit être la même que celle de la queue qui servira au pack/unpack des buffers de comms
-  m_ref_queue_data = makeQueueRef(m_runner, bi);
-  m_ref_queue_data->setAsync(true);
+
+  // la priorité doit être la même que celle de la queue qui servira au pack/unpack des buffers de comms = QP_high
+  m_ref_queue_data = AcceleratorUtils::refQueueAsync(m_runner, QP_high);
 }
 
 VarSyncMng::~VarSyncMng() {
@@ -60,6 +60,29 @@ VarSyncMng::~VarSyncMng() {
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
     delete m_pack_events[inei];
     delete m_transfer_events[inei];
+  }
+
+  delete m_sync_evi;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Initialise les futures synchros multi-mat                                 */
+/*---------------------------------------------------------------------------*/
+void VarSyncMng::initSyncMultiEnv(IMeshMaterialMng* mesh_material_mng) {
+  m_mesh_material_mng = mesh_material_mng;
+  if (!m_sync_evi) {
+    m_sync_evi = new SyncEnvIndexes(
+        MatVarSpace::MaterialAndEnvironment, m_mesh_material_mng,
+        m_neigh_ranks, m_acc_mem_adv);
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/* Remet à jour les synchros multi-mat quand la carte des environnements a changé */
+/*---------------------------------------------------------------------------*/
+void VarSyncMng::updateSyncMultiEnv() {
+  if (m_sync_evi) {
+    m_sync_evi->updateEnvIndexes();
   }
 }
 
@@ -97,16 +120,16 @@ SyncItems<Node>* VarSyncMng::getSyncItems() {
 void VarSyncMng::_preAllocBuffers() {
   auto sync_items = getSyncItems<Cell>();
   
-  auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
-  auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
+  auto nb_owned_item_idx_pn = sync_items->nbOwnedItemIdxPn();
+  auto nb_ghost_item_idx_pn = sync_items->nbGhostItemIdxPn();
 
   // Alloue pour un buffer de 24 Real3 par maille
   Integer degree = 24;
 
   m_sync_buffers->resetBuf();
   // On prévoit une taille max du buffer qui va contenir tous les messages
-  m_sync_buffers->addEstimatedMaxSz<Real3>(owned_item_idx_pn, degree);
-  m_sync_buffers->addEstimatedMaxSz<Real3>(ghost_item_idx_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<Real3>(nb_owned_item_idx_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<Real3>(nb_ghost_item_idx_pn, degree);
   // Le buffer de tous les messages est réalloué si pas assez de place
   m_sync_buffers->allocIfNeeded();
 }

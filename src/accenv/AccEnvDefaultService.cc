@@ -393,6 +393,9 @@ updateMultiEnv(IMeshMaterialMng* mesh_material_mng) {
     IMeshEnvironment* env = *ienv;
     m_acc_mem_adv->setReadMostly(env->pureEnvItems().valueIndexes());
   }
+
+  // Pour mettre à jours des listes pour les comms multi-env
+  m_vsync_mng->updateSyncMultiEnv();
 }
 
 /*---------------------------------------------------------------------------*/
@@ -400,6 +403,10 @@ updateMultiEnv(IMeshMaterialMng* mesh_material_mng) {
 /*---------------------------------------------------------------------------*/
 void AccEnvDefaultService::
 initMultiEnv(IMeshMaterialMng* mesh_material_mng) {
+
+  // 6 = toutes les variables sont synchronisées simultanément
+  mesh_material_mng->setSynchronizeVariableVersion(6);
+  m_vsync_mng->initSyncMultiEnv(mesh_material_mng);
 
   m_menv_queue = new MultiAsyncRunQueue(m_runner, mesh_material_mng->environments().size());
 

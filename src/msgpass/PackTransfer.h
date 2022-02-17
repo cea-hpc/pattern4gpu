@@ -2,6 +2,7 @@
 #define MSG_PASS_PACK_TRANSFER_H
 
 #include "accenv/AcceleratorUtils.h"
+#include "accenv/MultiEnvUtils.h"
 #include "msgpass/SyncBuffers.h"
 
 using namespace Arcane;
@@ -82,5 +83,50 @@ void async_unpack_buf2var(IntegerConstArrayView item_idx,
   }; // asynchrone
 }
 
+
+/*---------------------------------------------------------------------------*/
+/* async_pack_varmenv2buf */
+/*---------------------------------------------------------------------------*/
+template< typename DataType>
+void async_pack_varmenv2buf(ConstArrayView<EnvVarIndex> levis, 
+    MultiEnvVar<DataType>& var_menv,
+    ArrayView<Byte> buf, RunQueue& queue) 
+{
+  auto command = makeCommand(queue);
+
+  auto in_var_menv = var_menv.span();
+  Span<const EnvVarIndex> in_levis(levis);
+  Span<DataType> buf_vals(MultiBufView::valBuf<DataType>(buf));
+
+  Integer nb_evis = levis.size();
+
+  command << RUNCOMMAND_LOOP1(iter, nb_evis) {
+    auto [i] = iter();
+    buf_vals[i] = in_var_menv[ in_levis[i] ];
+  }; // asynchrone
+}
+
+
+/*---------------------------------------------------------------------------*/
+/* async_unpack_buf2varmenv */
+/*---------------------------------------------------------------------------*/
+template< typename DataType>
+void async_unpack_buf2varmenv(ConstArrayView<EnvVarIndex> levis,
+    ArrayView<Byte> buf, 
+    MultiEnvVar<DataType>& var_menv, RunQueue& queue) 
+{
+  auto command = makeCommand(queue);
+
+  auto out_var_menv = var_menv.span();
+  Span<const EnvVarIndex> in_levis(levis);
+  Span<const DataType>    buf_vals(MultiBufView::valBuf<DataType>(buf));
+
+  Integer nb_evis = levis.size();
+
+  command << RUNCOMMAND_LOOP1(iter, nb_evis) {
+    auto [i] = iter();
+    out_var_menv.setValue(in_levis[i], buf_vals[i]);
+  }; // asynchrone
+}
 #endif
 

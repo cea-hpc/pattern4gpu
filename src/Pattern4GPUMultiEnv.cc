@@ -1,6 +1,7 @@
 #include "Pattern4GPUModule.h"
 
 #include <arcane/materials/ComponentPartItemVectorView.h>
+#include <arcane/materials/MeshMaterialVariableSynchronizerList.h>
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
 
 using namespace Arcane;
@@ -58,8 +59,11 @@ initMEnvVar() {
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
 
   if (options()->getInitMenvVarVersion() == IMVV_ori) {
+    //bool to_sync = true;
+    bool to_sync = false;
+    CellGroup cell_group = (to_sync ? ownCells() : allCells());
     CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
-    ENUMERATE_CELL(icell, allCells()) {
+    ENUMERATE_CELL(icell, cell_group) {
       Cell cell = * icell;
       const Node& first_node=cell.node(0);
       const Real3& c=node_coord[first_node];
@@ -77,6 +81,20 @@ initMEnvVar() {
           m_menv_var3[ev] = m_frac_vol[ev] * m_menv_var3[icell];
         }
       }
+    }
+    if (to_sync) {
+#if 0
+      MeshMaterialVariableSynchronizerList mmvsl(m_mesh_material_mng);
+      m_menv_var1.synchronize(mmvsl);
+      m_menv_var2.synchronize(mmvsl);
+      m_menv_var3.synchronize(mmvsl);
+      mmvsl.apply();
+#else
+      auto ref_queue = m_acc_env->refQueueAsync();
+      m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, m_menv_var1);
+      m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, m_menv_var2);
+      m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, m_menv_var3);
+#endif
     }
   }
   else if (options()->getInitMenvVarVersion() == IMVV_arcgpu_v1) 
@@ -490,6 +508,10 @@ partialAndMean() {
         out_menv_var1_g[cid] += in_frac_vol[imix] * inout_menv_var1[imix];
       };
     }
+#if 1
+    auto ref_queue = m_acc_env->refQueueAsync();
+    m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, m_menv_var1);
+#endif
   }
 
   _dumpVisuMEnvVar();

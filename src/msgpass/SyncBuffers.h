@@ -55,9 +55,9 @@ class SyncBuffers {
   //
   void resetBuf();
 
-  // 
+  // Ajout à partir du nb d'items par voisin
   template<typename DataType>
-  void addEstimatedMaxSz(ConstMultiArray2View<Integer> item_idx_pn, Integer degree);
+  void addEstimatedMaxSz(IntegerConstArrayView item_sizes, Integer degree);
 
   // 
   void allocIfNeeded();
@@ -73,7 +73,7 @@ class SyncBuffers {
    */
   template<typename DataType>
   MultiBufView multiBufView(
-    ConstMultiArray2View<Integer> item_idx_pn, Integer degree, Integer imem);
+    IntegerConstArrayView item_sizes, Integer degree, Integer imem);
 
  protected:
   /*!

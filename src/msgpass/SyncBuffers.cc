@@ -109,13 +109,13 @@ SyncBuffers::SyncBuffers(bool is_acc_avl) :
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-/*---------------------------------------------------------------------------*/
 SyncBuffers::~SyncBuffers() {
   for(Integer imem(0) ; imem<2 ; ++imem) {
     delete m_buf_mem[imem].m_buf;
   }
 }
 
+/*---------------------------------------------------------------------------*/
 /* A partir des items à communiquer, estime une borne sup de la taille du    */ 
 /* buffer en octets                                                          */
 /*---------------------------------------------------------------------------*/
@@ -145,11 +145,12 @@ void SyncBuffers::resetBuf() {
 }
 
 /*---------------------------------------------------------------------------*/
+/* Ajout à partir du nb d'items par voisin                                   */
 /*---------------------------------------------------------------------------*/
 template<typename DataType>
-void SyncBuffers::addEstimatedMaxSz(ConstMultiArray2View<Integer> item_idx_pn,
+void SyncBuffers::addEstimatedMaxSz(IntegerConstArrayView item_sizes,
     Integer degree) {
-  m_buf_estim_sz += estimatedMaxBufSz<DataType>(item_idx_pn.dim2Sizes(), degree);
+  m_buf_estim_sz += estimatedMaxBufSz<DataType>(item_sizes, degree);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -261,14 +262,14 @@ MultiBufView SyncBuffers::_multiBufView(
 /*---------------------------------------------------------------------------*/
 template<typename DataType>
 MultiBufView SyncBuffers::multiBufView(
-    ConstMultiArray2View<Integer> item_idx_pn, Integer degree, Integer imem) {
+    IntegerConstArrayView item_sizes, Integer degree, Integer imem) {
 
   auto& buf_mem = m_buf_mem[imem];
   Byte* new_ptr = buf_mem.m_buf->data()+buf_mem.m_first_av_pos;
   Int64 av_space = buf_mem.m_buf->size()-buf_mem.m_first_av_pos;
   Span<Byte> buf_bytes(new_ptr, av_space);
 
-  auto mb = _multiBufView<DataType>(item_idx_pn.dim2Sizes(), degree, buf_bytes);
+  auto mb = _multiBufView<DataType>(item_sizes, degree, buf_bytes);
 
   auto rg{mb.rangeSpan()}; // Encapsule [beg_ptr, end_ptr[
   Byte* end_ptr = rg.data()+rg.size();
@@ -283,8 +284,8 @@ MultiBufView SyncBuffers::multiBufView(
 #define INST_SYNC_BUFFERS(__DataType__) \
   template ArrayView<__DataType__> MultiBufView::valBuf<__DataType__>(ArrayView<Byte> buf); \
   template Array2View<__DataType__> MultiBufView::valBuf2<__DataType__>(ArrayView<Byte> buf, Integer dim2_size); \
-  template MultiBufView SyncBuffers::multiBufView<__DataType__>(ConstMultiArray2View<Integer> item_idx_pn, Integer degree, Integer imem); \
-  template void SyncBuffers::addEstimatedMaxSz<__DataType__>(ConstMultiArray2View<Integer> item_idx_pn, Integer degree)
+  template MultiBufView SyncBuffers::multiBufView<__DataType__>(IntegerConstArrayView item_sizes, Integer degree, Integer imem); \
+  template void SyncBuffers::addEstimatedMaxSz<__DataType__>(IntegerConstArrayView item_sizes, Integer degree)
 
 INST_SYNC_BUFFERS(Real);
 INST_SYNC_BUFFERS(Real3);

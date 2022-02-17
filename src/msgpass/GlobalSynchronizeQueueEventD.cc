@@ -25,6 +25,9 @@ void VarSyncMng::globalSynchronizeQueueEventD(Ref<RunQueue> ref_queue, MeshVaria
 
   SyncItems<ItemType>* sync_items = getSyncItems<ItemType>();
 
+  auto nb_owned_item_idx_pn = sync_items->nbOwnedItemIdxPn();
+  auto nb_ghost_item_idx_pn = sync_items->nbGhostItemIdxPn();
+
   auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
   auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
 
@@ -33,15 +36,15 @@ void VarSyncMng::globalSynchronizeQueueEventD(Ref<RunQueue> ref_queue, MeshVaria
 
   m_sync_buffers->resetBuf();
   // On prévoit une taille max du buffer qui va contenir tous les messages
-  m_sync_buffers->addEstimatedMaxSz<DataType>(owned_item_idx_pn, degree);
-  m_sync_buffers->addEstimatedMaxSz<DataType>(ghost_item_idx_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<DataType>(nb_owned_item_idx_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<DataType>(nb_ghost_item_idx_pn, degree);
   // Le buffer de tous les messages est réalloué si pas assez de place
   m_sync_buffers->allocIfNeeded();
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception 
   // sur le DEVICE (_d et LM_DevMem)
-  auto buf_snd_d = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 1);
-  auto buf_rcv_d = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree, 1);
+  auto buf_snd_d = m_sync_buffers->multiBufView<DataType>(nb_owned_item_idx_pn, degree, 1);
+  auto buf_rcv_d = m_sync_buffers->multiBufView<DataType>(nb_ghost_item_idx_pn, degree, 1);
 
   // L'échange proprement dit des valeurs de var
   UniqueArray<Parallel::Request> requests(2*m_nb_nei);

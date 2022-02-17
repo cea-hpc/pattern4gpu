@@ -1,53 +1,52 @@
 #include "msgpass/VarSyncMng.h"
 #include "msgpass/PackTransfer.h"
 
+#include <arcane/utils/TraceInfo.h>
 #include <arcane/IParallelMng.h>
-#include <arcane/MeshVariableScalarRef.h>
-#include <arcane/MeshVariableArrayRef.h>
-#include <arcane/VariableBuildInfo.h>
 
+#include <arcane/materials/IMeshMaterialVariableSynchronizer.h>
 
 /*---------------------------------------------------------------------------*/
-/* Equivalent à un var.synchronize() où var est une variable globale         */ 
-/* (i.e. non multi-mat) dont les données sont présentes sur GPU              */
+/* Equivalent à un var.synchronize() où var est une variable multi-env       */ 
 /*---------------------------------------------------------------------------*/
-template<typename MeshVariableRefT>
-void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariableRefT var)
+template<typename DataType>
+void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue, 
+    CellMaterialVariableScalarRef<DataType> var_menv)
 {
   if (m_nb_nei==0) {
     return;
   }
 
-  using ItemType = typename MeshVariableRefT::ItemType;
-  using DataType = typename MeshVariableRefT::DataType;
+  auto nb_owned_evi_pn = m_sync_evi->nbOwnedEviPn();
+  auto nb_ghost_evi_pn = m_sync_evi->nbGhostEviPn();
 
-  SyncItems<ItemType>* sync_items = getSyncItems<ItemType>();
+  auto owned_evi_pn = m_sync_evi->ownedEviPn();
+  auto ghost_evi_pn = m_sync_evi->ghostEviPn();
 
-  auto nb_owned_item_idx_pn = sync_items->nbOwnedItemIdxPn();
-  auto nb_ghost_item_idx_pn = sync_items->nbGhostItemIdxPn();
-
-  auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
-  auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
-
-  // Pour un ItemType donné, combien de DataType sont utilisés ? => degree
-  Integer degree = get_var_degree(var);
+  // Pour une Cell donnée, combien de DataType sont utilisés ? => degree
+  Integer degree = var_menv.globalVariable().arraySize();
+  degree = (degree==0 ? 1 : degree);
+#if 0
+  std::cout << String::format("P{0} : var={1}, degree={2}",
+      m_pm->commRank(), var_menv.name(), degree).localstr() << std::endl;
+#endif
 
   m_sync_buffers->resetBuf();
   // On prévoit une taille max du buffer qui va contenir tous les messages
-  m_sync_buffers->addEstimatedMaxSz<DataType>(nb_owned_item_idx_pn, degree);
-  m_sync_buffers->addEstimatedMaxSz<DataType>(nb_ghost_item_idx_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<DataType>(nb_owned_evi_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<DataType>(nb_ghost_evi_pn, degree);
   // Le buffer de tous les messages est réalloué si pas assez de place
   m_sync_buffers->allocIfNeeded();
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception 
   // sur l'HOTE (_h et LM_HostMem)
-  auto buf_snd_h = m_sync_buffers->multiBufView<DataType>(nb_owned_item_idx_pn, degree, 0);
-  auto buf_rcv_h = m_sync_buffers->multiBufView<DataType>(nb_ghost_item_idx_pn, degree, 0);
+  auto buf_snd_h = m_sync_buffers->multiBufView<DataType>(nb_owned_evi_pn, degree, 0);
+  auto buf_rcv_h = m_sync_buffers->multiBufView<DataType>(nb_ghost_evi_pn, degree, 0);
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception 
   // sur le DEVICE (_d et LM_DevMem)
-  auto buf_snd_d = m_sync_buffers->multiBufView<DataType>(nb_owned_item_idx_pn, degree, 1);
-  auto buf_rcv_d = m_sync_buffers->multiBufView<DataType>(nb_ghost_item_idx_pn, degree, 1);
+  auto buf_snd_d = m_sync_buffers->multiBufView<DataType>(nb_owned_evi_pn, degree, 1);
+  auto buf_rcv_d = m_sync_buffers->multiBufView<DataType>(nb_ghost_evi_pn, degree, 1);
 
   // L'échange proprement dit des valeurs de var
   UniqueArray<Parallel::Request> requests(2*m_nb_nei);
@@ -63,6 +62,10 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
     msg_types[inei] = inei+1; // >0 pour la réception
   }
 
+  // On crée un accesseur pour la variable multi-env
+  // Cette création est un peu couteuse (allocation)
+  MultiEnvVar<DataType> menv_var(var_menv, m_mesh_material_mng);
+
   // On enchaine sur le device : 
   //    copie de var_dev dans buf_dev 
   //    puis transfert buf_dev => buf_hst
@@ -70,30 +73,27 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
   // On remplit les buffers sur le DEVICE
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
 
-    // On lit les valeurs de var pour les recopier dans le buffer d'envoi
-    auto buf_snd_inei = buf_snd_d.byteBuf(inei); // buffer dans lequel on va écrire
-    // "buf_snd[inei] <= var"
-    async_pack_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei, *(ref_queue.get()));
-
-    // On enregistre un événement pour la fin de packing pour le voisin inei
-    if (m_pack_events[inei])
-      m_pack_events[inei]->record(*(ref_queue.get()));
-  }
-
-  // Maintenant qu'on a lancé de façon asynchrones tous les packing pour tous les voisins
-  // on va attendre voisin après vois la terminaison des packing pour amorcer les transferts
-  // asynchrones sur la queue m_ref_queue_data qui s'occupent des transferts asynchrones
-  for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
     auto byte_buf_snd_d = buf_snd_d.byteBuf(inei); // le buffer d'envoi pour inei sur le DEVICE
     auto byte_buf_snd_h = buf_snd_h.byteBuf(inei); // le buffer d'envoi pour inei sur l'HOTE
 
-    // Bloque tant que l'evenement n'a pas lieu
-    if (m_pack_events[inei])
-      m_pack_events[inei]->wait();
+    // On lit les valeurs de var pour les recopier dans le buffer d'envoi
+    // byte_buf_snd_d = buffer dans lequel on va écrire
+    // "buf_snd[inei] <= var_menv"
+    async_pack_varmenv2buf(owned_evi_pn[inei], menv_var, byte_buf_snd_d, *(ref_queue.get()));
+
+    if (m_pack_events[inei]) {
+      // On enregistre un événement pour la fin de packing pour le voisin inei
+      m_pack_events[inei]->record(*(ref_queue.get()));
+
+      // le transfert sur m_ref_queue_data ne pourra pas commencer
+      // tant que l'événement m_pack_events[inei] ne sera pas arrivé
+      m_pack_events[inei]->queueWait(*(m_ref_queue_data.get()));
+    }
 
     // transfert buf_snd_d[inei] => buf_snd_h[inei]
     async_transfer(byte_buf_snd_h, byte_buf_snd_d, *(m_ref_queue_data.get()));
 
+    // On enregistre un événement pour la fin du transfert pour le voisin inei
     if (m_transfer_events[inei])
       m_transfer_events[inei]->record(*(m_ref_queue_data.get()));
   }
@@ -179,8 +179,8 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
             m_transfer_events[inei]->queueWait(*(ref_queue.get()));
 
           // Maintenant que byte_buf_rcv_d est sur DEVICE on peut enclencher le unpacking des données
-          // "var <= buf_rcv_d[inei]"
-          async_unpack_buf2var(ghost_item_idx_pn[inei], byte_buf_rcv_d, var, *(ref_queue.get()));
+          // "var_menv <= buf_rcv_d[inei]"
+          async_unpack_buf2varmenv(ghost_evi_pn[inei], byte_buf_rcv_d, menv_var, *(ref_queue.get()));
         }
       }
       is_done_requests[idone_req] = true;
@@ -230,10 +230,8 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
 /*---------------------------------------------------------------------------*/
 /* INSTANCIATIONS STATIQUES                                                  */
 /*---------------------------------------------------------------------------*/
+#define INST_VAR_SYNC_MNG_MULTI_MAT_SYNCHRONIZE(__DataType__) \
+  template void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue, CellMaterialVariableScalarRef<__DataType__> var)
 
-#define INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_QUEUE_EVENT(__MeshVariableRefT__) \
-  template void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, __MeshVariableRefT__ var)
-
-INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_QUEUE_EVENT(VariableCellReal);
-INST_VAR_SYNC_MNG_GLOBAL_SYNCHRONIZE_QUEUE_EVENT(VariableNodeReal3);
+INST_VAR_SYNC_MNG_MULTI_MAT_SYNCHRONIZE(Real);
 

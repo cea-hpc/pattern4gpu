@@ -3,15 +3,19 @@
 
 #include "accenv/AcceleratorUtils.h"
 #include <arcane/IMesh.h>
+#include <arcane/materials/IMeshMaterialMng.h>
+#include <arcane/materials/MeshMaterialVariableRef.h>
 #include <arcane/utils/MultiArray2.h>
 #include <arcane/IParallelMng.h>
 
 #include "msgpass/SyncItems.h"
+#include "msgpass/SyncEnvIndexes.h"
 #include "msgpass/SyncBuffers.h"
 #include "msgpass/VarSyncMngOptions.h"
 #include "accenv/AcceleratorEvent.h"
 
 using namespace Arcane;
+using namespace Arcane::Materials;
 
 /*---------------------------------------------------------------------------*/
 /* Encapsule une requête de synchronisation sur une variable globale         */
@@ -59,6 +63,12 @@ class VarSyncMng {
   VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_adv);
   virtual ~VarSyncMng();
 
+  //! Initialise les futures synchros multi-mat
+  void initSyncMultiEnv(IMeshMaterialMng* mesh_material_mng);
+
+  //! Remet à jour les synchros multi-mat quand la carte des environnements a changé
+  void updateSyncMultiEnv();
+
   //! Retourne vrai si un GPU est dispo pour exécuter les calculs
   bool isAcceleratorAvailable() const;
 
@@ -102,6 +112,10 @@ class VarSyncMng {
   template<typename Func, typename MeshVariableRefT>
   void computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version=VS_overlap_evqueue);
 
+  //! Equivalent à un var.synchronize() où var est une variable multi-mat
+  template<typename DataType>
+  void multiMatSynchronize(Ref<RunQueue> ref_queue, CellMaterialVariableScalarRef<DataType> var_menv);
+
  protected:
   
   // Pré-allocation des buffers de communication pour miniser le nb de réallocations
@@ -110,6 +124,9 @@ class VarSyncMng {
  protected:
 
   IMesh* m_mesh=nullptr;
+  IMeshMaterialMng* m_mesh_material_mng=nullptr;
+  AccMemAdviser* m_acc_mem_adv=nullptr;
+
   ax::Runner& m_runner;
 
   bool m_is_device_aware=false; //! Vrai si l'on peut effectuer les comms avec adresses sur GPU
@@ -129,6 +146,8 @@ class VarSyncMng {
   Ref<ax::RunQueue> m_ref_queue_data;  //! Référence sur une queue prioritaire pour le transfert des données
   UniqueArray<AcceleratorEvent*> m_pack_events;  //! Les evenements pour le packing des données
   UniqueArray<AcceleratorEvent*> m_transfer_events;  //! Les evenements pour le transfert des données
+
+  SyncEnvIndexes* m_sync_evi=nullptr;  //! Pour gérer les EnvVarIndex(es) pour les comms
 };
 
 // Implementation template de computeAndSync
