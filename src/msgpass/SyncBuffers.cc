@@ -1,5 +1,7 @@
 #include "msgpass/SyncBuffers.h"
 
+#include <arcane/utils/IMemoryRessourceMng.h>
+
 /*---------------------------------------------------------------------------*/
 /* Encapsule des vues sur plusieurs buffers de communication                 */
 /*---------------------------------------------------------------------------*/
@@ -11,8 +13,7 @@ MultiBufView::MultiBufView()
 MultiBufView::MultiBufView(ArrayView<Byte*> ptrs, Int64ConstArrayView sizes,
     eLocMem loc_mem) :
   m_ptrs    (ptrs),
-  m_sizes   (sizes),
-  m_loc_mem (loc_mem)
+  m_sizes   (sizes)
 {
   ARCANE_ASSERT(ptrs.size()==sizes.size(), ("ptrs.size()!=sizes.size()"));
 }
@@ -21,8 +22,7 @@ MultiBufView::MultiBufView(ArrayView<Byte*> ptrs, Int64ConstArrayView sizes,
 /*---------------------------------------------------------------------------*/
 MultiBufView::MultiBufView(const MultiBufView& rhs) :
   m_ptrs    (rhs.m_ptrs),
-  m_sizes   (rhs.m_sizes),
-  m_loc_mem (rhs.m_loc_mem)
+  m_sizes   (rhs.m_sizes)
 {
 }
 
@@ -32,7 +32,6 @@ MultiBufView& MultiBufView::operator=(const MultiBufView& rhs)
 {
   m_ptrs    = rhs.m_ptrs;
   m_sizes   = rhs.m_sizes;
-  m_loc_mem = rhs.m_loc_mem;
   return *this;
 }
 
@@ -103,10 +102,8 @@ SyncBuffers::SyncBuffers(bool is_acc_avl) :
   m_is_accelerator_available (is_acc_avl)
 {
   for(Integer imem(0) ; imem<2 ; ++imem) {
-    m_buf_mem[imem].m_ptr=nullptr;
-    m_buf_mem[imem].m_size=0;
+    m_buf_mem[imem].m_buf=nullptr;
     m_buf_mem[imem].m_first_av_pos=0;
-    m_buf_mem[imem].m_loc_mem=LM_HostMem;
   }
 }
 
@@ -115,25 +112,7 @@ SyncBuffers::SyncBuffers(bool is_acc_avl) :
 /*---------------------------------------------------------------------------*/
 SyncBuffers::~SyncBuffers() {
   for(Integer imem(0) ; imem<2 ; ++imem) {
-    if (m_buf_mem[imem].m_loc_mem == LM_HostMem) {
-#ifdef ARCANE_COMPILING_CUDA
-      if (m_is_accelerator_available) {
-        cudaFreeHost(reinterpret_cast<void*>(m_buf_mem[imem].m_ptr));
-      } else {
-        delete[] m_buf_mem[imem].m_ptr;
-      }
-#else
-      delete[] m_buf_mem[imem].m_ptr;
-#endif
-    }
-#ifdef ARCANE_COMPILING_CUDA
-    else if (m_buf_mem[imem].m_ptr)
-    {
-      ARCANE_ASSERT(m_buf_mem[imem].m_loc_mem == LM_DevMem, 
-          ("Impossible de libérer de la mémoire qui n'est pas sur le device"));
-      cudaFree(reinterpret_cast<void*>(m_buf_mem[imem].m_ptr));
-    }
-#endif
+    delete m_buf_mem[imem].m_buf;
   }
 }
 
@@ -177,43 +156,25 @@ void SyncBuffers::addEstimatedMaxSz(ConstMultiArray2View<Integer> item_idx_pn,
 /* Reallocation dans la mémoire hôte */
 /*---------------------------------------------------------------------------*/
 void SyncBuffers::BufMem::reallocIfNeededOnHost(Int64 wanted_size, bool is_acc_avl) {
-  m_loc_mem = LM_HostMem;
-  // S'il n'y a pas assez d'espace, on réalloue (peu importe les données précédentes)
-  if (m_size < wanted_size) {
-#ifdef ARCANE_COMPILING_CUDA
-    if (is_acc_avl) {
-      cudaFreeHost(reinterpret_cast<void*>(m_ptr));
-      void* h_ptr;
-      cudaMallocHost(&h_ptr, wanted_size);
-      m_ptr = reinterpret_cast<Byte*>(h_ptr);
-    } else {
-      delete[] m_ptr;
-      m_ptr = new Byte[wanted_size];
-    }
-#else
-    delete[] m_ptr;
-    m_ptr = new Byte[wanted_size];
-#endif
-    m_size = wanted_size;
+  if (m_buf==nullptr) {
+    eMemoryRessource mem_res = (is_acc_avl ? eMemoryRessource::HostPinned : eMemoryRessource::Host);
+    IMemoryAllocator* allocator = platform::getDataMemoryRessourceMng()->getAllocator(mem_res);
+    m_buf = new UniqueArray<Byte>(allocator, wanted_size);
   }
+  m_buf->resize(wanted_size);
 }
 
 /*---------------------------------------------------------------------------*/
 /* Reallocation dans la mémoire device */
 /*---------------------------------------------------------------------------*/
-#ifdef ARCANE_COMPILING_CUDA
 void SyncBuffers::BufMem::reallocIfNeededOnDevice(Int64 wanted_size) {
-  m_loc_mem = LM_DevMem;
-  // S'il n'y a pas assez d'espace, on réalloue (peu importe les données précédentes)
-  if (m_size < wanted_size) {
-    cudaFree(reinterpret_cast<void*>(m_ptr));
-    void* d_ptr;
-    cudaMalloc(&d_ptr, wanted_size);
-    m_ptr = reinterpret_cast<Byte*>(d_ptr);
-    m_size = wanted_size;
+  if (m_buf==nullptr) {
+    IMemoryAllocator* allocator = 
+      platform::getDataMemoryRessourceMng()->getAllocator(eMemoryRessource::Device);
+    m_buf = new UniqueArray<Byte>(allocator, wanted_size);
   }
+  m_buf->resize(wanted_size);
 }
-#endif
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -223,9 +184,7 @@ void SyncBuffers::allocIfNeeded() {
 
   // Puis le device si celui-ci existe
   if (m_is_accelerator_available) {
-#ifdef ARCANE_COMPILING_CUDA
     m_buf_mem[1].reallocIfNeededOnDevice(m_buf_estim_sz);
-#endif
   }
   if (!m_is_accelerator_available) {
     // Pour débugger, le buffer "device" se trouve dans la mémoire hôte
@@ -305,16 +264,15 @@ MultiBufView SyncBuffers::multiBufView(
     ConstMultiArray2View<Integer> item_idx_pn, Integer degree, Integer imem) {
 
   auto& buf_mem = m_buf_mem[imem];
-  Byte* new_ptr = buf_mem.m_ptr+buf_mem.m_first_av_pos;
-  Int64 av_space = buf_mem.m_size-buf_mem.m_first_av_pos;
+  Byte* new_ptr = buf_mem.m_buf->data()+buf_mem.m_first_av_pos;
+  Int64 av_space = buf_mem.m_buf->size()-buf_mem.m_first_av_pos;
   Span<Byte> buf_bytes(new_ptr, av_space);
 
   auto mb = _multiBufView<DataType>(item_idx_pn.dim2Sizes(), degree, buf_bytes);
-  mb.locMem() = buf_mem.m_loc_mem;
 
   auto rg{mb.rangeSpan()}; // Encapsule [beg_ptr, end_ptr[
   Byte* end_ptr = rg.data()+rg.size();
-  buf_mem.m_first_av_pos = (end_ptr - buf_mem.m_ptr);
+  buf_mem.m_first_av_pos = (end_ptr - buf_mem.m_buf->data());
   return mb;
 }
 

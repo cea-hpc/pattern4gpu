@@ -40,14 +40,9 @@ class MultiBufView {
   //! Retourne [beg_ptr, end_ptr[ qui contient tous les buffers (peut-être espacés de trous)
   Span<Byte> rangeSpan();
 
-  //! Emplacement de la mémoire
-  eLocMem& locMem() { return m_loc_mem; }
-  eLocMem locMem() const { return m_loc_mem; }
-
  protected:
   SharedArray<Byte*> m_ptrs;
   SharedArray<Int64> m_sizes;
-  eLocMem m_loc_mem=LM_HostMem;  //! emplacement de la mémoire
 };
 
 /*---------------------------------------------------------------------------*/
@@ -91,14 +86,10 @@ class SyncBuffers {
 
  protected:
   struct BufMem {
-    Byte* m_ptr=nullptr;  //! Adresse de base du buffer
-    Int64 m_size=0;  //! Taille totale (en octets) du buffer
+    UniqueArray<Byte> *m_buf=nullptr;
     Int64 m_first_av_pos=0;  //! Première position disponible
-    eLocMem m_loc_mem=LM_HostMem;  //! Emplacement de la mémoire
     void reallocIfNeededOnHost(Int64 wanted_size, bool is_acc_avl);
-#ifdef ARCANE_COMPILING_CUDA
     void reallocIfNeededOnDevice(Int64 wanted_size);
-#endif
   };
  protected:
   bool m_is_accelerator_available=false;  //! Vrai si un GPU est disponible pour les calculs
