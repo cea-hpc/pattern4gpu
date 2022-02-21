@@ -9,6 +9,7 @@
 #include "arcane/accelerator/RunCommandLoop.h"
 #include "arcane/accelerator/RunCommandEnumerate.h"
 #include "arcane/accelerator/core/RunQueueBuildInfo.h"
+#include <arcane/accelerator/core/Memory.h>
 
 /*---------------------------------------------------------------------------*/
 /* Pour les accélérateurs                                                    */

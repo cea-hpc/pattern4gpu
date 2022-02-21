@@ -89,8 +89,7 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
       m_pack_events[inei]->wait();
 
     // transfert buf_snd_d[inei] => buf_snd_h[inei]
-    async_transfer(byte_buf_snd_h, buf_snd_h.locMem(),
-        byte_buf_snd_d, buf_snd_d.locMem(), *(m_ref_queue_data.get()));
+    async_transfer(byte_buf_snd_h, byte_buf_snd_d, *(m_ref_queue_data.get()));
 
     if (m_transfer_events[inei])
       m_transfer_events[inei]->record(*(m_ref_queue_data.get()));
@@ -165,8 +164,7 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
           auto byte_buf_rcv_d = buf_rcv_d.byteBuf(inei); // buffer des données reçues à transférer sur le DEVICE
 
           // transfert buf_rcv_h[inei] => buf_rcv_d[inei]
-          async_transfer(byte_buf_rcv_d, buf_rcv_d.locMem(),
-              byte_buf_rcv_h, buf_rcv_h.locMem(), *(m_ref_queue_data.get()));
+          async_transfer(byte_buf_rcv_d, byte_buf_rcv_h, *(m_ref_queue_data.get()));
 
           // On enregistre un événement pour repérer la fin du transfert
           if (m_transfer_events[inei])

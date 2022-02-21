@@ -4,12 +4,9 @@
 #include "accenv/AcceleratorUtils.h"
 #include "msgpass/SyncBuffers.h"
 
-#include <arcane/accelerator/IRunQueueStream.h>
-
 using namespace Arcane;
 
-void async_transfer(Span<Byte> dst_buf, eLocMem dst_loc_mem,
-    Span<const Byte> src_buf, eLocMem src_loc_mem, RunQueue& queue);
+void async_transfer(Span<Byte> dst_buf, Span<const Byte> src_buf, RunQueue& queue);
 
 void async_transfer(MultiBufView out_buf, MultiBufView in_buf, RunQueue& queue);
 

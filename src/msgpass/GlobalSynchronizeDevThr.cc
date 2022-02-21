@@ -89,8 +89,7 @@ void VarSyncMng::globalSynchronizeDevThr(MeshVariableRefT var)
     async_pack_var2buf(owned_item_idx_pn[inei], var, byte_buf_snd_d, queue);
 
     // transfert buf_snd_d[inei] => buf_snd_h[inei]
-    async_transfer(byte_buf_snd_h, buf_snd_h.locMem(),
-        byte_buf_snd_d, buf_snd_d.locMem(), queue);
+    async_transfer(byte_buf_snd_h, byte_buf_snd_d, queue);
 
     // attendre que la copie sur l'hôte soit terminée pour envoyer les messages
     queue.barrier(); 
@@ -135,8 +134,7 @@ void VarSyncMng::globalSynchronizeDevThr(MeshVariableRefT var)
     auto byte_buf_rcv_d = buf_rcv_d.byteBuf(inei); // buffer des données reçues à transférer sur le DEVICE
 
     // transfert buf_rcv_h[inei] => buf_rcv_d[inei]
-    async_transfer(byte_buf_rcv_d, buf_rcv_d.locMem(),
-        byte_buf_rcv_h, buf_rcv_h.locMem(), queue);
+    async_transfer(byte_buf_rcv_d, byte_buf_rcv_h, queue);
 
     // "var <= buf_rcv_d[inei]"
     async_unpack_buf2var(ghost_item_idx_pn[inei], byte_buf_rcv_d, var, queue);
