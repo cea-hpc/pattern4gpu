@@ -70,27 +70,23 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
   // On remplit les buffers sur le DEVICE
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
 
-    // On lit les valeurs de var pour les recopier dans le buffer d'envoi
-    auto buf_snd_inei = buf_snd_d.byteBuf(inei); // buffer dans lequel on va écrire
-    // "buf_snd[inei] <= var"
-    async_pack_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei, *(ref_queue.get()));
-
-    // On enregistre un événement pour la fin de packing pour le voisin inei
-    if (m_pack_events[inei])
-      m_pack_events[inei]->record(*(ref_queue.get()));
-  }
-
-  // Maintenant qu'on a lancé de façon asynchrones tous les packing pour tous les voisins
-  // on va attendre voisin après vois la terminaison des packing pour amorcer les transferts
-  // asynchrones sur la queue m_ref_queue_data qui s'occupent des transferts asynchrones
-  for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
     auto byte_buf_snd_d = buf_snd_d.byteBuf(inei); // le buffer d'envoi pour inei sur le DEVICE
     auto byte_buf_snd_h = buf_snd_h.byteBuf(inei); // le buffer d'envoi pour inei sur l'HOTE
 
-    // Bloque tant que l'evenement n'a pas lieu
-    if (m_pack_events[inei])
-      m_pack_events[inei]->wait();
+    // On lit les valeurs de var pour les recopier dans le buffer d'envoi
+    // byte_buf_snd_d = buffer dans lequel on va écrire
+    // "buf_snd[inei] <= var"
+    async_pack_var2buf(owned_item_idx_pn[inei], var, byte_buf_snd_d, *(ref_queue.get()));
 
+    if (m_pack_events[inei]) {
+      // On enregistre un événement pour la fin de packing pour le voisin inei
+      m_pack_events[inei]->record(*(ref_queue.get()));
+
+      // le transfert sur m_ref_queue_data ne pourra pas commencer
+      // tant que l'événement m_pack_events[inei] ne sera pas arrivé
+      m_pack_events[inei]->queueWait(*(m_ref_queue_data.get()));
+    }
+    
     // transfert buf_snd_d[inei] => buf_snd_h[inei]
     async_transfer(byte_buf_snd_h, byte_buf_snd_d, *(m_ref_queue_data.get()));
 
