@@ -143,6 +143,7 @@ class VarSyncMng {
 
   MultiAsyncRunQueue* m_neigh_queues=nullptr;  //! Pour gérer plusieurs queues pour les voisins
 
+  Ref<ax::RunQueue> m_ref_queue_bnd;  //! Référence sur queue prioritaire pour traitement items bords
   Ref<ax::RunQueue> m_ref_queue_data;  //! Référence sur une queue prioritaire pour le transfert des données
   UniqueArray<AcceleratorEvent*> m_pack_events;  //! Les evenements pour le packing des données
   UniqueArray<AcceleratorEvent*> m_transfer_events;  //! Les evenements pour le transfert des données

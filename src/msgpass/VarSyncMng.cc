@@ -48,6 +48,7 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
   }
 
   // la priorité doit être la même que celle de la queue qui servira au pack/unpack des buffers de comms = QP_high
+  m_ref_queue_bnd  = AcceleratorUtils::refQueueAsync(m_runner, QP_high);
   m_ref_queue_data = AcceleratorUtils::refQueueAsync(m_runner, QP_high);
 }
 
