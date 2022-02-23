@@ -444,8 +444,20 @@ initCqs()
   }
   else if (options()->getInitCqsVersion() == ICQV_arcgpu_v5)
   {
-      m_numarray_cqs = new NumArray<Real3,2>();
-      m_numarray_cqs->resize(8,allCells().size());
+    m_numarray_cqs = new NumArray<Real3,2>();
+    m_numarray_cqs->resize(8,allCells().size());
+    
+    auto queue = m_acc_env->newQueue();
+    auto command = makeCommand(queue);
+
+    auto out_cell_cqs = Real3_View8(*m_numarray_cqs);
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      Int32 cid_as_int = cid.localId();
+      for(Integer inode(0) ; inode<8 ; ++inode) {
+        out_cell_cqs(inode, cid_as_int) = Real3::zero();
+      }
+    };
   }
   else if (options()->getInitCqsVersion() == ICQV_kokkos)
   {
