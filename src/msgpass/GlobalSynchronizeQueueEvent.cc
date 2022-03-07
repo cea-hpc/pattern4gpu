@@ -78,20 +78,17 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
     // "buf_snd[inei] <= var"
     async_pack_var2buf(owned_item_idx_pn[inei], var, byte_buf_snd_d, *(ref_queue.get()));
 
-    if (m_pack_events[inei]) {
-      // On enregistre un événement pour la fin de packing pour le voisin inei
-      m_pack_events[inei]->record(*(ref_queue.get()));
+    // On enregistre un événement pour la fin de packing pour le voisin inei
+    m_pack_events[inei]->record(*(ref_queue.get()));
 
-      // le transfert sur m_ref_queue_data ne pourra pas commencer
-      // tant que l'événement m_pack_events[inei] ne sera pas arrivé
-      m_pack_events[inei]->queueWait(*(m_ref_queue_data.get()));
-    }
+    // le transfert sur m_ref_queue_data ne pourra pas commencer
+    // tant que l'événement m_pack_events[inei] ne sera pas arrivé
+    m_pack_events[inei]->queueWait(*(m_ref_queue_data.get()));
     
     // transfert buf_snd_d[inei] => buf_snd_h[inei]
     async_transfer(byte_buf_snd_h, byte_buf_snd_d, *(m_ref_queue_data.get()));
 
-    if (m_transfer_events[inei])
-      m_transfer_events[inei]->record(*(m_ref_queue_data.get()));
+    m_transfer_events[inei]->record(*(m_ref_queue_data.get()));
   }
   
   // On amorce les envois sur l'HOTE dès qu'un transfert est terminé
@@ -99,8 +96,7 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
     Int32 rank_nei = m_neigh_ranks[inei]; // le rang du inei-ième voisin
 
     // Attente de la fin du transfert
-    if (m_transfer_events[inei])
-      m_transfer_events[inei]->wait();
+    m_transfer_events[inei]->wait();
 
     // On amorce l'envoi
     auto byte_buf_snd = buf_snd_h.byteBuf(inei); // le buffer d'envoi pour inei
@@ -166,13 +162,11 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
           async_transfer(byte_buf_rcv_d, byte_buf_rcv_h, *(m_ref_queue_data.get()));
 
           // On enregistre un événement pour repérer la fin du transfert
-          if (m_transfer_events[inei])
-            m_transfer_events[inei]->record(*(m_ref_queue_data.get()));
+          m_transfer_events[inei]->record(*(m_ref_queue_data.get()));
 
           // Les kernels suivant sur ref_queue vont attendre l'occurence 
           // de l'événement m_transfer_events[inei] sur la queue m_ref_queue_data
-          if (m_transfer_events[inei])
-            m_transfer_events[inei]->queueWait(*(ref_queue.get()));
+          m_transfer_events[inei]->queueWait(*(ref_queue.get()));
 
           // Maintenant que byte_buf_rcv_d est sur DEVICE on peut enclencher le unpacking des données
           // "var <= buf_rcv_d[inei]"

@@ -2,6 +2,7 @@
 #define ACC_ENV_ACCELERATOR_EVENT_H
 
 #include "accenv/AcceleratorUtils.h"
+#include <arcane/accelerator/core/RunQueueEvent.h>
 
 using namespace Arcane;
 
@@ -10,7 +11,7 @@ using namespace Arcane;
 /*---------------------------------------------------------------------------*/
 class AcceleratorEvent {
  public:
-  AcceleratorEvent();
+  AcceleratorEvent(ax::Runner& runner);
   virtual ~AcceleratorEvent();
 
   // Enregistre l'événement au sein d'une RunQueue
@@ -23,9 +24,7 @@ class AcceleratorEvent {
   void queueWait(ax::RunQueue& queue);
 
  protected:
-#ifdef ARCANE_COMPILING_CUDA
-  cudaEvent_t m_event;
-#endif  
+  ax::RunQueueEvent m_event;
 };
 
 #endif

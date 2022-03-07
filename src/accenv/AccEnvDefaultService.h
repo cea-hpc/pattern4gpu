@@ -31,7 +31,7 @@ class AccEnvDefaultService : public ArcaneAccEnvDefaultObject
   
   void initMesh(IMesh* mesh) override;
 
-  Span<const Int16> nodeIndexInCells() const { return m_node_index_in_cells.constSpan(); }
+  Span<const Int16> nodeIndexInCells() const override { return m_node_index_in_cells.constSpan(); }
 
   Integer maxNodeCell() const override { return 8; }
 

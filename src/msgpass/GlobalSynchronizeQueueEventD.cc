@@ -72,8 +72,7 @@ void VarSyncMng::globalSynchronizeQueueEventD(Ref<RunQueue> ref_queue, MeshVaria
     async_pack_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei, *(ref_queue.get()));
 
     // On enregistre un événement pour la fin de packing pour le voisin inei
-    if (m_pack_events[inei])
-      m_pack_events[inei]->record(*(ref_queue.get()));
+    m_pack_events[inei]->record(*(ref_queue.get()));
   }
 
   // Maintenant qu'on a lancé de façon asynchrones tous les packing pour tous les voisins
@@ -83,8 +82,7 @@ void VarSyncMng::globalSynchronizeQueueEventD(Ref<RunQueue> ref_queue, MeshVaria
     Int32 rank_nei = m_neigh_ranks[inei]; // le rang du inei-ième voisin
 
     // Attente de la fin du transfert
-    if (m_pack_events[inei])
-      m_pack_events[inei]->wait();
+    m_pack_events[inei]->wait();
 
     // On amorce l'envoi
     auto byte_buf_snd = buf_snd_d.byteBuf(inei); // le buffer d'envoi pour inei

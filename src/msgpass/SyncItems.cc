@@ -188,7 +188,7 @@ SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks,
   IntegerUniqueArray private_item_ids;
   private_item_ids.reserve(own_items.size()); // pour minimiser le nb d'allocations dynamiques
 
-  ENUMERATE_ITEM(iitem, own_items) {
+  ENUMERATE_(ItemType, iitem, own_items) {
     if (item_status[iitem] == 0) {
       private_item_ids.add(iitem->localId());
     }

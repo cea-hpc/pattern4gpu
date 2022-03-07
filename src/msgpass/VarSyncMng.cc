@@ -38,13 +38,8 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
   m_pack_events.resize(m_nb_nei);
   m_transfer_events.resize(m_nb_nei);
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
-    if (isAcceleratorAvailable()) {
-      m_pack_events[inei] = new AcceleratorEvent();
-      m_transfer_events[inei] = new AcceleratorEvent();
-    } else {
-      m_pack_events[inei] = nullptr;
-      m_transfer_events[inei] = nullptr;
-    }
+    m_pack_events[inei] = new AcceleratorEvent(m_runner);
+    m_transfer_events[inei] = new AcceleratorEvent(m_runner);
   }
 
   // la priorité doit être la même que celle de la queue qui servira au pack/unpack des buffers de comms = QP_high
@@ -104,6 +99,12 @@ bool VarSyncMng::isDeviceAware() const {
 /*---------------------------------------------------------------------------*/
 /* Spécialisations pour retourner l'instance de SyncItems<T> en fonction de T*/
 /*---------------------------------------------------------------------------*/
+template<typename ItemType>
+SyncItems<ItemType>* VarSyncMng::getSyncItems() {
+  throw NotSupportedException(A_FUNCINFO, "Not implemented for <ItemType>");
+  return nullptr;
+}
+
 template<>
 SyncItems<Cell>* VarSyncMng::getSyncItems() {
   return m_sync_cells;
@@ -134,14 +135,4 @@ void VarSyncMng::_preAllocBuffers() {
   // Le buffer de tous les messages est réalloué si pas assez de place
   m_sync_buffers->allocIfNeeded();
 }
-
-/*---------------------------------------------------------------------------*/
-/* INSTANCIATIONS STATIQUES                                                  */
-/*---------------------------------------------------------------------------*/
-
-#define INST_VAR_SYNC_MNG_GET_SYNC_ITEMS(__ItemType__) \
-  template SyncItems<__ItemType__>* VarSyncMng::getSyncItems()
-
-INST_VAR_SYNC_MNG_GET_SYNC_ITEMS(Cell);
-INST_VAR_SYNC_MNG_GET_SYNC_ITEMS(Node);
 
