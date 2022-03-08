@@ -79,16 +79,16 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
     async_pack_var2buf(owned_item_idx_pn[inei], var, byte_buf_snd_d, *(ref_queue.get()));
 
     // On enregistre un événement pour la fin de packing pour le voisin inei
-    m_pack_events[inei]->record(*(ref_queue.get()));
+    ref_queue->recordEvent(m_pack_events[inei]);
 
     // le transfert sur m_ref_queue_data ne pourra pas commencer
     // tant que l'événement m_pack_events[inei] ne sera pas arrivé
-    m_pack_events[inei]->queueWait(*(m_ref_queue_data.get()));
+    m_ref_queue_data->waitEvent(m_pack_events[inei]);
     
     // transfert buf_snd_d[inei] => buf_snd_h[inei]
     async_transfer(byte_buf_snd_h, byte_buf_snd_d, *(m_ref_queue_data.get()));
 
-    m_transfer_events[inei]->record(*(m_ref_queue_data.get()));
+    m_ref_queue_data->recordEvent(m_transfer_events[inei]);
   }
   
   // On amorce les envois sur l'HOTE dès qu'un transfert est terminé
@@ -162,11 +162,11 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
           async_transfer(byte_buf_rcv_d, byte_buf_rcv_h, *(m_ref_queue_data.get()));
 
           // On enregistre un événement pour repérer la fin du transfert
-          m_transfer_events[inei]->record(*(m_ref_queue_data.get()));
+          m_ref_queue_data->recordEvent(m_transfer_events[inei]);
 
           // Les kernels suivant sur ref_queue vont attendre l'occurence 
           // de l'événement m_transfer_events[inei] sur la queue m_ref_queue_data
-          m_transfer_events[inei]->queueWait(*(ref_queue.get()));
+          ref_queue->waitEvent(m_transfer_events[inei]);
 
           // Maintenant que byte_buf_rcv_d est sur DEVICE on peut enclencher le unpacking des données
           // "var <= buf_rcv_d[inei]"

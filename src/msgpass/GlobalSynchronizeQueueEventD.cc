@@ -72,7 +72,7 @@ void VarSyncMng::globalSynchronizeQueueEventD(Ref<RunQueue> ref_queue, MeshVaria
     async_pack_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei, *(ref_queue.get()));
 
     // On enregistre un événement pour la fin de packing pour le voisin inei
-    m_pack_events[inei]->record(*(ref_queue.get()));
+    ref_queue->recordEvent(m_pack_events[inei]);
   }
 
   // Maintenant qu'on a lancé de façon asynchrones tous les packing pour tous les voisins

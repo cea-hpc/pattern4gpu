@@ -7,12 +7,12 @@
 #include <arcane/materials/MeshMaterialVariableRef.h>
 #include <arcane/utils/MultiArray2.h>
 #include <arcane/IParallelMng.h>
+#include <arcane/accelerator/core/RunQueueEvent.h>
 
 #include "msgpass/SyncItems.h"
 #include "msgpass/SyncEnvIndexes.h"
 #include "msgpass/SyncBuffers.h"
 #include "msgpass/VarSyncMngOptions.h"
-#include "accenv/AcceleratorEvent.h"
 
 using namespace Arcane;
 using namespace Arcane::Materials;
@@ -145,8 +145,8 @@ class VarSyncMng {
 
   Ref<ax::RunQueue> m_ref_queue_bnd;  //! Référence sur queue prioritaire pour traitement items bords
   Ref<ax::RunQueue> m_ref_queue_data;  //! Référence sur une queue prioritaire pour le transfert des données
-  UniqueArray<AcceleratorEvent*> m_pack_events;  //! Les evenements pour le packing des données
-  UniqueArray<AcceleratorEvent*> m_transfer_events;  //! Les evenements pour le transfert des données
+  UniqueArray<Ref<ax::RunQueueEvent>> m_pack_events;  //! Les evenements pour le packing des données
+  UniqueArray<Ref<ax::RunQueueEvent>> m_transfer_events;  //! Les evenements pour le transfert des données
 
   SyncEnvIndexes* m_sync_evi=nullptr;  //! Pour gérer les EnvVarIndex(es) pour les comms
 };

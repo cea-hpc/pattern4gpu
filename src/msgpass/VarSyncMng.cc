@@ -38,8 +38,8 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
   m_pack_events.resize(m_nb_nei);
   m_transfer_events.resize(m_nb_nei);
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
-    m_pack_events[inei] = new AcceleratorEvent(m_runner);
-    m_transfer_events[inei] = new AcceleratorEvent(m_runner);
+    m_pack_events[inei]     = makeEventRef(m_runner);
+    m_transfer_events[inei] = makeEventRef(m_runner);
   }
 
   // la priorité doit être la même que celle de la queue qui servira au pack/unpack des buffers de comms = QP_high
@@ -52,11 +52,6 @@ VarSyncMng::~VarSyncMng() {
   delete m_sync_nodes;
   delete m_sync_buffers;
   delete m_neigh_queues;
-
-  for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
-    delete m_pack_events[inei];
-    delete m_transfer_events[inei];
-  }
 
   delete m_sync_evi;
 }

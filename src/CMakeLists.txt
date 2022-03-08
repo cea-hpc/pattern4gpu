@@ -33,8 +33,7 @@ target_include_directories(libcartesian PUBLIC .)
 target_link_libraries(libcartesian PUBLIC arcane_core)
 
 # Services communs pour les accélérateurs
-add_library(libaccenv accenv/AccEnvDefaultService.cc
-                      accenv/AcceleratorEvent.cc)
+add_library(libaccenv accenv/AccEnvDefaultService.cc)
 target_include_directories(libaccenv PUBLIC .)
 ## Pour HWLOC (en attendant un FindHWLOC.cmake)
 #set(ENV_HWLOC_INCDIR "$ENV{HWLOC_INCDIR}")
@@ -104,7 +103,6 @@ arcane_accelerator_add_source_files(cartesian/FaceDirectionMng.cc)
 arcane_accelerator_add_source_files(cartesian/NodeDirectionMng.cc)
 arcane_accelerator_add_source_files(cartesian/CartesianItemSorter.cc)
 arcane_accelerator_add_source_files(accenv/AccEnvDefaultService.cc)
-arcane_accelerator_add_source_files(accenv/AcceleratorEvent.cc)
 arcane_accelerator_add_source_files(msgpass/VarSyncMng.cc)
 arcane_accelerator_add_source_files(msgpass/GlobalSynchronize.cc)
 arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeQueue.cc)
