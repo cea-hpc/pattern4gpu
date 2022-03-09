@@ -89,7 +89,7 @@ void async_unpack_buf2var(IntegerConstArrayView item_idx,
 /*---------------------------------------------------------------------------*/
 template< typename DataType>
 void async_pack_varmenv2buf(ConstArrayView<EnvVarIndex> levis, 
-    MultiEnvVar<DataType>& var_menv,
+    MultiEnvDataVar<DataType>& var_menv,
     ArrayView<Byte> buf, RunQueue& queue) 
 {
   auto command = makeCommand(queue);
@@ -113,7 +113,7 @@ void async_pack_varmenv2buf(ConstArrayView<EnvVarIndex> levis,
 template< typename DataType>
 void async_unpack_buf2varmenv(ConstArrayView<EnvVarIndex> levis,
     ArrayView<Byte> buf, 
-    MultiEnvVar<DataType>& var_menv, RunQueue& queue) 
+    MultiEnvDataVar<DataType>& var_menv, RunQueue& queue) 
 {
   auto command = makeCommand(queue);
 

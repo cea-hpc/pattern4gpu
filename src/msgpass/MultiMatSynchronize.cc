@@ -17,6 +17,20 @@ void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue,
     return;
   }
 
+  // On crée un accesseur pour la variable multi-env
+  // Cette création est un peu couteuse (allocation)
+//  MultiEnvVar<DataType> menv_var(var_menv, m_mesh_material_mng);
+#if 0
+  bool is_acc = isAcceleratorAvailable();
+  MultiEnvDataVar<DataType> h_menv_var(var_menv, m_mesh_material_mng, (is_acc ? eMemoryRessource::HostPinned : eMemoryRessource::Host));
+  MultiEnvDataVar<DataType> d_menv_var(m_mesh_material_mng, (is_acc ? eMemoryRessource::Device : eMemoryRessource::Host));
+#else
+  // *m_buf_addr_h et *m_buf_addr_d sont des zones mémoires déjà allouées
+  MultiEnvDataVar<DataType> h_menv_var(var_menv, m_mesh_material_mng, *m_buf_addr_h);
+  MultiEnvDataVar<DataType> d_menv_var(*m_buf_addr_d);
+#endif
+  d_menv_var.asyncCpy(h_menv_var, ref_queue);
+
   auto nb_owned_evi_pn = m_sync_evi->nbOwnedEviPn();
   auto nb_ghost_evi_pn = m_sync_evi->nbGhostEviPn();
 
@@ -62,10 +76,6 @@ void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue,
     msg_types[inei] = inei+1; // >0 pour la réception
   }
 
-  // On crée un accesseur pour la variable multi-env
-  // Cette création est un peu couteuse (allocation)
-  MultiEnvVar<DataType> menv_var(var_menv, m_mesh_material_mng);
-
   // On enchaine sur le device : 
   //    copie de var_dev dans buf_dev 
   //    puis transfert buf_dev => buf_hst
@@ -79,7 +89,7 @@ void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue,
     // On lit les valeurs de var pour les recopier dans le buffer d'envoi
     // byte_buf_snd_d = buffer dans lequel on va écrire
     // "buf_snd[inei] <= var_menv"
-    async_pack_varmenv2buf(owned_evi_pn[inei], menv_var, byte_buf_snd_d, *(ref_queue.get()));
+    async_pack_varmenv2buf(owned_evi_pn[inei], d_menv_var, byte_buf_snd_d, *(ref_queue.get()));
 
     // On enregistre un événement pour la fin de packing pour le voisin inei
     ref_queue->recordEvent(m_pack_events[inei]);
@@ -174,7 +184,7 @@ void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue,
 
           // Maintenant que byte_buf_rcv_d est sur DEVICE on peut enclencher le unpacking des données
           // "var_menv <= buf_rcv_d[inei]"
-          async_unpack_buf2varmenv(ghost_evi_pn[inei], byte_buf_rcv_d, menv_var, *(ref_queue.get()));
+          async_unpack_buf2varmenv(ghost_evi_pn[inei], byte_buf_rcv_d, d_menv_var, *(ref_queue.get()));
         }
       }
       is_done_requests[idone_req] = true;

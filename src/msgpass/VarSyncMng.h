@@ -149,6 +149,10 @@ class VarSyncMng {
   UniqueArray<Ref<ax::RunQueueEvent>> m_transfer_events;  //! Les evenements pour le transfert des données
 
   SyncEnvIndexes* m_sync_evi=nullptr;  //! Pour gérer les EnvVarIndex(es) pour les comms
+
+  // TEST pour amortir le cout des allocs
+  UniqueArray<Int64>* m_buf_addr_h = nullptr;
+  UniqueArray<Int64>* m_buf_addr_d = nullptr;
 };
 
 // Implementation template de computeAndSync

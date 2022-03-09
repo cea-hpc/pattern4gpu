@@ -511,6 +511,8 @@ partialAndMean() {
 #if 1
     auto ref_queue = m_acc_env->refQueueAsync();
     m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, m_menv_var1);
+#else
+    m_menv_var1.synchronize();
 #endif
   }
 

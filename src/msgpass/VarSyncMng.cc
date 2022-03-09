@@ -54,6 +54,9 @@ VarSyncMng::~VarSyncMng() {
   delete m_neigh_queues;
 
   delete m_sync_evi;
+
+  delete m_buf_addr_h;
+  delete m_buf_addr_d;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -65,6 +68,17 @@ void VarSyncMng::initSyncMultiEnv(IMeshMaterialMng* mesh_material_mng) {
     m_sync_evi = new SyncEnvIndexes(
         MatVarSpace::MaterialAndEnvironment, m_mesh_material_mng,
         m_neigh_ranks, m_acc_mem_adv);
+  }
+
+  // Buffers mémoire pré-alloués pour minimiser coût des allocs, c'est un TEST
+  if (!m_buf_addr_h) {
+    eMemoryRessource mem_h = (isAcceleratorAvailable() ? eMemoryRessource::HostPinned : eMemoryRessource::Host);
+    eMemoryRessource mem_d = (isAcceleratorAvailable() ? eMemoryRessource::Device : eMemoryRessource::Host);
+    IMemoryAllocator* alloc_h = platform::getDataMemoryRessourceMng()->getAllocator(mem_h);
+    IMemoryAllocator* alloc_d = platform::getDataMemoryRessourceMng()->getAllocator(mem_d);
+    Integer nenvp1 = m_mesh_material_mng->environments().size()+1;
+    m_buf_addr_h = new UniqueArray<Int64>(alloc_h, nenvp1);
+    m_buf_addr_d = new UniqueArray<Int64>(alloc_d, nenvp1);
   }
 }
 
