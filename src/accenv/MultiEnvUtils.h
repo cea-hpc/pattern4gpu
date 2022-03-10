@@ -168,14 +168,14 @@ class MultiEnvDataVar {
 
   // A partir d'un buffer déjà existant
   MultiEnvDataVar(CellMaterialVariableScalarRef<value_type>& var_menv, IMeshMaterialMng* mm,
-      UniqueArray<Int64>& buf_addr) 
+      ArrayView<Int64> buf_addr) 
   {
     m_var_menv_impl = _viewFromBuf(buf_addr);
 
     _initViewFromVar(var_menv, mm);
   }
 
-  MultiEnvDataVar(UniqueArray<Int64>& buf_addr) 
+  MultiEnvDataVar(ArrayView<Int64> buf_addr) 
   {
     m_var_menv_impl = _viewFromBuf(buf_addr);
   }
@@ -196,7 +196,7 @@ class MultiEnvDataVar {
 
  protected:
 
-  ArrayView<value_type*> _viewFromBuf(UniqueArray<Int64>& buf_addr) {
+  ArrayView<value_type*> _viewFromBuf(ArrayView<Int64> buf_addr) {
     void* base_ptr_v = static_cast<void*>(buf_addr.data());
     value_type** base_ptr = static_cast<value_type**>(base_ptr_v);
     return ArrayView<value_type*>(buf_addr.size(), base_ptr);

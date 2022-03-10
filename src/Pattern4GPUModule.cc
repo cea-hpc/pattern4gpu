@@ -49,6 +49,9 @@ Pattern4GPUModule::
     delete m_kokkos_wrapper;
     KokkosWrapper::end();
   }
+
+  delete m_buf_addr_h;
+  delete m_buf_addr_d;
 }
 
 /*---------------------------------------------------------------------------*/

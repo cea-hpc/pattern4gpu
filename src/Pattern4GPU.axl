@@ -369,6 +369,7 @@
     <enumvalue name="ori" genvalue="PMV_ori" />
     <enumvalue name="ori_v2" genvalue="PMV_ori_v2" />
     <enumvalue name="arcgpu_v1" genvalue="PMV_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2" genvalue="PMV_arcgpu_v2" />
   </enumeration>
 
   <!-- - - - - partial-and-mean4-version - - - - -->

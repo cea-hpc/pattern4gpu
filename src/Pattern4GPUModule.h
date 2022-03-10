@@ -157,6 +157,11 @@ class Pattern4GPUModule
 
   // Encapsulation pour Kokkos
   KokkosWrapper* m_kokkos_wrapper;
+
+  // TEST, pour amortir cout des allocs pour GPU
+  Integer m_nb_addr_per_buf=0;
+  UniqueArray<Int64>* m_buf_addr_h = nullptr;
+  UniqueArray<Int64>* m_buf_addr_d = nullptr;
 };
 
 #endif

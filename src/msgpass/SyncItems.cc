@@ -147,7 +147,7 @@ SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks,
   auto arr_item_status = item_status.asArray();
   // = 0 : "private" : item intérieur qui ne participe à aucune comm
   // > 0 : "shared" : item "own" dont les valeurs doivent être envoyées
-  // > 0 : "ghost"  : item fantôme dont on va recevoir une valeur
+  // < 0 : "ghost"  : item fantôme dont on va recevoir une valeur
   arr_item_status.fill(0);
 
   IntegerUniqueArray all_shared_lids;
