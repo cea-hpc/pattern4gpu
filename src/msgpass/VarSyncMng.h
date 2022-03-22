@@ -108,9 +108,19 @@ class VarSyncMng {
   template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
   Ref<GlobalSyncRequest<ItemType, DataType, MeshVarRefT> > iGlobalSynchronizeQueue(Ref<RunQueue> ref_queue, MeshVarRefT<ItemType, DataType> var);
 
-  // Overlapping entre calcul et communications
+  // Overlapping entre calcul et communications pour variable "globale"
   template<typename Func, typename MeshVariableRefT>
   void computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version=VS_overlap_evqueue);
+
+  // Overlapping entre calcul et communications pour variable multi-mat
+  template<typename Func, typename DataType>
+  void computeMatAndSync(Func func, CellMaterialVariableScalarRef<DataType> var, eVarSyncVersion vs_version=VS_overlap_evqueue);
+
+  //! Une fois déroulés les événements de depends_on_evts, 
+  // overlapping entre calcul et communications pour variable multi-mat
+  template<typename Func, typename DataType>
+  void computeMatAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
+    Func func, CellMaterialVariableScalarRef<DataType> var, eVarSyncVersion vs_version);
 
   //! Equivalent à un var.synchronize() où var est une variable multi-mat
   template<typename DataType>
@@ -157,6 +167,7 @@ class VarSyncMng {
 
 // Implementation template de computeAndSync
 #include "msgpass/ComputeAndSync.h"
+#include "msgpass/ComputeMatAndSync.h"
 
 /*---------------------------------------------------------------------------*/
 /* Spécialisations pour retourner le nb de fois un type élémentaire DataType */

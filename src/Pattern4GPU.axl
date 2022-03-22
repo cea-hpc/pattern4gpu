@@ -372,6 +372,15 @@
     <enumvalue name="arcgpu_v2" genvalue="PMV_arcgpu_v2" />
   </enumeration>
 
+  <!-- - - - - pmean-var1-sync-version - - - - -->
+  <enumeration name="pmean-var1-sync-version" type="eVarSyncVersion" default="overlap_evqueue">
+    <description>Choix version implémentation synchronisation de m_menv_var1 dans partialAndMean</description>
+    <enumvalue name="nosync"          genvalue="VS_nosync" />
+    <enumvalue name="bulksync_evqueue" genvalue="VS_bulksync_evqueue" />
+    <enumvalue name="overlap_evqueue" genvalue="VS_overlap_evqueue" />
+    <enumvalue name="overlap_evqueue_d" genvalue="VS_overlap_evqueue_d" />
+  </enumeration>
+
   <!-- - - - - partial-and-mean4-version - - - - -->
   <enumeration name="partial-and-mean4-version" type="ePartialAndMean4Version" default="ori">
     <description>Choix version implémentation PartialAndMean4 </description>

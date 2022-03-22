@@ -528,12 +528,8 @@ partialAndMean() {
   }
   else if (options()->getPartialAndMeanVersion() == PMV_arcgpu_v2)
   {
-    auto ref_queue = m_acc_env->refQueueAsync();
-    auto command = makeCommand(ref_queue.get());
-
-    auto in_env_id       = ax::viewIn(command, m_env_id);
-    auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
-
+    auto queue = m_acc_env->newQueue();
+    queue.setAsync(true);
 #if 0
     MultiEnvVar<Real> menv_menv_var1(m_menv_var1, m_mesh_material_mng);
     auto inout_menv_var1(menv_menv_var1.span());
@@ -558,7 +554,7 @@ partialAndMean() {
     MultiEnvDataVar<Real> d_menv_menv_var3(m_buf_addr_d->subView(2*n, n));
     MultiEnvDataVar<Real> d_menv_frac_vol (m_buf_addr_d->subView(3*n, n));
 
-    ref_queue->copyMemory(ax::MemoryCopyArgs(
+    queue.copyMemory(ax::MemoryCopyArgs(
           m_buf_addr_d->subView(0, 4*n).data(), 
           m_buf_addr_h->subView(0, 4*n).data(), 
           4*n*sizeof(Int64)).addAsync());
@@ -567,33 +563,49 @@ partialAndMean() {
     auto in_menv_var2(d_menv_menv_var2.span());
     auto in_menv_var3(d_menv_menv_var3.span());
     auto in_frac_vol(d_menv_frac_vol.span());
+
+    UniqueArray<Ref<ax::RunQueueEvent>> events;
+    events.add( makeEventRef(m_acc_env->runner()) );
+    queue.recordEvent(events[0]);
 #endif
 
-    // Pour décrire l'accés multi-env sur GPU
-    auto in_menv_cell(m_acc_env->multiEnvCellStorage()->viewIn(command));
+    auto comp_var1 = [&](CellGroup cell_group, RunQueue* async_queue) {
+      auto command = makeCommand(async_queue);
 
-    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      auto in_env_id       = ax::viewIn(command, m_env_id);
+      auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
 
-      // Calcul des valeurs partielles pour tous les environnements de la maille
-      for(Integer ienv=0 ; ienv<in_menv_cell.nbEnv(cid) ; ++ienv) {
-        auto evi = in_menv_cell.envCell(cid,ienv);
+      // Pour décrire l'accés multi-env sur GPU
+      auto in_menv_cell(m_acc_env->multiEnvCellStorage()->viewIn(command));
 
-        inout_menv_var1.setValue(evi, 
-            math::sqrt(in_menv_var2[evi]/in_menv_var3[evi]));
-      }
+      command << RUNCOMMAND_ENUMERATE(Cell, cid, cell_group) {
 
-      // Puis on moyennise uniquement sur les mailles mixtes
-      if (in_env_id[cid]<0) { // Maille mixte ou vide
-        Real sum_var1=0.;
+        // Calcul des valeurs partielles pour tous les environnements de la maille
         for(Integer ienv=0 ; ienv<in_menv_cell.nbEnv(cid) ; ++ienv) {
           auto evi = in_menv_cell.envCell(cid,ienv);
 
-          sum_var1 += in_frac_vol[evi] * inout_menv_var1[evi];
+          inout_menv_var1.setValue(evi, 
+              math::sqrt(in_menv_var2[evi]/in_menv_var3[evi]));
         }
-        out_menv_var1_g[cid] = sum_var1;
-      }
-    };
-    ref_queue->barrier();
+
+        // Puis on moyennise uniquement sur les mailles mixtes
+        if (in_env_id[cid]<0) { // Maille mixte ou vide
+          Real sum_var1=0.;
+          for(Integer ienv=0 ; ienv<in_menv_cell.nbEnv(cid) ; ++ienv) {
+            auto evi = in_menv_cell.envCell(cid,ienv);
+
+            sum_var1 += in_frac_vol[evi] * inout_menv_var1[evi];
+          }
+          out_menv_var1_g[cid] = sum_var1;
+        }
+      };
+    }; // fin lambda comp_var1
+
+    m_acc_env->vsyncMng()->computeMatAndSyncOnEvents(events,
+        comp_var1, m_menv_var1,
+        options()->getPmeanVar1SyncVersion());
+
+    queue.barrier();
   }
 
   _dumpVisuMEnvVar();
