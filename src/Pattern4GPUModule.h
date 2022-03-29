@@ -58,7 +58,6 @@ class Pattern4GPUModule
 
   void initEnvOrder() override; // InitEnvOrder
 
-  void initMEnv() override; // InitMEnv
   void initMEnvVar() override; // InitMEnvVar
   
   void syncNodeVector() override; // SyncNodeVector
@@ -159,9 +158,7 @@ class Pattern4GPUModule
   KokkosWrapper* m_kokkos_wrapper;
 
   // TEST, pour amortir cout des allocs pour GPU
-  Integer m_nb_addr_per_buf=0;
-  UniqueArray<Int64>* m_buf_addr_h = nullptr;
-  UniqueArray<Int64>* m_buf_addr_d = nullptr;
+  BufAddrMng* m_buf_addr_mng=nullptr;
 };
 
 #endif

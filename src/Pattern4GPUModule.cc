@@ -50,8 +50,7 @@ Pattern4GPUModule::
     KokkosWrapper::end();
   }
 
-  delete m_buf_addr_h;
-  delete m_buf_addr_d;
+  delete m_buf_addr_mng;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -103,6 +102,14 @@ initP4GPU()
   // init kokkos
   if (options()->getWithKokkos())
     initKokkosWrapper();
+
+  // Pour le multi-environnement
+  m_acc_env->initMultiEnv(m_mesh_material_mng); 
+
+  // TEST : pour amortir le cout des allocs pour GPU
+  if (!m_buf_addr_mng) {
+    m_buf_addr_mng = new BufAddrMng(m_acc_env->runner(), m_mesh_material_mng);
+  }
 
   PROF_ACC_END;
 }

@@ -166,6 +166,10 @@
   <variable field-name="env_id" name="EnvId" data-type="integer" item-kind="cell"
 	    dim="0" dump="false" need-sync="false" />
 
+  <!-- MENV-IV1 -->
+  <variable field-name="menv_iv1" name="MEnvIv1" data-type="integer" item-kind="cell"
+      dim="0" dump="false" need-sync="false" material="true" />
+
   <!-- MENV-VAR1 -->
   <variable field-name="menv_var1" name="MEnvVar1" data-type="real" item-kind="cell"
       dim="0" dump="false" need-sync="false" material="true" />
@@ -206,7 +210,6 @@
   <entry-point method-name="initCartMesh" name="InitCartMesh" where="start-init" property="none" />
   <entry-point method-name="initForVol" name="InitForVol" where="start-init" property="none" />
   <entry-point method-name="initEnvOrder" name="InitEnvOrder" where="start-init" property="none" />
-  <entry-point method-name="initMEnv" name="InitMEnv" where="start-init" property="none" />
   <entry-point method-name="initMEnvVar" name="InitMEnvVar" where="start-init" property="none" />
   
   <entry-point method-name="syncNodeVector" name="SyncNodeVector" where="start-init" property="none" />
@@ -376,6 +379,7 @@
   <enumeration name="pmean-var1-sync-version" type="eVarSyncVersion" default="overlap_evqueue">
     <description>Choix version implémentation synchronisation de m_menv_var1 dans partialAndMean</description>
     <enumvalue name="nosync"          genvalue="VS_nosync" />
+    <enumvalue name="bulksync_std"    genvalue="VS_bulksync_std" />
     <enumvalue name="bulksync_evqueue" genvalue="VS_bulksync_evqueue" />
     <enumvalue name="overlap_evqueue" genvalue="VS_overlap_evqueue" />
     <enumvalue name="overlap_evqueue_d" genvalue="VS_overlap_evqueue_d" />

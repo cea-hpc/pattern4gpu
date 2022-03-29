@@ -2,6 +2,7 @@
 #define ACC_ENV_MULTI_ENV_UTILS_H
 
 #include "accenv/AcceleratorUtils.h"
+#include "accenv/BufAddrMng.h"
 
 #include "arcane/MeshVariableScalarRef.h"
 #include "arcane/MeshVariableArrayRef.h"
@@ -216,6 +217,35 @@ class MultiEnvDataVar {
  protected:
   UniqueArray<Int64> m_buf_addr;  //<! Int64 va être converti en value_type*
   ArrayView< value_type* > m_var_menv_impl;
+};
+
+/*---------------------------------------------------------------------------*/
+/* Pour créer des vues non protégées sur une variable multi-environnement en */
+/* mémoires Host et Device                                                   */
+/*---------------------------------------------------------------------------*/
+template<typename value_type>
+class MultiEnvVarHD {
+ public:
+  MultiEnvVarHD(CellMaterialVariableScalarRef<value_type>& var_menv,
+      BufAddrMng* bam) :
+    m_menv_var_h(var_menv, bam->materialMng(), bam->nextHostView()),
+    m_menv_var_d(bam->nextDeviceView())
+  {
+  }
+
+  //! Vue en mémoire Hôte
+  auto spanH() {
+    return m_menv_var_h.span();
+  }
+
+  //! Vue en mémoire Device
+  auto spanD() {
+    return m_menv_var_d.span();
+  }
+
+ protected:
+  MultiEnvDataVar<value_type> m_menv_var_h;  //! View in HOST memory on multi-mat data
+  MultiEnvDataVar<value_type> m_menv_var_d;  //! View in DEVICE memory on multi-mat data
 };
 
 /*---------------------------------------------------------------------------*/

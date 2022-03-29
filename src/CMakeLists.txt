@@ -62,7 +62,8 @@ add_library(libmsgpass msgpass/VarSyncMng.cc
                        msgpass/SyncItems.cc
                        msgpass/SyncBuffers.cc
                        msgpass/SyncEnvIndexes.cc
-                       msgpass/MultiMatSynchronize.cc)
+                       msgpass/MultiMatSynchronize.cc
+                       msgpass/MeshVariableSynchronizerList.cc)
 target_include_directories(libmsgpass PUBLIC .)
 target_link_libraries(libmsgpass PUBLIC arcane_core)
 # Pour MPI
@@ -118,6 +119,7 @@ arcane_accelerator_add_source_files(msgpass/SyncItems.cc)
 arcane_accelerator_add_source_files(msgpass/SyncEnvIndexes.cc)
 arcane_accelerator_add_source_files(msgpass/SyncBuffers.cc)
 arcane_accelerator_add_source_files(msgpass/MultiMatSynchronize.cc)
+arcane_accelerator_add_source_files(msgpass/MeshVariableSynchronizerList.cc)
 arcane_accelerator_add_to_target(libpattern4gpu)
 arcane_accelerator_add_to_target(libgeomenv)
 arcane_accelerator_add_to_target(libcartesian)

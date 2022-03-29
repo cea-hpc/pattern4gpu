@@ -36,31 +36,17 @@ _dumpVisuMEnvVar() {
 }
 
 /*---------------------------------------------------------------------------*/
-/* Initialisation de l'environnement multi-envrionnement                     */
-/*---------------------------------------------------------------------------*/
-void Pattern4GPUModule::
-initMEnv() {
-  PROF_ACC_BEGIN(__FUNCTION__);
-
-  m_acc_env->initMultiEnv(m_mesh_material_mng); 
-
-  PROF_ACC_END;
-}
-
-/*---------------------------------------------------------------------------*/
 /* Initialisation des variables multi-envrionnement                          */
 /*---------------------------------------------------------------------------*/
 void Pattern4GPUModule::
 initMEnvVar() {
   PROF_ACC_BEGIN(__FUNCTION__);
 
-  m_acc_env->initMultiEnv(m_mesh_material_mng); // TODO : en faire un point d'entrée ?
-
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
 
   if (options()->getInitMenvVarVersion() == IMVV_ori) {
-    //bool to_sync = true;
-    bool to_sync = false;
+    bool to_sync = true;
+    //bool to_sync = false;
     CellGroup cell_group = (to_sync ? ownCells() : allCells());
     CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
     ENUMERATE_CELL(icell, cell_group) {
@@ -71,6 +57,7 @@ initMEnvVar() {
       m_menv_var1[icell]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2)); 
       m_menv_var2[icell]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
       m_menv_var3[icell]=3.+math::abs(sin(c.x+2)*sin(c.y+2)*cos(c.z+1));
+      m_menv_iv1[icell] = icell.localId();
 
       AllEnvCell all_env_cell = allenvcell_converter[cell];
       if (all_env_cell.nbEnvironment() !=1) { // uniquement mailles mixtes
@@ -79,21 +66,31 @@ initMEnvVar() {
           m_menv_var1[ev] = 0.; 
           m_menv_var2[ev] = m_frac_vol[ev] * m_menv_var2[icell];
           m_menv_var3[ev] = m_frac_vol[ev] * m_menv_var3[icell];
+          m_menv_iv1[ev] = icell.localId()+ev.environmentId();
         }
       }
     }
     if (to_sync) {
-#if 0
+#if 1
       MeshMaterialVariableSynchronizerList mmvsl(m_mesh_material_mng);
       m_menv_var1.synchronize(mmvsl);
       m_menv_var2.synchronize(mmvsl);
       m_menv_var3.synchronize(mmvsl);
       mmvsl.apply();
-#else
+#elif 0
       auto ref_queue = m_acc_env->refQueueAsync();
-      m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, m_menv_var1);
-      m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, m_menv_var2);
-      m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, m_menv_var3);
+      m_acc_env->vsyncMng()->multiMatSynchronize1(ref_queue, m_menv_var1);
+      m_acc_env->vsyncMng()->multiMatSynchronize1(ref_queue, m_menv_var2);
+      m_acc_env->vsyncMng()->multiMatSynchronize1(ref_queue, m_menv_var3);
+#else
+      MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng()->bufAddrMng());
+      mvsl.add(m_menv_var1);
+      mvsl.add(m_menv_iv1);
+      mvsl.add(m_menv_var2);
+      mvsl.add(m_tensor);
+      mvsl.add(m_menv_var3);
+      auto ref_queue = m_acc_env->refQueueAsync();
+      m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, mvsl);
 #endif
     }
   }
@@ -107,6 +104,7 @@ initMEnvVar() {
       auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
       auto out_menv_var2_g = ax::viewOut(command, m_menv_var2.globalVariable());
       auto out_menv_var3_g = ax::viewOut(command, m_menv_var3.globalVariable());
+      auto out_menv_iv1_g  = ax::viewOut(command, m_menv_iv1 .globalVariable());
 
       auto cnc = m_acc_env->connectivityView().cellNode();
 
@@ -116,6 +114,7 @@ initMEnvVar() {
         out_menv_var1_g[cid]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
         out_menv_var2_g[cid]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
         out_menv_var3_g[cid]=3.+math::abs(sin(c.x+2)*sin(c.y+2)*cos(c.z+1));
+        out_menv_iv1_g[cid]=cid;
       };
     }
 
@@ -123,6 +122,7 @@ initMEnvVar() {
     auto menv_queue = m_acc_env->multiEnvQueue();
     ENUMERATE_ENV(ienv,m_mesh_material_mng){
       IMeshEnvironment* env = *ienv;
+      Integer env_id = env->id();
 
       auto command = makeCommand(menv_queue->queue(env->id()));
 
@@ -135,6 +135,7 @@ initMEnvVar() {
       Span<Real>          out_menv_var1 (envView(m_menv_var1, env));
       Span<Real>          out_menv_var2 (envView(m_menv_var2, env));
       Span<Real>          out_menv_var3 (envView(m_menv_var3, env));
+      Span<Integer>       out_menv_iv1  (envView(m_menv_iv1 , env));
 
       // Nombre de mailles impures (mixtes) de l'environnement
       Integer nb_imp = env->impureEnvItems().nbItem();
@@ -146,10 +147,20 @@ initMEnvVar() {
         out_menv_var1[imix] = 0;
         out_menv_var2[imix] = in_frac_vol[imix] * in_menv_var2_g[cid];
         out_menv_var3[imix] = in_frac_vol[imix] * in_menv_var3_g[cid];
+        out_menv_iv1[imix] = cid+env_id;
 
       }; // asynchrone par rapport au CPU et aux autres environnements
     }
     menv_queue->waitAllQueues();
+
+    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng()->bufAddrMng());
+    mvsl.add(m_menv_var1);
+    mvsl.add(m_menv_iv1);
+    mvsl.add(m_menv_var2);
+    mvsl.add(m_tensor);
+    mvsl.add(m_menv_var3);
+    auto ref_queue = m_acc_env->refQueueAsync();
+    m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, mvsl);
   }
 
   // Sortie des variables multi-environnement pour la visu
@@ -160,17 +171,6 @@ initMEnvVar() {
     m_menv_var3_visu.resize(nb_env);
   }
   _dumpVisuMEnvVar();
-
-  // TEST : pour amortir le cout des allocs pour GPU
-  bool is_acc_avl = AcceleratorUtils::isAvailable(m_acc_env->runner());
-  eMemoryRessource mem_h = (is_acc_avl ? eMemoryRessource::HostPinned : eMemoryRessource::Host);
-  eMemoryRessource mem_d = (is_acc_avl ? eMemoryRessource::Device : eMemoryRessource::Host);
-  IMemoryAllocator* alloc_h = platform::getDataMemoryRessourceMng()->getAllocator(mem_h);
-  IMemoryAllocator* alloc_d = platform::getDataMemoryRessourceMng()->getAllocator(mem_d);
-  m_nb_addr_per_buf = m_mesh_material_mng->environments().size()+1;
-  Integer sz = 10*m_nb_addr_per_buf; // jusqu'à 10 buffers
-  m_buf_addr_h = new UniqueArray<Int64>(alloc_h, sz);
-  m_buf_addr_d = new UniqueArray<Int64>(alloc_d, sz);
   
   PROF_ACC_END;
 }
@@ -521,7 +521,7 @@ partialAndMean() {
     }
 #if 1
     auto ref_queue = m_acc_env->refQueueAsync();
-    m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, m_menv_var1);
+    m_acc_env->vsyncMng()->multiMatSynchronize1(ref_queue, m_menv_var1);
 #else
     m_menv_var1.synchronize();
 #endif
@@ -543,30 +543,18 @@ partialAndMean() {
     MultiEnvVar<Real> menv_frac_vol(m_frac_vol, m_mesh_material_mng);
     auto in_frac_vol(menv_frac_vol.span());
 #else
-    Integer n = m_nb_addr_per_buf;
-    MultiEnvDataVar<Real> h_menv_menv_var1(m_menv_var1, m_mesh_material_mng, m_buf_addr_h->subView(0*n, n));
-    MultiEnvDataVar<Real> h_menv_menv_var2(m_menv_var2, m_mesh_material_mng, m_buf_addr_h->subView(1*n, n));
-    MultiEnvDataVar<Real> h_menv_menv_var3(m_menv_var3, m_mesh_material_mng, m_buf_addr_h->subView(2*n, n));
-    MultiEnvDataVar<Real> h_menv_frac_vol (m_frac_vol,  m_mesh_material_mng, m_buf_addr_h->subView(3*n, n));
+    MultiEnvVarHD<Real> menv_menv_var1(m_menv_var1, m_buf_addr_mng);
+    MultiEnvVarHD<Real> menv_menv_var2(m_menv_var2, m_buf_addr_mng);
+    MultiEnvVarHD<Real> menv_menv_var3(m_menv_var3, m_buf_addr_mng);
+    MultiEnvVarHD<Real> menv_frac_vol (m_frac_vol,  m_buf_addr_mng);
 
-    MultiEnvDataVar<Real> d_menv_menv_var1(m_buf_addr_d->subView(0*n, n));
-    MultiEnvDataVar<Real> d_menv_menv_var2(m_buf_addr_d->subView(1*n, n));
-    MultiEnvDataVar<Real> d_menv_menv_var3(m_buf_addr_d->subView(2*n, n));
-    MultiEnvDataVar<Real> d_menv_frac_vol (m_buf_addr_d->subView(3*n, n));
+    auto end_cpy_event = m_buf_addr_mng->asyncCpyHToD(queue);
+    UniqueArray<Ref<ax::RunQueueEvent>> events{end_cpy_event};
 
-    queue.copyMemory(ax::MemoryCopyArgs(
-          m_buf_addr_d->subView(0, 4*n).data(), 
-          m_buf_addr_h->subView(0, 4*n).data(), 
-          4*n*sizeof(Int64)).addAsync());
-
-    auto inout_menv_var1(d_menv_menv_var1.span());
-    auto in_menv_var2(d_menv_menv_var2.span());
-    auto in_menv_var3(d_menv_menv_var3.span());
-    auto in_frac_vol(d_menv_frac_vol.span());
-
-    UniqueArray<Ref<ax::RunQueueEvent>> events;
-    events.add( makeEventRef(m_acc_env->runner()) );
-    queue.recordEvent(events[0]);
+    auto inout_menv_var1(menv_menv_var1.spanD());
+    auto in_menv_var2   (menv_menv_var2.spanD());
+    auto in_menv_var3   (menv_menv_var3.spanD());
+    auto in_frac_vol    (menv_frac_vol .spanD());
 #endif
 
     auto comp_var1 = [&](CellGroup cell_group, RunQueue* async_queue) {
@@ -601,9 +589,20 @@ partialAndMean() {
       };
     }; // fin lambda comp_var1
 
-    m_acc_env->vsyncMng()->computeMatAndSyncOnEvents(events,
+#if 0
+    m_acc_env->vsyncMng()->computeMatAndSyncOnEvents1(events,
         comp_var1, m_menv_var1,
         options()->getPmeanVar1SyncVersion());
+#else
+    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng()->bufAddrMng());
+    mvsl.add(m_menv_var1);
+//    mvsl.add(m_menv_var2);
+//    mvsl.add(m_menv_var3);
+
+    m_acc_env->vsyncMng()->computeMatAndSyncOnEvents(events,
+        comp_var1, mvsl,
+        options()->getPmeanVar1SyncVersion());
+#endif
 
     queue.barrier();
   }
