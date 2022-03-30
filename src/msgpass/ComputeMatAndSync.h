@@ -4,6 +4,10 @@
 #include <arcane/utils/ITraceMng.h>
 #include <arcane/materials/MeshMaterialVariableSynchronizerList.h>
 
+#include "msgpass/Algo1SyncDataMMatDH.h"
+#include "msgpass/Algo1SyncDataMMatD.h"
+#include "msgpass/VarSyncAlgo1.h"
+
 template<typename Func, typename DataType>
 void VarSyncMng::
 computeMatAndSync1(Func func, CellMaterialVariableScalarRef<DataType> var, eVarSyncVersion vs_version) {
@@ -200,7 +204,8 @@ computeMatAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
       ARCANE_ASSERT(vs_version==VS_bulksync_evqueue,
           ("Ici, option differente de bulksync_evqueue"));
       tm->debug() << "bulksync_evqueue";
-      this->multiMatSynchronize(ref_queue, vars);
+      Algo1SyncDataMMatDH sync_data_dh(vars, ref_queue, *m_a1_mmat_dh_pi);
+      m_vsync_algo1->synchronize(&sync_data_dh);
     }
     PROF_ACC_END;
 
@@ -225,15 +230,17 @@ computeMatAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
     // Sur la même queue de bord m_ref_queue_bnd, on amorce le packing des données
     // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
     // la queue m_ref_queue_bnd
+    IAlgo1SyncData* sync_data=nullptr;
     if (vs_version == VS_overlap_evqueue) {
       tm->debug() << "overlap_evqueue";
-      this->multiMatSynchronize(m_ref_queue_bnd, vars);
+      sync_data = new Algo1SyncDataMMatDH(vars, m_ref_queue_bnd, *m_a1_mmat_dh_pi);
     } else if (vs_version == VS_overlap_evqueue_d) {
       tm->debug() << "overlap_evqueue_d";
-      throw NotSupportedException(A_FUNCINFO,
-        String::format("Invalid eVarSyncVersion={0}",(int)vs_version));
+      sync_data = new Algo1SyncDataMMatD(vars, m_ref_queue_bnd, *m_a1_mmat_d_pi);
     }
+    m_vsync_algo1->synchronize(sync_data);
     // ici, après cet appel, m_ref_queue_bnd est synchronisée
+    delete sync_data;
 
     // On attend la terminaison des calculs intérieurs
     ref_queue_inr->barrier();

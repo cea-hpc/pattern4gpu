@@ -14,6 +14,9 @@
 #include "msgpass/SyncBuffers.h"
 #include "msgpass/VarSyncMngOptions.h"
 #include "msgpass/MeshVariableSynchronizerList.h"
+#include "msgpass/VarSyncAlgo1.h"
+#include "msgpass/Algo1SyncDataMMatDH.h"
+#include "msgpass/Algo1SyncDataMMatD.h"
 
 using namespace Arcane;
 using namespace Arcane::Materials;
@@ -180,6 +183,11 @@ class VarSyncMng {
 
   // TEST pour amortir le cout des allocs
   BufAddrMng* m_buf_addr_mng=nullptr;
+
+  // Pour synchro algo1
+  VarSyncAlgo1* m_vsync_algo1=nullptr;
+  Algo1SyncDataMMatDH::PersistentInfo* m_a1_mmat_dh_pi=nullptr;
+  Algo1SyncDataMMatD::PersistentInfo* m_a1_mmat_d_pi=nullptr;
 };
 
 // Implementation template de computeAndSync

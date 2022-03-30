@@ -45,6 +45,9 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
   // la priorité doit être la même que celle de la queue qui servira au pack/unpack des buffers de comms = QP_high
   m_ref_queue_bnd  = AcceleratorUtils::refQueueAsync(m_runner, QP_high);
   m_ref_queue_data = AcceleratorUtils::refQueueAsync(m_runner, QP_high);
+
+  // Pour synchro algo1
+  m_vsync_algo1 = new VarSyncAlgo1(m_pm, m_neigh_ranks);
 }
 
 VarSyncMng::~VarSyncMng() {
@@ -56,6 +59,10 @@ VarSyncMng::~VarSyncMng() {
   delete m_sync_evi;
 
   delete m_buf_addr_mng;
+
+  delete m_vsync_algo1;
+  delete m_a1_mmat_dh_pi;
+  delete m_a1_mmat_d_pi;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -67,6 +74,15 @@ void VarSyncMng::initSyncMultiEnv(IMeshMaterialMng* mesh_material_mng) {
     m_sync_evi = new SyncEnvIndexes(
         MatVarSpace::MaterialAndEnvironment, m_mesh_material_mng,
         m_neigh_ranks, m_acc_mem_adv);
+
+    // m_sync_evi doit être créé pour construire m_a1_*
+    // _dh_ = Device-Host
+    m_a1_mmat_dh_pi = 
+      new Algo1SyncDataMMatDH::PersistentInfo(m_nb_nei, m_runner, m_sync_evi, m_sync_buffers);
+    // _d_ = only Device
+    m_a1_mmat_d_pi = 
+      new Algo1SyncDataMMatD::PersistentInfo(m_is_device_aware,
+          m_nb_nei, m_runner, m_sync_evi, m_sync_buffers);
   }
 
   // Buffers mémoire pré-alloués pour minimiser coût des allocs, c'est un TEST

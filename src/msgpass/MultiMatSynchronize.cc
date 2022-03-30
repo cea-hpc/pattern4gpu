@@ -5,6 +5,7 @@
 #include <arcane/IParallelMng.h>
 
 #include <arcane/materials/IMeshMaterialVariableSynchronizer.h>
+#include <arccore/base/FatalErrorException.h>
 
 /*---------------------------------------------------------------------------*/
 /* Equivalent à un var.synchronize() où var est une variable multi-env       */ 
@@ -267,12 +268,12 @@ void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue,
   m_sync_buffers->allocIfNeeded(buf_estim_sz);
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception 
-  // sur l'HOTE (_h et LM_HostMem)
+  // sur l'HOTE (_h et "0")
   auto buf_snd_h = m_sync_buffers->multiBufViewVars(lvars, nb_owned_evi_pn, 0);
   auto buf_rcv_h = m_sync_buffers->multiBufViewVars(lvars, nb_ghost_evi_pn, 0);
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception 
-  // sur le DEVICE (_d et LM_DevMem)
+  // sur le DEVICE (_d et "1")
   auto buf_snd_d = m_sync_buffers->multiBufViewVars(lvars, nb_owned_evi_pn, 1);
   auto buf_rcv_d = m_sync_buffers->multiBufViewVars(lvars, nb_ghost_evi_pn, 1);
 
@@ -340,8 +341,9 @@ void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue,
   m_ref_queue_data->barrier();
 
   // Maitenant que toutes les requêtes de comms sont amorcées, il faut les terminer
-  ARCANE_ASSERT(2*m_nb_nei==requests.size(), 
-      ("Le nb de requetes n'est pas egal à 2 fois le nb de voisins"));
+  if (2*m_nb_nei!=requests.size()) {
+    throw FatalErrorException(A_FUNCINFO, "Le nb de requetes n'est pas egal à 2 fois le nb de voisins");
+  }
 
   UniqueArray<Parallel::Request> requests2(2*m_nb_nei);
   IntegerUniqueArray msg_types2(2*m_nb_nei); 
@@ -377,11 +379,13 @@ void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue,
     for(Integer idone_req : done_indexes) {
       if (pending_types[idone_req] > 0) { // >0 signifie que c'est une requête de reception
 
-        nb_pending_rcv--; // on une requete de reception en moins
+        nb_pending_rcv--; // on a une requete de reception en moins
 
         // On récupère l'indice du voisin
         Integer inei = pending_types[idone_req]-1;
-        ARCANE_ASSERT(inei>=0 && inei<m_nb_nei, ("Mauvais indice de voisin"));
+        if (!(inei>=0 && inei<m_nb_nei)) {
+          throw FatalErrorException(A_FUNCINFO, "Mauvais indice de voisin");
+        }
 
         // Maintenant qu'on a reçu le buffer pour le inei-ième voisin, 
         // on transfère les donnees de façon asynchrone pour le inei-ième voisin
@@ -395,7 +399,7 @@ void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue,
           // On enregistre un événement pour repérer la fin du transfert
           m_ref_queue_data->recordEvent(m_transfer_events[inei]);
 
-          // Les kernels suivant sur ref_queue vont attendre l'occurence 
+          // Les kernels suivants sur ref_queue vont attendre l'occurence 
           // de l'événement m_transfer_events[inei] sur la queue m_ref_queue_data
           ref_queue->waitEvent(m_transfer_events[inei]);
 
@@ -438,11 +442,15 @@ void VarSyncMng::multiMatSynchronize(Ref<RunQueue> ref_queue,
   // Mais il peut rester encore des requetes d'envoi en cours
   if (pending_requests.size()) {
     // Normalement, il ne reste que des requêtes d'envois
-    ARCANE_ASSERT(pending_requests.size()<=m_nb_nei, 
-        ("Il ne peut pas rester un nb de requetes d'envoi supérieur au nb de voisins"));
+    if (!(pending_requests.size()<=m_nb_nei)) {
+      throw FatalErrorException(A_FUNCINFO,
+          "Il ne peut pas rester un nb de requetes d'envoi supérieur au nb de voisins");
+    }
     for(Integer msg_type : pending_types) {
-      ARCANE_ASSERT(msg_type<0, 
-          ("Un message d'envoi doit avoir un type négatif ce qui n'est pas le cas"));
+      if (!(msg_type<0)) {
+        throw FatalErrorException(A_FUNCINFO, 
+            "Un message d'envoi doit avoir un type négatif ce qui n'est pas le cas");
+      }
     }
     m_pm->waitAllRequests(pending_requests);
   }
