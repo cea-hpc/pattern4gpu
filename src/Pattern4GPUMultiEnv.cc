@@ -71,17 +71,17 @@ initMEnvVar() {
       }
     }
     if (to_sync) {
-#if 1
+#if 0
       MeshMaterialVariableSynchronizerList mmvsl(m_mesh_material_mng);
       m_menv_var1.synchronize(mmvsl);
       m_menv_var2.synchronize(mmvsl);
       m_menv_var3.synchronize(mmvsl);
       mmvsl.apply();
-#elif 0
+#elif 1
       auto ref_queue = m_acc_env->refQueueAsync();
-      m_acc_env->vsyncMng()->multiMatSynchronize1(ref_queue, m_menv_var1);
-      m_acc_env->vsyncMng()->multiMatSynchronize1(ref_queue, m_menv_var2);
-      m_acc_env->vsyncMng()->multiMatSynchronize1(ref_queue, m_menv_var3);
+      m_acc_env->vsyncMng()->multiMatSynchronize(m_menv_var1, ref_queue);
+      m_acc_env->vsyncMng()->multiMatSynchronize(m_menv_var2, ref_queue);
+      m_acc_env->vsyncMng()->multiMatSynchronize(m_menv_var3, ref_queue);
 #else
       MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng()->bufAddrMng());
       mvsl.add(m_menv_var1);
@@ -90,7 +90,7 @@ initMEnvVar() {
       mvsl.add(m_tensor);
       mvsl.add(m_menv_var3);
       auto ref_queue = m_acc_env->refQueueAsync();
-      m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, mvsl);
+      m_acc_env->vsyncMng()->multiMatSynchronize(mvsl, ref_queue);
 #endif
     }
   }
@@ -160,7 +160,7 @@ initMEnvVar() {
     mvsl.add(m_tensor);
     mvsl.add(m_menv_var3);
     auto ref_queue = m_acc_env->refQueueAsync();
-    m_acc_env->vsyncMng()->multiMatSynchronize(ref_queue, mvsl);
+    m_acc_env->vsyncMng()->multiMatSynchronize(mvsl, ref_queue);
   }
 
   // Sortie des variables multi-environnement pour la visu
@@ -521,7 +521,7 @@ partialAndMean() {
     }
 #if 1
     auto ref_queue = m_acc_env->refQueueAsync();
-    m_acc_env->vsyncMng()->multiMatSynchronize1(ref_queue, m_menv_var1);
+    m_acc_env->vsyncMng()->multiMatSynchronize(m_menv_var1, ref_queue);
 #else
     m_menv_var1.synchronize();
 #endif
@@ -590,7 +590,7 @@ partialAndMean() {
     }; // fin lambda comp_var1
 
 #if 0
-    m_acc_env->vsyncMng()->computeMatAndSyncOnEvents1(events,
+    m_acc_env->vsyncMng()->computeMatAndSyncOnEvents(events,
         comp_var1, m_menv_var1,
         options()->getPmeanVar1SyncVersion());
 #else

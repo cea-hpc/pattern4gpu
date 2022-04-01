@@ -62,7 +62,6 @@ add_library(libmsgpass msgpass/VarSyncMng.cc
                        msgpass/SyncItems.cc
                        msgpass/SyncBuffers.cc
                        msgpass/SyncEnvIndexes.cc
-                       msgpass/MultiMatSynchronize.cc
                        msgpass/MeshVariableSynchronizerList.cc
                        msgpass/Algo1SyncDataMMatDH.cc
                        msgpass/Algo1SyncDataMMatD.cc
@@ -121,7 +120,6 @@ arcane_accelerator_add_source_files(msgpass/PackTransfer.cc)
 arcane_accelerator_add_source_files(msgpass/SyncItems.cc)
 arcane_accelerator_add_source_files(msgpass/SyncEnvIndexes.cc)
 arcane_accelerator_add_source_files(msgpass/SyncBuffers.cc)
-arcane_accelerator_add_source_files(msgpass/MultiMatSynchronize.cc)
 arcane_accelerator_add_source_files(msgpass/MeshVariableSynchronizerList.cc)
 arcane_accelerator_add_source_files(msgpass/Algo1SyncDataMMatDH.cc)
 arcane_accelerator_add_source_files(msgpass/Algo1SyncDataMMatD.cc)

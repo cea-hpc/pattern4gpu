@@ -120,32 +120,39 @@ class VarSyncMng {
   void computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version=VS_overlap_evqueue);
 
 
+  //! Equivalent à un var.synchronize() où var est une variable multi-mat
+  template<typename DataType>
+  void multiMatSynchronize(CellMaterialVariableScalarRef<DataType> var_menv, Ref<RunQueue> ref_queue, 
+      eVarSyncVersion vs_version=VS_bulksync_evqueue);
+
+  //! Maj des mailles fantômes d'une liste de variables multi-mat
+  void multiMatSynchronize(MeshVariableSynchronizerList& vars, Ref<RunQueue> ref_queue, 
+      eVarSyncVersion vs_version=VS_bulksync_evqueue);
+
+
   // Overlapping entre calcul et communications pour variable multi-mat
   template<typename Func, typename DataType>
-  void computeMatAndSync1(Func func, CellMaterialVariableScalarRef<DataType> var, eVarSyncVersion vs_version=VS_overlap_evqueue);
+  void computeMatAndSync(Func func, CellMaterialVariableScalarRef<DataType> var, 
+      eVarSyncVersion vs_version=VS_overlap_evqueue);
 
   //! Une fois déroulés les événements de depends_on_evts, 
   // overlapping entre calcul et communications pour variable multi-mat
   template<typename Func, typename DataType>
-  void computeMatAndSyncOnEvents1(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
-    Func func, CellMaterialVariableScalarRef<DataType> var, eVarSyncVersion vs_version);
-
-  //! Equivalent à un var.synchronize() où var est une variable multi-mat
-  template<typename DataType>
-  void multiMatSynchronize1(Ref<RunQueue> ref_queue, CellMaterialVariableScalarRef<DataType> var_menv);
+  void computeMatAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
+    Func func, CellMaterialVariableScalarRef<DataType> var, 
+    eVarSyncVersion vs_version=VS_overlap_evqueue);
 
   // Overlapping entre calcul et communications pour une liste de variables multi-mat
   template<typename Func>
-  void computeMatAndSync(Func func, MeshVariableSynchronizerList& vars, eVarSyncVersion vs_version);
+  void computeMatAndSync(Func func, MeshVariableSynchronizerList& vars, 
+      eVarSyncVersion vs_version=VS_overlap_evqueue);
 
   //! Une fois déroulés les événements de depends_on_evts, 
   // overlapping entre calcul et communications pour une liste de variables multi-mat
   template<typename Func>
   void computeMatAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
-      Func func, MeshVariableSynchronizerList& vars, eVarSyncVersion vs_version);
-
-  //! Maj des mailles fantômes d'une liste de variables multi-mat
-  void multiMatSynchronize(Ref<RunQueue> ref_queue, MeshVariableSynchronizerList& vars);
+      Func func, MeshVariableSynchronizerList& vars, 
+      eVarSyncVersion vs_version=VS_overlap_evqueue);
 
  protected:
   

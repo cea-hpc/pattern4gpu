@@ -4,6 +4,7 @@
 #include <arcane/IVariableSynchronizer.h>
 #include <arcane/IItemFamily.h>
 #include <arcane/IParallelMng.h>
+#include <arcane/utils/NotSupportedException.h>
 
 // Définie ailleurs
 bool is_comm_device_aware();
@@ -159,5 +160,29 @@ void VarSyncMng::_preAllocBuffers() {
   m_sync_buffers->addEstimatedMaxSz<Real3>(nb_ghost_item_idx_pn, degree);
   // Le buffer de tous les messages est réalloué si pas assez de place
   m_sync_buffers->allocIfNeeded();
+}
+
+/*---------------------------------------------------------------------------*/
+/* Maj des mailles fantômes d'une liste de variables multi-mat               */
+/*---------------------------------------------------------------------------*/
+void VarSyncMng::multiMatSynchronize(MeshVariableSynchronizerList& vars, 
+    Ref<RunQueue> ref_queue, eVarSyncVersion vs_version)
+{
+  IAlgo1SyncData* sync_data=nullptr;
+  if (vs_version==VS_bulksync_evqueue) 
+  {
+    sync_data = new Algo1SyncDataMMatDH(vars, ref_queue, *m_a1_mmat_dh_pi);
+  } 
+  else if (vs_version == VS_bulksync_evqueue_d) 
+  {
+    sync_data = new Algo1SyncDataMMatD(vars, m_ref_queue_bnd, *m_a1_mmat_d_pi);
+  } 
+  else 
+  {
+    throw NotSupportedException(A_FUNCINFO, 
+        String::format("Invalid eVarSyncVersion for this method ={0}",(int)vs_version));
+  }
+  m_vsync_algo1->synchronize(sync_data);
+  delete sync_data;
 }
 

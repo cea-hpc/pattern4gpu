@@ -97,6 +97,8 @@ class BufAddrMng {
   ArrayView<Int64> _nextView(UniqueArray<Int64>* buf_addr, Integer& cur) {
     if (cur == (buf_addr->size()/m_nb_addr_per_buf)) {
       Integer sz = buf_addr->size() + 10*m_nb_addr_per_buf;
+      // FIXME : resize plante si eMemoryRessource::Device, utiliser un
+      // NumArray à la place ?
       buf_addr->resize(sz);
     }
     Integer n = m_nb_addr_per_buf;
