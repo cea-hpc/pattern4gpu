@@ -24,7 +24,8 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
   
   ITraceMng* tm = m_mesh->traceMng();
   if (vs_version == VS_bulksync_std ||
-      vs_version == VS_bulksync_queue) 
+      vs_version == VS_bulksync_queue ||
+      vs_version == VS_bulksync_evqueue) 
   {
     // Calcul sur tous les items "own"
     auto own_items = get_own_items<ItemType>(m_mesh);
@@ -38,14 +39,17 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
     if (vs_version == VS_bulksync_std) {
       tm->debug() << "bulksync_std";
       var.synchronize();
-    } else {
-      ARCANE_ASSERT(vs_version==VS_bulksync_queue,
-          ("Ici, option differente de bulksync_queue"));
+    } else if (vs_version == VS_bulksync_queue) {
       tm->debug() << "bulksync_queue";
       //this->globalSynchronize(var);
       this->globalSynchronizeQueue(ref_queue, var);
       //this->globalSynchronizeDevThr(var);
       //this->globalSynchronizeDevQueues(var);
+    } else {
+      ARCANE_ASSERT(vs_version==VS_bulksync_evqueue,
+          ("Ici, option differente de bulksync_evqueue"));
+      tm->debug() << "bulksync_evqueue";
+      this->globalSynchronizeQueueEvent(ref_queue, var);
     }
     PROF_ACC_END;
 
@@ -56,9 +60,8 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
     SyncItems<ItemType>* sync_items = this->getSyncItems<ItemType>();
 
     // On amorce sur le DEVICE le calcul sur les items "own" sur le bord du
-    // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
-    Ref<RunQueue> ref_queue_bnd = AcceleratorUtils::refQueueAsync(m_runner, QP_high);
-    func(sync_items->sharedItems(), ref_queue_bnd.get());
+    // sous-domaine sur la queue m_ref_queue_bnd (_bnd = boundary)
+    func(sync_items->sharedItems(), m_ref_queue_bnd.get());
     // ici, le calcul n'est pas terminé sur le DEVICE
 
     // On amorce sur le DEVICE le calcul des items intérieurs dont ne dépendent
@@ -66,17 +69,17 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
     Ref<RunQueue> ref_queue_inr = AcceleratorUtils::refQueueAsync(m_runner, QP_default);
     func(sync_items->privateItems(), ref_queue_inr.get());
 
-    // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
+    // Sur la même queue de bord m_ref_queue_bnd, on amorce le packing des données
     // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
-    // la queue ref_queue_bnd
+    // la queue m_ref_queue_bnd
     if (vs_version == VS_overlap_evqueue) {
       tm->debug() << "overlap_evqueue";
-      this->globalSynchronizeQueueEvent(ref_queue_bnd, var);
+      this->globalSynchronizeQueueEvent(m_ref_queue_bnd, var);
     } else if (vs_version == VS_overlap_evqueue_d) {
       tm->debug() << "overlap_evqueue_d";
-      this->globalSynchronizeQueueEventD(ref_queue_bnd, var);
+      this->globalSynchronizeQueueEventD(m_ref_queue_bnd, var);
     }
-    // ici, après cet appel, ref_queue_bnd est synchronisée
+    // ici, après cet appel, m_ref_queue_bnd est synchronisée
 
     // On attend la terminaison des calculs intérieurs
     ref_queue_inr->barrier();
@@ -87,24 +90,23 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
     SyncItems<ItemType>* sync_items = this->getSyncItems<ItemType>();
 
     // On amorce sur le DEVICE le calcul sur les items "own" sur le bord du
-    // sous-domaine sur la queue ref_queue_bnd (_bnd = boundary)
-    Ref<RunQueue> ref_queue_bnd = AcceleratorUtils::refQueueAsync(m_runner, QP_high);
-    func(sync_items->sharedItems(), ref_queue_bnd.get());
+    // sous-domaine sur la queue m_ref_queue_bnd (_bnd = boundary)
+    func(sync_items->sharedItems(), m_ref_queue_bnd.get());
     // ici, le calcul n'est pas terminé sur le DEVICE
     
-    // Sur la même queue de bord ref_queue_bnd, on amorce le packing des données
-    auto ref_sync_req = this->iGlobalSynchronizeQueue(ref_queue_bnd, var);
+    // Sur la même queue de bord m_ref_queue_bnd, on amorce le packing des données
+    auto ref_sync_req = this->iGlobalSynchronizeQueue(m_ref_queue_bnd, var);
 
     // On amorce sur le DEVICE le calcul des items intérieurs dont ne dépendent
     // pas les comms sur la queue ref_queue_inr (_inr = inner)
     Ref<RunQueue> ref_queue_inr = AcceleratorUtils::refQueueAsync(m_runner, QP_default);
     func(sync_items->privateItems(), ref_queue_inr.get());
 
-    // Une fois le packing des données terminé sur ref_queue_bnd
+    // Une fois le packing des données terminé sur m_ref_queue_bnd
     // on effectue les comms MPI sur CPU, 
-    // puis unpacking des données et on synchronise la queue ref_queue_bnd
+    // puis unpacking des données et on synchronise la queue m_ref_queue_bnd
     ref_sync_req->wait();
-    // ici, après cet appel, ref_queue_bnd est synchronisée
+    // ici, après cet appel, m_ref_queue_bnd est synchronisée
 
     // On attend la terminaison des calculs intérieurs
     ref_queue_inr->barrier();

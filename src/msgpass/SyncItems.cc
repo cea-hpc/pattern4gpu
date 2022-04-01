@@ -147,7 +147,7 @@ SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks,
   auto arr_item_status = item_status.asArray();
   // = 0 : "private" : item intérieur qui ne participe à aucune comm
   // > 0 : "shared" : item "own" dont les valeurs doivent être envoyées
-  // > 0 : "ghost"  : item fantôme dont on va recevoir une valeur
+  // < 0 : "ghost"  : item fantôme dont on va recevoir une valeur
   arr_item_status.fill(0);
 
   IntegerUniqueArray all_shared_lids;
@@ -188,7 +188,7 @@ SyncItems<ItemType>::SyncItems(IMesh* mesh, Int32ConstArrayView neigh_ranks,
   IntegerUniqueArray private_item_ids;
   private_item_ids.reserve(own_items.size()); // pour minimiser le nb d'allocations dynamiques
 
-  ENUMERATE_ITEM(iitem, own_items) {
+  ENUMERATE_(ItemType, iitem, own_items) {
     if (item_status[iitem] == 0) {
       private_item_ids.add(iitem->localId());
     }

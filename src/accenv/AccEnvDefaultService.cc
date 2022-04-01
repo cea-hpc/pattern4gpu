@@ -10,6 +10,7 @@
 
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
 #include <arcane/IParallelMng.h>
+#include <arcane/ParallelMngUtils.h>
 #include <arcane/IParallelTopology.h>
 
 #if defined(ACCENV_HWLOC) && defined(ARCANE_COMPILING_CUDA)
@@ -117,46 +118,43 @@ initAcc()
   }
 
   bool is_acc_av = AcceleratorUtils::isAvailable(m_runner);
-#ifdef ARCANE_COMPILING_CUDA
-  if (is_acc_av && options()->getDeviceAffinity() == DA_cu_world_rank) 
+  if (is_acc_av && options()->getDeviceAffinity() == DA_world_rank) 
   {
-    info() << "Placement GPU : device =  world_rank%cuda_device_count";
+    info() << "Placement GPU : device =  world_rank%device_count";
 
-    Integer device_count=0;
-    cudaGetDeviceCount(&device_count);
+    Integer device_count = AcceleratorUtils::deviceCount();
     if (device_count>0) {
       Integer rank = mesh()->parallelMng()->commRank();
       Integer device=rank%device_count;
-      cudaSetDevice(device);
+      AcceleratorUtils::setDevice(device);
       pinfo() << "Processus " << rank  
         << " : Device " << device << " (pour " << device_count << " device(s))";
     }
   }
-  if (options()->getDeviceAffinity() == DA_cu_node_rank) 
+  if (options()->getDeviceAffinity() == DA_node_rank) 
   {
     IParallelMng* pm = mesh()->parallelMng();
     // Attention, createTopology() est une opération collective
-    IParallelTopology* pt = pm->createTopology();
+    Ref<IParallelTopology> pt = ParallelMngUtils::createTopologyRef(pm);
     auto node_ranks = pt->machineRanks();
     // Attention, createSubParallelMng() est une opération collective
     Ref<IParallelMng> pm_node = pm->createSubParallelMngRef(node_ranks);
 
     if (is_acc_av) {
-      info() << "Placement GPU : device =  node_rank%cuda_device_count";
+      info() << "Placement GPU : device =  node_rank%device_count";
 
-      Integer device_count=0;
-      cudaGetDeviceCount(&device_count);
+      Integer device_count = AcceleratorUtils::deviceCount();
       if (device_count>0) {
         Integer rank = pm->commRank();
         Integer node_rank = pm_node->commRank();
         Integer device=node_rank%device_count;
-        cudaSetDevice(device);
+        AcceleratorUtils::setDevice(device);
         pinfo() << "Processus " << rank  << " (node_rank=" << node_rank << ")"
           << " : Device " << device << " (pour " << device_count << " device(s))";
       }
     }
-    delete pt;
   }
+#ifdef ARCANE_COMPILING_CUDA
 #ifdef ACCENV_HWLOC
   if (is_acc_av && options()->getDeviceAffinity() == DA_cu_hwloc) 
   {
@@ -393,6 +391,9 @@ updateMultiEnv(IMeshMaterialMng* mesh_material_mng) {
     IMeshEnvironment* env = *ienv;
     m_acc_mem_adv->setReadMostly(env->pureEnvItems().valueIndexes());
   }
+
+  // Pour mettre à jours des listes pour les comms multi-env
+  m_vsync_mng->updateSyncMultiEnv();
 }
 
 /*---------------------------------------------------------------------------*/
@@ -400,6 +401,10 @@ updateMultiEnv(IMeshMaterialMng* mesh_material_mng) {
 /*---------------------------------------------------------------------------*/
 void AccEnvDefaultService::
 initMultiEnv(IMeshMaterialMng* mesh_material_mng) {
+
+  // 6 = toutes les variables sont synchronisées simultanément
+  mesh_material_mng->setSynchronizeVariableVersion(6);
+  m_vsync_mng->initSyncMultiEnv(mesh_material_mng);
 
   m_menv_queue = new MultiAsyncRunQueue(m_runner, mesh_material_mng->environments().size());
 

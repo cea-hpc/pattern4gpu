@@ -9,6 +9,7 @@
 #include "arcane/accelerator/RunCommandLoop.h"
 #include "arcane/accelerator/RunCommandEnumerate.h"
 #include "arcane/accelerator/core/RunQueueBuildInfo.h"
+#include <arcane/accelerator/core/Memory.h>
 
 /*---------------------------------------------------------------------------*/
 /* Pour les accélérateurs                                                    */
@@ -22,10 +23,6 @@ namespace ax = Arcane::Accelerator;
 /*---------------------------------------------------------------------------*/
 
 #if defined(ARCANE_COMPILING_CUDA) && defined(PROF_ACC)
-#define USE_PROF_ACC
-#endif
-
-#if defined(USE_PROF_ACC)
 
 #warning "PROF_ACC : instrumentation avec nvtx"
 #include <nvtx3/nvToolsExt.h>
@@ -45,6 +42,28 @@ namespace ax = Arcane::Accelerator;
 
 #ifndef PROF_ACC_END
 #define PROF_ACC_END nvtxRangePop()
+#endif
+
+#elif defined(ARCANE_COMPILING_HIP) && defined(PROF_ACC)
+
+#warning "PROF_ACC : instrumentation avec roctx"
+#include <roctracer/roctx.h>
+//#include <roctracer/roctracer_ext.h>
+
+#ifndef PROF_ACC_START_CAPTURE
+#define PROF_ACC_START_CAPTURE //roctracer_start()
+#endif
+
+#ifndef PROF_ACC_STOP_CAPTURE
+#define PROF_ACC_STOP_CAPTURE //roctracer_stop()
+#endif
+
+#ifndef PROF_ACC_BEGIN
+#define PROF_ACC_BEGIN(__name__) roctxRangePushA(__name__)
+#endif
+
+#ifndef PROF_ACC_END
+#define PROF_ACC_END roctxRangePop()
 #endif
 
 #else
@@ -85,6 +104,30 @@ class AcceleratorUtils {
  public:
   static bool isAvailable(const ax::Runner& runner) {
     return ax::impl::isAcceleratorPolicy(runner.executionPolicy());
+  }
+
+  static Integer deviceCount() {
+#if defined(ARCANE_COMPILING_CUDA)
+    Integer device_count=0;
+    cudaGetDeviceCount(&device_count);
+    return device_count;
+#elif defined(ARCANE_COMPILING_HIP)
+    Integer device_count=0;
+    auto err = hipGetDeviceCount(&device_count);
+    return device_count;
+#else
+    return 0;
+#endif
+  }
+
+  static void setDevice(Integer device) {
+#if defined(ARCANE_COMPILING_CUDA)
+    cudaSetDevice(device);
+#elif defined(ARCANE_COMPILING_HIP)
+    auto err = hipSetDevice(device);
+#else
+    return ;
+#endif
   }
 
   /*---------------------------------------------------------------------------*/

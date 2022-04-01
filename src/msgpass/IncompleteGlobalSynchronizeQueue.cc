@@ -35,6 +35,9 @@ GlobalSyncRequest<ItemType, DataType, MeshVarRefT>::GlobalSyncRequest(
   m_ref_queue   (ref_queue),
   m_var         (var)
 {
+  auto nb_owned_item_idx_pn = sync_items->nbOwnedItemIdxPn();
+  auto nb_ghost_item_idx_pn = sync_items->nbGhostItemIdxPn();
+
   auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
   m_ghost_item_idx_pn = sync_items->ghostItemIdxPn();
 
@@ -43,20 +46,20 @@ GlobalSyncRequest<ItemType, DataType, MeshVarRefT>::GlobalSyncRequest(
 
   sync_buffers->resetBuf();
   // On prévoit une taille max du buffer qui va contenir tous les messages
-  sync_buffers->addEstimatedMaxSz<DataType>(owned_item_idx_pn, degree);
-  sync_buffers->addEstimatedMaxSz<DataType>(m_ghost_item_idx_pn, degree);
+  sync_buffers->addEstimatedMaxSz<DataType>(nb_owned_item_idx_pn, degree);
+  sync_buffers->addEstimatedMaxSz<DataType>(nb_ghost_item_idx_pn, degree);
   // Le buffer de tous les messages est réalloué si pas assez de place
   sync_buffers->allocIfNeeded();
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception 
   // sur l'HOTE (_h et LM_HostMem)
-  m_buf_snd_h = sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 0);
-  m_buf_rcv_h = sync_buffers->multiBufView<DataType>(m_ghost_item_idx_pn, degree, 0);
+  m_buf_snd_h = sync_buffers->multiBufView<DataType>(nb_owned_item_idx_pn, degree, 0);
+  m_buf_rcv_h = sync_buffers->multiBufView<DataType>(nb_ghost_item_idx_pn, degree, 0);
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception 
   // sur le DEVICE (_d et LM_DevMem)
-  m_buf_snd_d = sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 1);
-  m_buf_rcv_d = sync_buffers->multiBufView<DataType>(m_ghost_item_idx_pn, degree, 1);
+  m_buf_snd_d = sync_buffers->multiBufView<DataType>(nb_owned_item_idx_pn, degree, 1);
+  m_buf_rcv_d = sync_buffers->multiBufView<DataType>(nb_ghost_item_idx_pn, degree, 1);
 
   // L'échange proprement dit des valeurs de var
   Integer nb_nei = m_neigh_ranks.size();

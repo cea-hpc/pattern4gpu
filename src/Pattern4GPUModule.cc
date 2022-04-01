@@ -49,6 +49,8 @@ Pattern4GPUModule::
     delete m_kokkos_wrapper;
     KokkosWrapper::end();
   }
+
+  delete m_buf_addr_mng;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -100,6 +102,14 @@ initP4GPU()
   // init kokkos
   if (options()->getWithKokkos())
     initKokkosWrapper();
+
+  // Pour le multi-environnement
+  m_acc_env->initMultiEnv(m_mesh_material_mng); 
+
+  // TEST : pour amortir le cout des allocs pour GPU
+  if (!m_buf_addr_mng) {
+    m_buf_addr_mng = new BufAddrMng(m_acc_env->runner(), m_mesh_material_mng);
+  }
 
   PROF_ACC_END;
 }
@@ -444,8 +454,20 @@ initCqs()
   }
   else if (options()->getInitCqsVersion() == ICQV_arcgpu_v5)
   {
-      m_numarray_cqs = new NumArray<Real3,2>();
-      m_numarray_cqs->resize(8,allCells().size());
+    m_numarray_cqs = new NumArray<Real3,2>();
+    m_numarray_cqs->resize(8,allCells().size());
+    
+    auto queue = m_acc_env->newQueue();
+    auto command = makeCommand(queue);
+
+    auto out_cell_cqs = Real3_View8(*m_numarray_cqs);
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+      Int32 cid_as_int = cid.localId();
+      for(Integer inode(0) ; inode<8 ; ++inode) {
+        out_cell_cqs(inode, cid_as_int) = Real3::zero();
+      }
+    };
   }
   else if (options()->getInitCqsVersion() == ICQV_kokkos)
   {

@@ -33,8 +33,7 @@ target_include_directories(libcartesian PUBLIC .)
 target_link_libraries(libcartesian PUBLIC arcane_core)
 
 # Services communs pour les accélérateurs
-add_library(libaccenv accenv/AccEnvDefaultService.cc
-                      accenv/AcceleratorEvent.cc)
+add_library(libaccenv accenv/AccEnvDefaultService.cc)
 target_include_directories(libaccenv PUBLIC .)
 ## Pour HWLOC (en attendant un FindHWLOC.cmake)
 #set(ENV_HWLOC_INCDIR "$ENV{HWLOC_INCDIR}")
@@ -61,7 +60,12 @@ add_library(libmsgpass msgpass/VarSyncMng.cc
                        msgpass/MsgPassInit.cc
                        msgpass/PackTransfer.cc
                        msgpass/SyncItems.cc
-                       msgpass/SyncBuffers.cc)
+                       msgpass/SyncBuffers.cc
+                       msgpass/SyncEnvIndexes.cc
+                       msgpass/MeshVariableSynchronizerList.cc
+                       msgpass/Algo1SyncDataMMatDH.cc
+                       msgpass/Algo1SyncDataMMatD.cc
+                       msgpass/VarSyncAlgo1.cc)
 target_include_directories(libmsgpass PUBLIC .)
 target_link_libraries(libmsgpass PUBLIC arcane_core)
 # Pour MPI
@@ -84,48 +88,47 @@ target_link_libraries(libpattern4gpu PUBLIC libgeomenv libcartesian libaccenv li
 
 # Pour la gestion des accélérateurs et des sources à compiler avec le
 # compilateur pour accélérateur
-if(WANT_CUDA)
-  enable_language(CUDA)
-  find_package(CUDAToolkit REQUIRED)
-  set_source_files_properties(
-      Pattern4GPUModule.cc 
-      Pattern4GPUcomputeCqsAndVector.cc 
-      Pattern4GPUupdateVectorFromTensor.cc 
-      Pattern4GPUupdateTensor.cc 
-      Pattern4GPUTestCartesian.cc 
-      Pattern4GPUBenchCartesian.cc 
-      Pattern4GPUCartesian.cc 
-      Pattern4GPUEnvOrder.cc 
-      Pattern4GPUMultiEnv.cc 
-      geomenv/GeomEnvModule.cc
-      cartesian/CartesianConnectivity.cc
-      cartesian/CartesianMesh.cc
-      cartesian/CellDirectionMng.cc
-      cartesian/FaceDirectionMng.cc
-      cartesian/NodeDirectionMng.cc
-      cartesian/CartesianItemSorter.cc
-      accenv/AccEnvDefaultService.cc
-      accenv/AcceleratorEvent.cc
-      msgpass/VarSyncMng.cc
-      msgpass/GlobalSynchronize.cc
-      msgpass/GlobalSynchronizeQueue.cc
-      msgpass/GlobalSynchronizeQueueEvent.cc
-      msgpass/GlobalSynchronizeQueueEventD.cc
-      msgpass/GlobalSynchronizeDevThr.cc
-      msgpass/GlobalSynchronizeDevQueues.cc
-      msgpass/IncompleteGlobalSynchronizeQueue.cc
-      msgpass/IsCommDeviceAware.cc
-      msgpass/MsgPassInit.cc
-      msgpass/PackTransfer.cc
-      msgpass/SyncItems.cc
-      msgpass/SyncBuffers.cc
-      PROPERTIES LANGUAGE CUDA)
-  target_link_libraries(libpattern4gpu PUBLIC arcane_accelerator_cuda_runtime)
-  target_link_libraries(libgeomenv PUBLIC arcane_accelerator_cuda_runtime)
-  target_link_libraries(libcartesian PUBLIC arcane_accelerator_cuda_runtime)
-  target_link_libraries(libaccenv PUBLIC arcane_accelerator_cuda_runtime)
-  target_link_libraries(libmsgpass PUBLIC arcane_accelerator_cuda_runtime)
-endif()
+arcane_accelerator_enable()
+arcane_accelerator_add_source_files(Pattern4GPUModule.cc )
+arcane_accelerator_add_source_files(Pattern4GPUcomputeCqsAndVector.cc )
+arcane_accelerator_add_source_files(Pattern4GPUupdateVectorFromTensor.cc )
+arcane_accelerator_add_source_files(Pattern4GPUupdateTensor.cc )
+arcane_accelerator_add_source_files(Pattern4GPUTestCartesian.cc )
+arcane_accelerator_add_source_files(Pattern4GPUBenchCartesian.cc )
+arcane_accelerator_add_source_files(Pattern4GPUCartesian.cc )
+arcane_accelerator_add_source_files(Pattern4GPUEnvOrder.cc )
+arcane_accelerator_add_source_files(Pattern4GPUMultiEnv.cc )
+arcane_accelerator_add_source_files(geomenv/GeomEnvModule.cc)
+arcane_accelerator_add_source_files(cartesian/CartesianConnectivity.cc)
+arcane_accelerator_add_source_files(cartesian/CartesianMesh.cc)
+arcane_accelerator_add_source_files(cartesian/CellDirectionMng.cc)
+arcane_accelerator_add_source_files(cartesian/FaceDirectionMng.cc)
+arcane_accelerator_add_source_files(cartesian/NodeDirectionMng.cc)
+arcane_accelerator_add_source_files(cartesian/CartesianItemSorter.cc)
+arcane_accelerator_add_source_files(accenv/AccEnvDefaultService.cc)
+arcane_accelerator_add_source_files(msgpass/VarSyncMng.cc)
+arcane_accelerator_add_source_files(msgpass/GlobalSynchronize.cc)
+arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeQueue.cc)
+arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeQueueEvent.cc)
+arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeQueueEventD.cc)
+arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeDevThr.cc)
+arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeDevQueues.cc)
+arcane_accelerator_add_source_files(msgpass/IncompleteGlobalSynchronizeQueue.cc)
+arcane_accelerator_add_source_files(msgpass/IsCommDeviceAware.cc)
+arcane_accelerator_add_source_files(msgpass/MsgPassInit.cc)
+arcane_accelerator_add_source_files(msgpass/PackTransfer.cc)
+arcane_accelerator_add_source_files(msgpass/SyncItems.cc)
+arcane_accelerator_add_source_files(msgpass/SyncEnvIndexes.cc)
+arcane_accelerator_add_source_files(msgpass/SyncBuffers.cc)
+arcane_accelerator_add_source_files(msgpass/MeshVariableSynchronizerList.cc)
+arcane_accelerator_add_source_files(msgpass/Algo1SyncDataMMatDH.cc)
+arcane_accelerator_add_source_files(msgpass/Algo1SyncDataMMatD.cc)
+arcane_accelerator_add_source_files(msgpass/VarSyncAlgo1.cc)
+arcane_accelerator_add_to_target(libpattern4gpu)
+arcane_accelerator_add_to_target(libgeomenv)
+arcane_accelerator_add_to_target(libcartesian)
+arcane_accelerator_add_to_target(libaccenv)
+arcane_accelerator_add_to_target(libmsgpass)
 
 # Kokkos
 # a regarder pour transformer ca en external project

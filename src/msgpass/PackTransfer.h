@@ -2,14 +2,12 @@
 #define MSG_PASS_PACK_TRANSFER_H
 
 #include "accenv/AcceleratorUtils.h"
+#include "accenv/MultiEnvUtils.h"
 #include "msgpass/SyncBuffers.h"
-
-#include <arcane/accelerator/IRunQueueStream.h>
 
 using namespace Arcane;
 
-void async_transfer(Span<Byte> dst_buf, eLocMem dst_loc_mem,
-    Span<const Byte> src_buf, eLocMem src_loc_mem, RunQueue& queue);
+void async_transfer(Span<Byte> dst_buf, Span<const Byte> src_buf, RunQueue& queue);
 
 void async_transfer(MultiBufView out_buf, MultiBufView in_buf, RunQueue& queue);
 
@@ -85,5 +83,48 @@ void async_unpack_buf2var(IntegerConstArrayView item_idx,
   }; // asynchrone
 }
 
+
+/*---------------------------------------------------------------------------*/
+/* async_pack_varmenv2buf */
+/*---------------------------------------------------------------------------*/
+template< typename DataType>
+void async_pack_varmenv2buf(ConstArrayView<EnvVarIndex> levis, 
+    MultiEnvData<DataType>& in_var_menv,
+    ArrayView<Byte> buf, RunQueue& queue) 
+{
+  auto command = makeCommand(queue);
+
+  Span<const EnvVarIndex> in_levis(levis);
+  Span<DataType> buf_vals(MultiBufView::valBuf<DataType>(buf));
+
+  Integer nb_evis = levis.size();
+
+  command << RUNCOMMAND_LOOP1(iter, nb_evis) {
+    auto [i] = iter();
+    buf_vals[i] = in_var_menv[ in_levis[i] ];
+  }; // asynchrone
+}
+
+
+/*---------------------------------------------------------------------------*/
+/* async_unpack_buf2varmenv */
+/*---------------------------------------------------------------------------*/
+template< typename DataType>
+void async_unpack_buf2varmenv(ConstArrayView<EnvVarIndex> levis,
+    ArrayView<Byte> buf, 
+    MultiEnvData<DataType>& out_var_menv, RunQueue& queue) 
+{
+  auto command = makeCommand(queue);
+
+  Span<const EnvVarIndex> in_levis(levis);
+  Span<const DataType>    buf_vals(MultiBufView::valBuf<DataType>(buf));
+
+  Integer nb_evis = levis.size();
+
+  command << RUNCOMMAND_LOOP1(iter, nb_evis) {
+    auto [i] = iter();
+    out_var_menv.setValue(in_levis[i], buf_vals[i]);
+  }; // asynchrone
+}
 #endif
 

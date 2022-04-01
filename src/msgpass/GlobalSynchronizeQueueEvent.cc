@@ -23,6 +23,9 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
 
   SyncItems<ItemType>* sync_items = getSyncItems<ItemType>();
 
+  auto nb_owned_item_idx_pn = sync_items->nbOwnedItemIdxPn();
+  auto nb_ghost_item_idx_pn = sync_items->nbGhostItemIdxPn();
+
   auto owned_item_idx_pn = sync_items->ownedItemIdxPn();
   auto ghost_item_idx_pn = sync_items->ghostItemIdxPn();
 
@@ -31,20 +34,20 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
 
   m_sync_buffers->resetBuf();
   // On prévoit une taille max du buffer qui va contenir tous les messages
-  m_sync_buffers->addEstimatedMaxSz<DataType>(owned_item_idx_pn, degree);
-  m_sync_buffers->addEstimatedMaxSz<DataType>(ghost_item_idx_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<DataType>(nb_owned_item_idx_pn, degree);
+  m_sync_buffers->addEstimatedMaxSz<DataType>(nb_ghost_item_idx_pn, degree);
   // Le buffer de tous les messages est réalloué si pas assez de place
   m_sync_buffers->allocIfNeeded();
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception 
   // sur l'HOTE (_h et LM_HostMem)
-  auto buf_snd_h = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 0);
-  auto buf_rcv_h = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree, 0);
+  auto buf_snd_h = m_sync_buffers->multiBufView<DataType>(nb_owned_item_idx_pn, degree, 0);
+  auto buf_rcv_h = m_sync_buffers->multiBufView<DataType>(nb_ghost_item_idx_pn, degree, 0);
 
   // On récupère les adresses et tailles des buffers d'envoi et de réception 
   // sur le DEVICE (_d et LM_DevMem)
-  auto buf_snd_d = m_sync_buffers->multiBufView<DataType>(owned_item_idx_pn, degree, 1);
-  auto buf_rcv_d = m_sync_buffers->multiBufView<DataType>(ghost_item_idx_pn, degree, 1);
+  auto buf_snd_d = m_sync_buffers->multiBufView<DataType>(nb_owned_item_idx_pn, degree, 1);
+  auto buf_rcv_d = m_sync_buffers->multiBufView<DataType>(nb_ghost_item_idx_pn, degree, 1);
 
   // L'échange proprement dit des valeurs de var
   UniqueArray<Parallel::Request> requests(2*m_nb_nei);
@@ -67,33 +70,25 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
   // On remplit les buffers sur le DEVICE
   for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
 
-    // On lit les valeurs de var pour les recopier dans le buffer d'envoi
-    auto buf_snd_inei = buf_snd_d.byteBuf(inei); // buffer dans lequel on va écrire
-    // "buf_snd[inei] <= var"
-    async_pack_var2buf(owned_item_idx_pn[inei], var, buf_snd_inei, *(ref_queue.get()));
-
-    // On enregistre un événement pour la fin de packing pour le voisin inei
-    if (m_pack_events[inei])
-      m_pack_events[inei]->record(*(ref_queue.get()));
-  }
-
-  // Maintenant qu'on a lancé de façon asynchrones tous les packing pour tous les voisins
-  // on va attendre voisin après vois la terminaison des packing pour amorcer les transferts
-  // asynchrones sur la queue m_ref_queue_data qui s'occupent des transferts asynchrones
-  for(Integer inei=0 ; inei<m_nb_nei ; ++inei) {
     auto byte_buf_snd_d = buf_snd_d.byteBuf(inei); // le buffer d'envoi pour inei sur le DEVICE
     auto byte_buf_snd_h = buf_snd_h.byteBuf(inei); // le buffer d'envoi pour inei sur l'HOTE
 
-    // Bloque tant que l'evenement n'a pas lieu
-    if (m_pack_events[inei])
-      m_pack_events[inei]->wait();
+    // On lit les valeurs de var pour les recopier dans le buffer d'envoi
+    // byte_buf_snd_d = buffer dans lequel on va écrire
+    // "buf_snd[inei] <= var"
+    async_pack_var2buf(owned_item_idx_pn[inei], var, byte_buf_snd_d, *(ref_queue.get()));
 
+    // On enregistre un événement pour la fin de packing pour le voisin inei
+    ref_queue->recordEvent(m_pack_events[inei]);
+
+    // le transfert sur m_ref_queue_data ne pourra pas commencer
+    // tant que l'événement m_pack_events[inei] ne sera pas arrivé
+    m_ref_queue_data->waitEvent(m_pack_events[inei]);
+    
     // transfert buf_snd_d[inei] => buf_snd_h[inei]
-    async_transfer(byte_buf_snd_h, buf_snd_h.locMem(),
-        byte_buf_snd_d, buf_snd_d.locMem(), *(m_ref_queue_data.get()));
+    async_transfer(byte_buf_snd_h, byte_buf_snd_d, *(m_ref_queue_data.get()));
 
-    if (m_transfer_events[inei])
-      m_transfer_events[inei]->record(*(m_ref_queue_data.get()));
+    m_ref_queue_data->recordEvent(m_transfer_events[inei]);
   }
   
   // On amorce les envois sur l'HOTE dès qu'un transfert est terminé
@@ -101,8 +96,7 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
     Int32 rank_nei = m_neigh_ranks[inei]; // le rang du inei-ième voisin
 
     // Attente de la fin du transfert
-    if (m_transfer_events[inei])
-      m_transfer_events[inei]->wait();
+    m_transfer_events[inei]->wait();
 
     // On amorce l'envoi
     auto byte_buf_snd = buf_snd_h.byteBuf(inei); // le buffer d'envoi pour inei
@@ -165,17 +159,14 @@ void VarSyncMng::globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariab
           auto byte_buf_rcv_d = buf_rcv_d.byteBuf(inei); // buffer des données reçues à transférer sur le DEVICE
 
           // transfert buf_rcv_h[inei] => buf_rcv_d[inei]
-          async_transfer(byte_buf_rcv_d, buf_rcv_d.locMem(),
-              byte_buf_rcv_h, buf_rcv_h.locMem(), *(m_ref_queue_data.get()));
+          async_transfer(byte_buf_rcv_d, byte_buf_rcv_h, *(m_ref_queue_data.get()));
 
           // On enregistre un événement pour repérer la fin du transfert
-          if (m_transfer_events[inei])
-            m_transfer_events[inei]->record(*(m_ref_queue_data.get()));
+          m_ref_queue_data->recordEvent(m_transfer_events[inei]);
 
           // Les kernels suivant sur ref_queue vont attendre l'occurence 
           // de l'événement m_transfer_events[inei] sur la queue m_ref_queue_data
-          if (m_transfer_events[inei])
-            m_transfer_events[inei]->queueWait(*(ref_queue.get()));
+          ref_queue->waitEvent(m_transfer_events[inei]);
 
           // Maintenant que byte_buf_rcv_d est sur DEVICE on peut enclencher le unpacking des données
           // "var <= buf_rcv_d[inei]"
