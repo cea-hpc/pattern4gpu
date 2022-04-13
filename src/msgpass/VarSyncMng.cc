@@ -74,7 +74,7 @@ void VarSyncMng::initSyncMultiEnv(IMeshMaterialMng* mesh_material_mng) {
   if (!m_sync_evi) {
     m_sync_evi = new SyncEnvIndexes(
         MatVarSpace::MaterialAndEnvironment, m_mesh_material_mng,
-        m_neigh_ranks, m_acc_mem_adv);
+        m_neigh_ranks, m_sync_cells, m_acc_mem_adv);
 
     // m_sync_evi doit être créé pour construire m_a1_*
     // _dh_ = Device-Host
@@ -120,6 +120,13 @@ bool VarSyncMng::isDeviceAware() const {
 /*---------------------------------------------------------------------------*/
 BufAddrMng* VarSyncMng::bufAddrMng() {
   return m_buf_addr_mng;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Pour gérer les EnvVarIndex(es) pour les comms                             */
+/*---------------------------------------------------------------------------*/
+SyncEnvIndexes* VarSyncMng::syncEnvIndexes() {
+  return m_sync_evi;
 }
 
 /*---------------------------------------------------------------------------*/

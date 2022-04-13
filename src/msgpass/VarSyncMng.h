@@ -82,6 +82,9 @@ class VarSyncMng {
   //! Buffer d'adresses pour gérer les côuts des allocations
   BufAddrMng* bufAddrMng();
 
+  //! Pour gérer les EnvVarIndex(es) pour les comms
+  SyncEnvIndexes* syncEnvIndexes();
+
   // Retourne l'instance de SyncItems<T> en fonction de T
   template<typename ItemType>
   SyncItems<ItemType>* getSyncItems();
