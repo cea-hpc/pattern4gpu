@@ -389,6 +389,58 @@ partialOnly() {
     queue_glob.barrier();
     menv_queue->waitAllQueues();
   }
+  else if (options()->getPartialOnlyVersion() == POV_arcgpu_v3)
+  {
+    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+    
+    auto queue = m_acc_env->newQueue();
+    queue.setAsync(true);
+    
+    MultiEnvVarHD<Real> menv_menv_var1(m_menv_var1, m_buf_addr_mng);
+    MultiEnvVarHD<Real> menv_menv_var2(m_menv_var2, m_buf_addr_mng);
+    MultiEnvVarHD<Real> menv_menv_var3(m_menv_var3, m_buf_addr_mng);
+
+    auto end_cpy_event = m_buf_addr_mng->asyncCpyHToD(queue);
+    UniqueArray<Ref<ax::RunQueueEvent>> events{end_cpy_event};
+
+    auto out_menv_var1  (menv_menv_var1.spanD());
+    auto in_menv_var2   (menv_menv_var2.spanD());
+    auto in_menv_var3   (menv_menv_var3.spanD());
+
+    // L'ensemble des EnvVarIndexes à traiter
+    auto levis_penv = m_acc_env->vsyncMng()->syncEnvIndexes()->ownEviPenv();
+
+    queue.barrier();
+
+    // On traite en concurrence les mailles mixtes des environnements, 
+    // chaque environnement étant calculé en parallèle
+    auto menv_queue = m_acc_env->multiEnvQueue();
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+
+      auto command = makeCommand(menv_queue->queue(env->id()));
+
+      // Mailles de l'environnement
+      Span<const EnvVarIndex> in_levis(levis_penv[env->id()]);
+      Integer nb_evis = in_levis.size();
+
+      command << RUNCOMMAND_LOOP1(iter, nb_evis) {
+        auto [i] = iter(); // i \in [0,nb_evis[
+        const auto evi = in_levis[i];
+
+        out_menv_var1.setValue(evi, 
+            math::sqrt(in_menv_var2[evi]/in_menv_var3[evi]));
+
+      }; // non-bloquant et asynchrone par rapport au CPU et autres queues
+    }
+    menv_queue->waitAllQueues();
+
+    // Puis on fait la synchro en faisant contribuer le GPU
+    auto ref_queue = m_acc_env->refQueueAsync();
+    m_acc_env->vsyncMng()->multiMatSynchronize(m_menv_var1, ref_queue
+        , VS_bulksync_evqueue//_d
+        );
+  }
 
   _dumpVisuMEnvVar();
 

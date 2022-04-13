@@ -116,7 +116,8 @@ enum ePartialImpureOnlyVersion {
 enum ePartialOnlyVersion {
   POV_ori = 0, //! Version CPU d'origine
   POV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
-  POV_arcgpu_v2  //! Implémentation API GPU Arcane version 2
+  POV_arcgpu_v2, //! Implémentation API GPU Arcane version 2
+  POV_arcgpu_v3  //! Implémentation API GPU Arcane version 3
 };
 
 /*! \brief Définit les implémentations de PartialAndMean

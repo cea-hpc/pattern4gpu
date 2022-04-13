@@ -364,6 +364,7 @@
     <enumvalue name="ori" genvalue="POV_ori" />
     <enumvalue name="arcgpu_v1" genvalue="POV_arcgpu_v1" />
     <enumvalue name="arcgpu_v2" genvalue="POV_arcgpu_v2" />
+    <enumvalue name="arcgpu_v3" genvalue="POV_arcgpu_v3" />
   </enumeration>
 
   <!-- - - - - partial-and-mean-version - - - - -->
