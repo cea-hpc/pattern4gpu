@@ -364,6 +364,18 @@
     <enumvalue name="ori" genvalue="POV_ori" />
     <enumvalue name="arcgpu_v1" genvalue="POV_arcgpu_v1" />
     <enumvalue name="arcgpu_v2" genvalue="POV_arcgpu_v2" />
+    <enumvalue name="arcgpu_v3" genvalue="POV_arcgpu_v3" />
+  </enumeration>
+
+  <!-- - - - - ponly-var1-sync-version - - - - -->
+  <enumeration name="ponly-var1-sync-version" type="eVarSyncVersion" default="overlap_evqueue">
+    <description>Choix version implémentation synchronisation de m_menv_var1 dans partialOnly</description>
+    <enumvalue name="nosync"          genvalue="VS_nosync" />
+    <enumvalue name="bulksync_std"    genvalue="VS_bulksync_std" />
+    <enumvalue name="bulksync_evqueue" genvalue="VS_bulksync_evqueue" />
+    <enumvalue name="bulksync_evqueue_d" genvalue="VS_bulksync_evqueue_d" />
+    <enumvalue name="overlap_evqueue" genvalue="VS_overlap_evqueue" />
+    <enumvalue name="overlap_evqueue_d" genvalue="VS_overlap_evqueue_d" />
   </enumeration>
 
   <!-- - - - - partial-and-mean-version - - - - -->

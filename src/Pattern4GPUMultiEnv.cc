@@ -389,6 +389,48 @@ partialOnly() {
     queue_glob.barrier();
     menv_queue->waitAllQueues();
   }
+  else if (options()->getPartialOnlyVersion() == POV_arcgpu_v3)
+  {
+    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+    
+    auto queue = m_acc_env->newQueue();
+    queue.setAsync(true);
+    
+    MultiEnvVarHD<Real> menv_menv_var1(m_menv_var1, m_buf_addr_mng);
+    MultiEnvVarHD<Real> menv_menv_var2(m_menv_var2, m_buf_addr_mng);
+    MultiEnvVarHD<Real> menv_menv_var3(m_menv_var3, m_buf_addr_mng);
+
+    auto end_cpy_event = m_buf_addr_mng->asyncCpyHToD(queue);
+    UniqueArray<Ref<ax::RunQueueEvent>> events{end_cpy_event};
+
+    auto out_menv_var1  (menv_menv_var1.spanD());
+    auto in_menv_var2   (menv_menv_var2.spanD());
+    auto in_menv_var3   (menv_menv_var3.spanD());
+
+    // Description du traitement pour un environnement
+    auto comp_var1 = [&](IMeshEnvironment* env, 
+        ConstArrayView<EnvVarIndex> levis, RunQueue* async_queue) {
+      auto command = makeCommand(async_queue);
+
+      // Mailles de l'environnement
+      Span<const EnvVarIndex> in_levis(levis);
+      Integer nb_evis = in_levis.size();
+
+      command << RUNCOMMAND_LOOP1(iter, nb_evis) {
+        auto [i] = iter(); // i \in [0,nb_evis[
+        const auto evi = in_levis[i];
+
+        out_menv_var1.setValue(evi, 
+            math::sqrt(in_menv_var2[evi]/in_menv_var3[evi]));
+      }; 
+    }; // fin lambda comp_var1
+
+    // Effectue à la fois le calcul sur tous les environnements + synchronisation
+    m_acc_env->vsyncMng()->enumerateEnvAndSyncOnEvents(events,
+        comp_var1, m_menv_var1,
+        options()->ponlyVar1SyncVersion()
+        );
+  }
 
   _dumpVisuMEnvVar();
 
