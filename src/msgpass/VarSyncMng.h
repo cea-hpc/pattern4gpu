@@ -15,10 +15,8 @@
 #include "msgpass/VarSyncMngOptions.h"
 #include "msgpass/MeshVariableSynchronizerList.h"
 #include "msgpass/VarSyncAlgo1.h"
-#include "msgpass/Algo1SyncDataMMatDH.h"
-#include "msgpass/Algo1SyncDataMMatD.h"
-#include "msgpass/Algo1SyncDataGlobDH.h"
-#include "msgpass/Algo1SyncDataGlobD.h"
+#include "msgpass/Algo1SyncDataDH.h"
+#include "msgpass/Algo1SyncDataD.h"
 
 using namespace Arcane;
 using namespace Arcane::Materials;
@@ -242,10 +240,8 @@ class VarSyncMng {
 
   // Pour synchro algo1
   VarSyncAlgo1* m_vsync_algo1=nullptr;
-  Algo1SyncDataGlobDH::PersistentInfo* m_a1_glob_dh_pi=nullptr;
-  Algo1SyncDataGlobD::PersistentInfo* m_a1_glob_d_pi=nullptr;
-  Algo1SyncDataMMatDH::PersistentInfo* m_a1_mmat_dh_pi=nullptr;
-  Algo1SyncDataMMatD::PersistentInfo* m_a1_mmat_d_pi=nullptr;
+  Algo1SyncDataDH::PersistentInfo* m_a1_dh_pi=nullptr;
+  Algo1SyncDataD::PersistentInfo* m_a1_d_pi=nullptr;
 };
 
 // Implementation template de computeAndSync

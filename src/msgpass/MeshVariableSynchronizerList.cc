@@ -42,14 +42,6 @@ IVariable* CellMatVarScalSync<DataType>::variable() {
   return nullptr;
 }
 
-//! Estimate an upper bound of the buffer size to pack <item_sizes> values
-// TODO : a supprimer
-template<typename DataType>
-Int64 CellMatVarScalSync<DataType>::estimatedMaxBufSz(IntegerConstArrayView item_sizes) const
-{
-  return SyncBuffers::estimatedMaxBufSz<DataType>(item_sizes, /*degree=*/1);
-}
-
 //! Estimate an upper bound of the buffer size to pack/unpack the variable values
 template<typename DataType>
 Int64 CellMatVarScalSync<DataType>::estimatedMaxBufSz() const
@@ -76,48 +68,6 @@ size_t CellMatVarScalSync<DataType>::sizeInBytes(eItemSync item_sync, Integer in
   size_t sz_nei_in_bytes = item_sizes[inei]*sizeof_item;
 
   return sz_nei_in_bytes;
-}
-
-//! Asynchronously pack "shared" cell (levis) into the buffer (buf)
-// TODO : a supprimer
-template<typename DataType>
-void CellMatVarScalSync<DataType>::asyncPackIntoBuf(
-    ConstArrayView<EnvVarIndex> levis,
-    ArrayView<Byte> buf, RunQueue& queue)  
-{
-  auto command = makeCommand(queue);
-
-  auto in_var_menv = m_menv_var.spanD();
-  Span<const EnvVarIndex> in_levis(levis);
-  Span<DataType> buf_vals(MultiBufView::valBuf<DataType>(buf));
-
-  Integer nb_evis = levis.size();
-
-  command << RUNCOMMAND_LOOP1(iter, nb_evis) {
-    auto [i] = iter();
-    buf_vals[i] = in_var_menv[ in_levis[i] ];
-  }; // asynchronous
-}
-
-//! Asynchronously unpack buffer (buf) into "ghost" cell (levis)
-// TODO : a supprimer
-template<typename DataType>
-void CellMatVarScalSync<DataType>::asyncUnpackFromBuf(
-    ConstArrayView<EnvVarIndex> levis,
-    ArrayView<Byte> buf, RunQueue& queue) 
-{
-  auto command = makeCommand(queue);
-
-  auto out_var_menv = m_menv_var.spanD();
-  Span<const EnvVarIndex> in_levis(levis);
-  Span<const DataType>    buf_vals(MultiBufView::valBuf<DataType>(buf));
-
-  Integer nb_evis = levis.size();
-
-  command << RUNCOMMAND_LOOP1(iter, nb_evis) {
-    auto [i] = iter();
-    out_var_menv.setValue(in_levis[i], buf_vals[i]);
-  }; // asynchrone
 }
 
 //! Asynchronously pack "shared" items with neighbour <inei> into the buffer (buf)
@@ -199,15 +149,6 @@ IVariable* GlobVarSync<MeshVariableRefT>::variable() {
   return m_var.variable();
 }
 
-//! Estimate an upper bound of the buffer size to pack <item_sizes> values
-// TODO : a supprimer
-template<typename MeshVariableRefT>
-Int64 GlobVarSync<MeshVariableRefT>::estimatedMaxBufSz(IntegerConstArrayView item_sizes) const
-{
-  throw NotSupportedException(A_FUNCINFO, String("estimatedMaxBufSz(item_sizes) à supprimer"));
-  return 0;
-}
-
 //! Estimate an upper bound of the buffer size to pack/unpack the variable values
 template<typename MeshVariableRefT>
 Int64 GlobVarSync<MeshVariableRefT>::estimatedMaxBufSz() const
@@ -234,26 +175,6 @@ size_t GlobVarSync<MeshVariableRefT>::sizeInBytes(eItemSync item_sync, Integer i
   size_t sz_nei_in_bytes = item_sizes[inei]*sizeof_item;
 
   return sz_nei_in_bytes;
-}
-
-//! Asynchronously pack "shared" cell (levis) into the buffer (buf)
-// TODO : à supprimer
-template<typename MeshVariableRefT>
-void GlobVarSync<MeshVariableRefT>::asyncPackIntoBuf(
-    ConstArrayView<EnvVarIndex> levis,
-    ArrayView<Byte> buf, RunQueue& queue)  
-{
-  throw NotSupportedException(A_FUNCINFO, String("asyncPackIntoBuf() à supprimer"));
-}
-
-//! Asynchronously unpack buffer (buf) into "ghost" cell (levis)
-// TODO : à supprimer
-template<typename MeshVariableRefT>
-void GlobVarSync<MeshVariableRefT>::asyncUnpackFromBuf(
-    ConstArrayView<EnvVarIndex> levis,
-    ArrayView<Byte> buf, RunQueue& queue) 
-{
-  throw NotSupportedException(A_FUNCINFO, String("asyncUnpackFromBuf() à supprimer"));
 }
 
 //! Asynchronously pack "shared" items with neighbour <inei> into the buffer (buf)

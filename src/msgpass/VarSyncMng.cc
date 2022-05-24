@@ -55,10 +55,10 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
 
   // Pour synchro algo1
   m_vsync_algo1 = new VarSyncAlgo1(m_pm, m_neigh_ranks);
-  m_a1_glob_dh_pi = 
-    new Algo1SyncDataGlobDH::PersistentInfo(m_nb_nei, m_runner, m_sync_buffers);
-  m_a1_glob_d_pi = 
-    new Algo1SyncDataGlobD::PersistentInfo(m_is_device_aware, m_nb_nei, m_runner, m_sync_buffers);
+  m_a1_dh_pi = 
+    new Algo1SyncDataDH::PersistentInfo(m_nb_nei, m_runner, m_sync_buffers);
+  m_a1_d_pi = 
+    new Algo1SyncDataD::PersistentInfo(m_is_device_aware, m_nb_nei, m_runner, m_sync_buffers);
 }
 
 VarSyncMng::~VarSyncMng() {
@@ -76,10 +76,8 @@ VarSyncMng::~VarSyncMng() {
   delete m_buf_addr_mng;
 
   delete m_vsync_algo1;
-  delete m_a1_mmat_dh_pi;
-  delete m_a1_mmat_d_pi;
-  delete m_a1_glob_dh_pi;
-  delete m_a1_glob_d_pi;
+  delete m_a1_dh_pi;
+  delete m_a1_d_pi;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -91,15 +89,6 @@ void VarSyncMng::initSyncMultiEnv(IMeshMaterialMng* mesh_material_mng) {
     m_sync_evi = new SyncEnvIndexes(
         MatVarSpace::MaterialAndEnvironment, m_mesh_material_mng,
         m_neigh_ranks, m_sync_cells, m_acc_mem_adv);
-
-    // m_sync_evi doit être créé pour construire m_a1_*
-    // _dh_ = Device-Host
-    m_a1_mmat_dh_pi = 
-      new Algo1SyncDataMMatDH::PersistentInfo(m_nb_nei, m_runner, m_sync_evi, m_sync_buffers);
-    // _d_ = only Device
-    m_a1_mmat_d_pi = 
-      new Algo1SyncDataMMatD::PersistentInfo(m_is_device_aware,
-          m_nb_nei, m_runner, m_sync_evi, m_sync_buffers);
   }
 
   // Pour les traitements multi-env "intérieurs" ou de "bord"
@@ -284,11 +273,11 @@ void VarSyncMng::synchronize(MeshVariableSynchronizerList& vars,
     IAlgo1SyncData* sync_data=nullptr;
     if (vs_version==VS_bulksync_evqueue || vs_version==VS_overlap_evqueue) 
     {
-      sync_data = new Algo1SyncDataGlobDH(vars, ref_queue, *m_a1_glob_dh_pi);
+      sync_data = new Algo1SyncDataDH(vars, ref_queue, *m_a1_dh_pi);
     } 
     else if (vs_version==VS_bulksync_evqueue_d || vs_version==VS_overlap_evqueue_d) 
     {
-      sync_data = new Algo1SyncDataGlobD(vars, ref_queue, *m_a1_glob_d_pi);
+      sync_data = new Algo1SyncDataD(vars, ref_queue, *m_a1_d_pi);
     } 
     else 
     {

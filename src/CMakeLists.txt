@@ -63,12 +63,8 @@ add_library(libmsgpass msgpass/VarSyncMng.cc
                        msgpass/SyncBuffers.cc
                        msgpass/SyncEnvIndexes.cc
                        msgpass/MeshVariableSynchronizerList.cc
-                       msgpass/Algo1SyncDataMMatDH.cc
-                       msgpass/Algo1SyncDataMMatD.cc
-	               msgpass/Algo1SyncDataGlobD.cc
-	               msgpass/Algo1SyncDataGlobD.h
-	               msgpass/Algo1SyncDataGlobDH.cc
-	               msgpass/Algo1SyncDataGlobDH.h
+	               msgpass/Algo1SyncDataD.cc
+	               msgpass/Algo1SyncDataDH.cc
                        msgpass/VarSyncAlgo1.cc)
 target_include_directories(libmsgpass PUBLIC .)
 target_link_libraries(libmsgpass PUBLIC arcane_core)
@@ -125,10 +121,8 @@ arcane_accelerator_add_source_files(msgpass/SyncItems.cc)
 arcane_accelerator_add_source_files(msgpass/SyncEnvIndexes.cc)
 arcane_accelerator_add_source_files(msgpass/SyncBuffers.cc)
 arcane_accelerator_add_source_files(msgpass/MeshVariableSynchronizerList.cc)
-arcane_accelerator_add_source_files(msgpass/Algo1SyncDataMMatDH.cc)
-arcane_accelerator_add_source_files(msgpass/Algo1SyncDataMMatD.cc)
-arcane_accelerator_add_source_files(msgpass/Algo1SyncDataGlobD.cc)
-arcane_accelerator_add_source_files(msgpass/Algo1SyncDataGlobDH.cc)
+arcane_accelerator_add_source_files(msgpass/Algo1SyncDataD.cc)
+arcane_accelerator_add_source_files(msgpass/Algo1SyncDataDH.cc)
 arcane_accelerator_add_source_files(msgpass/VarSyncAlgo1.cc)
 arcane_accelerator_add_to_target(libpattern4gpu)
 arcane_accelerator_add_to_target(libgeomenv)

@@ -41,25 +41,11 @@ class IMeshVarSync {
   //! Pointer to IVariable if it exists (nullptr otherwise)
   virtual IVariable* variable() = 0;
 
-  //! Estimate an upper bound of the buffer size to pack <item_sizes> values
-  // TODO : à supprimer
-  virtual Int64 estimatedMaxBufSz(IntegerConstArrayView item_sizes) const = 0;
-
   //! Estimate an upper bound of the buffer size to pack/unpack the variable values
   virtual Int64 estimatedMaxBufSz() const = 0;
 
   //! Space in bytes to store the variable values on the item_sync items for the neighbour inei
   virtual size_t sizeInBytes(eItemSync item_sync, Integer inei) const = 0;
-
-  //! Asynchronously pack "shared" cell (levis) into the buffer (buf)
-  // TODO : à supprimer
-  virtual void asyncPackIntoBuf(ConstArrayView<EnvVarIndex> levis,
-      ArrayView<Byte> buf, RunQueue& queue) = 0;
-
-  //! Asynchronously unpack buffer (buf) into "ghost" cell (levis)
-  // TODO : à supprimer
-  virtual void asyncUnpackFromBuf(ConstArrayView<EnvVarIndex> levis,
-      ArrayView<Byte> buf, RunQueue& queue) = 0;
 
   //! Asynchronously pack "shared" items with neighbour <inei> into the buffer (buf)
   virtual void asyncPackOwnedIntoBuf(Integer inei, ArrayView<Byte> buf, 
@@ -93,25 +79,11 @@ class CellMatVarScalSync : public IMeshVarSync {
   //! Pointer to IVariable if it exists (nullptr otherwise)
   IVariable* variable() override;
 
-  //! Estimate an upper bound of the buffer size to pack <item_sizes> values
-  // TODO : a supprimer
-  Int64 estimatedMaxBufSz(IntegerConstArrayView item_sizes) const override;
-
   //! Estimate an upper bound of the buffer size to pack/unpack the variable values
   Int64 estimatedMaxBufSz() const override;
 
   //! Space in bytes to store the variable values on the item_sync items for the neighbour inei
   size_t sizeInBytes(eItemSync item_sync, Integer inei) const override;
-
-  //! Asynchronously pack "shared" cell (levis) into the buffer (buf)
-  // TODO : à supprimer
-  void asyncPackIntoBuf(ConstArrayView<EnvVarIndex> levis,
-      ArrayView<Byte> buf, RunQueue& queue) override;
-
-  //! Asynchronously unpack buffer (buf) into "ghost" cell (levis)
-  // TODO : à supprimer
-  void asyncUnpackFromBuf(ConstArrayView<EnvVarIndex> levis,
-      ArrayView<Byte> buf, RunQueue& queue) override;
 
   //! Asynchronously pack "shared" items with neighbour <inei> into the buffer (buf)
   void asyncPackOwnedIntoBuf(Integer inei, ArrayView<Byte> buf, 
@@ -151,25 +123,11 @@ class GlobVarSync : public IMeshVarSync {
   //! Pointer to IVariable if it exists (nullptr otherwise)
   IVariable* variable() override;
 
-  //! Estimate an upper bound of the buffer size to pack <item_sizes> values
-  // TODO : à supprimer
-  Int64 estimatedMaxBufSz(IntegerConstArrayView item_sizes) const override;
-
   //! Estimate an upper bound of the buffer size to pack/unpack the variable values
   Int64 estimatedMaxBufSz() const override;
 
   //! Space in bytes to store the variable values on the item_sync items for the neighbour inei
   size_t sizeInBytes(eItemSync item_sync, Integer inei) const override;
-
-  //! Asynchronously pack "shared" cell (levis) into the buffer (buf)
-  // TODO : à supprimer
-  void asyncPackIntoBuf(ConstArrayView<EnvVarIndex> levis,
-      ArrayView<Byte> buf, RunQueue& queue) override;
-
-  //! Asynchronously unpack buffer (buf) into "ghost" cell (levis)
-  // TODO : à supprimer
-  void asyncUnpackFromBuf(ConstArrayView<EnvVarIndex> levis,
-      ArrayView<Byte> buf, RunQueue& queue) override;
 
   //! Asynchronously pack "shared" items with neighbour <inei> into the buffer (buf)
   void asyncPackOwnedIntoBuf(Integer inei, ArrayView<Byte> buf, 

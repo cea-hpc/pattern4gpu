@@ -4,8 +4,6 @@
 #include <arcane/utils/ITraceMng.h>
 #include <arcane/materials/MeshMaterialVariableSynchronizerList.h>
 
-#include "msgpass/Algo1SyncDataMMatDH.h"
-#include "msgpass/Algo1SyncDataMMatD.h"
 #include "msgpass/VarSyncAlgo1.h"
 
 
@@ -124,29 +122,7 @@ computeMatAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
     ref_queue->barrier(); // on attend la fin du calcul sur tous les items "owns"
 
     // Puis comms
-    PROF_ACC_BEGIN("syncVar");
-    if (vs_version == VS_bulksync_std) {
-      tm->debug() << "bulksync_std";
-      MeshMaterialVariableSynchronizerList mmvsl(m_mesh_material_mng);
-      for(auto v : vars.varsList()) {
-        auto matv = v->materialVariable();
-        if (matv) {
-          mmvsl.add(matv);
-        }
-      }
-      mmvsl.apply(); // les synchros regroupées en une
-    } else if (vs_version == VS_bulksync_queue) {
-      tm->debug() << "bulksync_queue";
-      throw NotSupportedException(A_FUNCINFO,
-        String::format("Invalid eVarSyncVersion={0}",(int)vs_version));
-    } else {
-      ARCANE_ASSERT(vs_version==VS_bulksync_evqueue,
-          ("Ici, option differente de bulksync_evqueue"));
-      tm->debug() << "bulksync_evqueue";
-      Algo1SyncDataMMatDH sync_data_dh(vars, ref_queue, *m_a1_mmat_dh_pi);
-      m_vsync_algo1->synchronize(&sync_data_dh);
-    }
-    PROF_ACC_END;
+    this->synchronize(vars, ref_queue, vs_version);
 
   } 
   else if (vs_version == VS_overlap_evqueue ||
@@ -169,17 +145,7 @@ computeMatAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
     // Sur la même queue de bord m_ref_queue_bnd, on amorce le packing des données
     // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
     // la queue m_ref_queue_bnd
-    IAlgo1SyncData* sync_data=nullptr;
-    if (vs_version == VS_overlap_evqueue) {
-      tm->debug() << "overlap_evqueue";
-      sync_data = new Algo1SyncDataMMatDH(vars, m_ref_queue_bnd, *m_a1_mmat_dh_pi);
-    } else if (vs_version == VS_overlap_evqueue_d) {
-      tm->debug() << "overlap_evqueue_d";
-      sync_data = new Algo1SyncDataMMatD(vars, m_ref_queue_bnd, *m_a1_mmat_d_pi);
-    }
-    m_vsync_algo1->synchronize(sync_data);
-    // ici, après cet appel, m_ref_queue_bnd est synchronisée
-    delete sync_data;
+    this->synchronize(vars, m_ref_queue_bnd, vs_version);
 
     // On attend la terminaison des calculs intérieurs
     ref_queue_inr->barrier();
