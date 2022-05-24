@@ -17,6 +17,8 @@
 #include "msgpass/VarSyncAlgo1.h"
 #include "msgpass/Algo1SyncDataMMatDH.h"
 #include "msgpass/Algo1SyncDataMMatD.h"
+#include "msgpass/Algo1SyncDataGlobDH.h"
+#include "msgpass/Algo1SyncDataGlobD.h"
 
 using namespace Arcane;
 using namespace Arcane::Materials;
@@ -79,6 +81,12 @@ class VarSyncMng {
   //! Retourne vrai si on peut utiliser les adresses dans DEVICE pour les comms
   bool isDeviceAware() const;
 
+  //! Affecte la version par défaut de implem pour synchronisation var globale
+  void setDefaultGlobVarSyncVersion(eVarSyncVersion vs_version);
+
+  //! Retourne la version par défaut de implem pour synchronisation var globale
+  eVarSyncVersion defaultGlobVarSyncVersion() const;
+
   //! Buffer d'adresses pour gérer les côuts des allocations
   BufAddrMng* bufAddrMng();
 
@@ -88,6 +96,10 @@ class VarSyncMng {
   // Retourne l'instance de SyncItems<T> en fonction de T
   template<typename ItemType>
   SyncItems<ItemType>* getSyncItems();
+
+  // Synchronise les éléments fantômes sur une liste de variables
+  void synchronize(MeshVariableSynchronizerList& vars, 
+    Ref<RunQueue> ref_queue, eVarSyncVersion vs_version=VS_auto);
 
   // Equivalent à un var.synchronize() où var est une variable globale (i.e. non multi-mat)
   template<typename MeshVariableRefT>
@@ -118,9 +130,15 @@ class VarSyncMng {
   template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
   Ref<GlobalSyncRequest<ItemType, DataType, MeshVarRefT> > iGlobalSynchronizeQueue(Ref<RunQueue> ref_queue, MeshVarRefT<ItemType, DataType> var);
 
+  /* computeAndSync */
+
+  // Equivalent à un "var.synchronize()" (implem dépend de vs_version) + plus barrière sur ref_queue
+  template<typename MeshVariableRefT>
+  void globalSynchronize(Ref<RunQueue> ref_queue, MeshVariableRefT var, eVarSyncVersion vs_version = VS_auto);
+
   // Overlapping entre calcul et communications pour variable "globale"
   template<typename Func, typename MeshVariableRefT>
-  void computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version=VS_overlap_evqueue);
+  void computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version=VS_auto);
 
 
   //! Equivalent à un var.synchronize() où var est une variable multi-mat
@@ -199,6 +217,7 @@ class VarSyncMng {
   Int32ConstArrayView m_neigh_ranks;  //! Liste des rangs des voisins
 
   SyncItems<Cell>* m_sync_cells=nullptr;
+  SyncItems<Face>* m_sync_faces=nullptr;
   SyncItems<Node>* m_sync_nodes=nullptr;
 
   SyncBuffers* m_sync_buffers=nullptr;
@@ -219,8 +238,12 @@ class VarSyncMng {
   // TEST pour amortir le cout des allocs
   BufAddrMng* m_buf_addr_mng=nullptr;
 
+  eVarSyncVersion m_glob_deflt_vs_version;  //!< Version implem pour synchronisation var globale
+
   // Pour synchro algo1
   VarSyncAlgo1* m_vsync_algo1=nullptr;
+  Algo1SyncDataGlobDH::PersistentInfo* m_a1_glob_dh_pi=nullptr;
+  Algo1SyncDataGlobD::PersistentInfo* m_a1_glob_d_pi=nullptr;
   Algo1SyncDataMMatDH::PersistentInfo* m_a1_mmat_dh_pi=nullptr;
   Algo1SyncDataMMatD::PersistentInfo* m_a1_mmat_d_pi=nullptr;
 };

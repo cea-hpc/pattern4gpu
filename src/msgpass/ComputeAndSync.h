@@ -4,6 +4,26 @@
 #include <arcane/utils/ITraceMng.h>
 
 /*---------------------------------------------------------------------------*/
+/* Equivalent à un "var.synchronize()" (implem dépend de vs_version)         */
+/* + plus barrière sur ref_queue                                             */
+/*                                                                           */
+/* MeshVariableRefT var : variable qui doit être synchronisée après les      */
+/* calculs des items de bords                                                */
+/*                                                                           */
+/* Synchronise les items fantômes de var en utilisant ref_queue              */
+/* La queue ref_queue est synchronisée à la sortie de la méthode             */
+/*---------------------------------------------------------------------------*/
+template<typename MeshVariableRefT>
+void VarSyncMng::
+globalSynchronize(Ref<RunQueue> ref_queue, MeshVariableRefT var, eVarSyncVersion vs_version) {
+
+  MeshVariableSynchronizerList mvsl(this);
+  mvsl.add(var);
+
+  this->synchronize(mvsl, ref_queue, vs_version);
+}
+
+/*---------------------------------------------------------------------------*/
 /* Soit ItemType =  MeshVariableRefT::ItemType                               */
 /*                                                                           */
 /* Func func : traitement à appliquer sur un groupe d'items ItemType         */
@@ -19,6 +39,10 @@ template<typename Func, typename MeshVariableRefT>
 void VarSyncMng::
 computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
   PROF_ACC_BEGIN(__FUNCTION__);
+
+  if (vs_version == VS_auto) {
+    vs_version = defaultGlobVarSyncVersion();
+  }
 
   using ItemType = typename MeshVariableRefT::ItemType;
   

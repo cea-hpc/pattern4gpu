@@ -83,7 +83,7 @@ initMEnvVar() {
       m_acc_env->vsyncMng()->multiMatSynchronize(m_menv_var2, ref_queue);
       m_acc_env->vsyncMng()->multiMatSynchronize(m_menv_var3, ref_queue);
 #else
-      MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng()->bufAddrMng());
+      MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng());
       mvsl.add(m_menv_var1);
       mvsl.add(m_menv_iv1);
       mvsl.add(m_menv_var2);
@@ -153,7 +153,7 @@ initMEnvVar() {
     }
     menv_queue->waitAllQueues();
 
-    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng()->bufAddrMng());
+    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng());
     mvsl.add(m_menv_var1);
     mvsl.add(m_menv_iv1);
     mvsl.add(m_menv_var2);
@@ -636,7 +636,7 @@ partialAndMean() {
         comp_var1, m_menv_var1,
         options()->getPmeanVar1SyncVersion());
 #else
-    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng()->bufAddrMng());
+    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng());
     mvsl.add(m_menv_var1);
 //    mvsl.add(m_menv_var2);
 //    mvsl.add(m_menv_var3);
