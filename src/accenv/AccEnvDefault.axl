@@ -33,9 +33,9 @@
     <enumvalue name="heterog1" genvalue="HP_heterog1" />
   </enumeration>
 
-  <!-- - - - - global-var-sync-version - - - - -->
-  <enumeration name="global-var-sync-version" type="eVarSyncVersion" default="auto">
-    <description>Choix implémentation globalSynchronize(var) où var est globale</description>
+  <!-- - - - - var-sync-version - - - - -->
+  <enumeration name="var-sync-version" type="eVarSyncVersion" default="auto">
+    <description>Choix implémentation synchronize(var)</description>
     <enumvalue name="auto" genvalue="VS_auto" />
     <enumvalue name="nosync" genvalue="VS_nosync" />
     <enumvalue name="bulksync_std" genvalue="VS_bulksync_std" />

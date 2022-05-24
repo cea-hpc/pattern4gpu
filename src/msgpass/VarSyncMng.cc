@@ -51,7 +51,7 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
   m_ref_queue_data = AcceleratorUtils::refQueueAsync(m_runner, QP_high);
 
   // Version par défaut de implem pour synchronisation var globale
-  setDefaultGlobVarSyncVersion((isAcceleratorAvailable() ? VS_overlap_evqueue : VS_bulksync_std));
+  setDefaultVarSyncVersion((isAcceleratorAvailable() ? VS_overlap_evqueue : VS_bulksync_std));
 
   // Pour synchro algo1
   m_vsync_algo1 = new VarSyncAlgo1(m_pm, m_neigh_ranks);
@@ -146,27 +146,27 @@ bool VarSyncMng::isDeviceAware() const {
 /*---------------------------------------------------------------------------*/
 /* Affecte la version par défaut de implem pour synchronisation var globale  */
 /*---------------------------------------------------------------------------*/
-void VarSyncMng::setDefaultGlobVarSyncVersion(eVarSyncVersion vs_version) {
+void VarSyncMng::setDefaultVarSyncVersion(eVarSyncVersion vs_version) {
   if (vs_version == VS_auto)
   {
     // Détermination automatique
     if (isAcceleratorAvailable())
-      m_glob_deflt_vs_version = VS_overlap_evqueue;
+      m_deflt_vs_version = VS_overlap_evqueue;
     else
-      m_glob_deflt_vs_version = VS_bulksync_std; // .synchronize() Arcane
+      m_deflt_vs_version = VS_bulksync_std; // .synchronize() Arcane
   }
   else
   {
     // Choix imposé par l'utilisateur
-    m_glob_deflt_vs_version = vs_version;
+    m_deflt_vs_version = vs_version;
   }
 }
 
 /*---------------------------------------------------------------------------*/
 /* Retourne la version par défaut de implem pour synchronisation var globale */
 /*---------------------------------------------------------------------------*/
-eVarSyncVersion VarSyncMng::defaultGlobVarSyncVersion() const {
-  return m_glob_deflt_vs_version;
+eVarSyncVersion VarSyncMng::defaultVarSyncVersion() const {
+  return m_deflt_vs_version;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -234,22 +234,7 @@ void VarSyncMng::_preAllocBuffers() {
 void VarSyncMng::multiMatSynchronize(MeshVariableSynchronizerList& vars, 
     Ref<RunQueue> ref_queue, eVarSyncVersion vs_version)
 {
-  IAlgo1SyncData* sync_data=nullptr;
-  if (vs_version==VS_bulksync_evqueue || vs_version==VS_overlap_evqueue) 
-  {
-    sync_data = new Algo1SyncDataMMatDH(vars, ref_queue, *m_a1_mmat_dh_pi);
-  } 
-  else if (vs_version == VS_bulksync_evqueue_d || vs_version==VS_overlap_evqueue_d) 
-  {
-    sync_data = new Algo1SyncDataMMatD(vars, ref_queue, *m_a1_mmat_d_pi);
-  } 
-  else 
-  {
-    throw NotSupportedException(A_FUNCINFO, 
-        String::format("Invalid eVarSyncVersion for this method ={0}",(int)vs_version));
-  }
-  m_vsync_algo1->synchronize(sync_data);
-  delete sync_data;
+  this->synchronize(vars, ref_queue, vs_version);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -261,18 +246,25 @@ void VarSyncMng::synchronize(MeshVariableSynchronizerList& vars,
   PROF_ACC_BEGIN(__FUNCTION__);
 
   if (vs_version == VS_auto) {
-    vs_version = defaultGlobVarSyncVersion();
+    vs_version = defaultVarSyncVersion();
   }
 
   if (vs_version == VS_bulksync_std)
   {
     // On va construire autant de liste de variables qu'il y a de types d'items
     constexpr Integer MAX_ItemKind = IK_DoF;
-    UniqueArray<VariableCollection> all_vc(MAX_ItemKind);
+    UniqueArray<VariableCollection> all_vc(MAX_ItemKind); // pour regrouper les comms globales par type d'items
+    MeshMaterialVariableSynchronizerList mmvsl(m_mesh_material_mng); // pour regrouper les comms multi-mat
 
     auto lvars = vars.varsList();
     for(auto var : lvars) {
-      if (!var->materialVariable()) {
+      auto matv = var->materialVariable();
+      if (matv) 
+      {
+	mmvsl.add(matv);
+      }
+      else
+      {
 	// Si on est ici, c'est que la variable est globale
 	IVariable* v = var->variable();
 	eItemKind item_kind = v->itemKind();
@@ -285,6 +277,7 @@ void VarSyncMng::synchronize(MeshVariableSynchronizerList& vars,
       IItemFamily* item_family = m_mesh->itemFamily(item_kind);
       item_family->synchronize(all_vc[ik]);
     }
+    mmvsl.apply(); // les synchros multi-mat regroupées en une
   }
   else
   {

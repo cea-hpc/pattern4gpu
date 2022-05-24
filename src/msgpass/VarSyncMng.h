@@ -81,11 +81,11 @@ class VarSyncMng {
   //! Retourne vrai si on peut utiliser les adresses dans DEVICE pour les comms
   bool isDeviceAware() const;
 
-  //! Affecte la version par défaut de implem pour synchronisation var globale
-  void setDefaultGlobVarSyncVersion(eVarSyncVersion vs_version);
+  //! Affecte la version par défaut de implem pour synchronisation var 
+  void setDefaultVarSyncVersion(eVarSyncVersion vs_version);
 
   //! Retourne la version par défaut de implem pour synchronisation var globale
-  eVarSyncVersion defaultGlobVarSyncVersion() const;
+  eVarSyncVersion defaultVarSyncVersion() const;
 
   //! Buffer d'adresses pour gérer les côuts des allocations
   BufAddrMng* bufAddrMng();
@@ -238,7 +238,7 @@ class VarSyncMng {
   // TEST pour amortir le cout des allocs
   BufAddrMng* m_buf_addr_mng=nullptr;
 
-  eVarSyncVersion m_glob_deflt_vs_version;  //!< Version implem pour synchronisation var globale
+  eVarSyncVersion m_deflt_vs_version;  //!< Version implem pour synchronisation var
 
   // Pour synchro algo1
   VarSyncAlgo1* m_vsync_algo1=nullptr;

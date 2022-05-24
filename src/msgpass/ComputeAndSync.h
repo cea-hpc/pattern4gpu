@@ -41,7 +41,7 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
   PROF_ACC_BEGIN(__FUNCTION__);
 
   if (vs_version == VS_auto) {
-    vs_version = defaultGlobVarSyncVersion();
+    vs_version = defaultVarSyncVersion();
   }
 
   using ItemType = typename MeshVariableRefT::ItemType;

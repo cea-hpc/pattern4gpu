@@ -3,6 +3,7 @@
 
 #include "accenv/MultiEnvUtils.h"
 #include "msgpass/SyncItems.h"
+#include "msgpass/SyncEnvIndexes.h"
 
 #include <arcane/materials/MeshMaterialVariable.h>
 
@@ -78,6 +79,7 @@ template<typename DataType>
 class CellMatVarScalSync : public IMeshVarSync {
  public:
   CellMatVarScalSync(CellMaterialVariableScalarRef<DataType> var,
+      SyncEnvIndexes* sync_evi,
       BufAddrMng* bam);
 
   virtual ~CellMatVarScalSync();
@@ -96,11 +98,9 @@ class CellMatVarScalSync : public IMeshVarSync {
   Int64 estimatedMaxBufSz(IntegerConstArrayView item_sizes) const override;
 
   //! Estimate an upper bound of the buffer size to pack/unpack the variable values
-  // TODO : à implémenter
   Int64 estimatedMaxBufSz() const override;
 
   //! Space in bytes to store the variable values on the item_sync items for the neighbour inei
-  // TODO : à implémenter
   size_t sizeInBytes(eItemSync item_sync, Integer inei) const override;
 
   //! Asynchronously pack "shared" cell (levis) into the buffer (buf)
@@ -114,18 +114,17 @@ class CellMatVarScalSync : public IMeshVarSync {
       ArrayView<Byte> buf, RunQueue& queue) override;
 
   //! Asynchronously pack "shared" items with neighbour <inei> into the buffer (buf)
-  // TODO : à implémenter
   void asyncPackOwnedIntoBuf(Integer inei, ArrayView<Byte> buf, 
       RunQueue& queue) override;
 
   //! Asynchronously unpack "ghost" items with neighbour <inei> from the buffer (buf)
-  // TODO : à implémenter
   void asyncUnpackGhostFromBuf(Integer inei, ArrayView<Byte> buf, 
       RunQueue& queue) override;
 
  protected:
   CellMaterialVariableScalarRef<DataType> m_var;  //! Variable to synchronize
   MultiEnvVarHD<DataType> m_menv_var;  //! View memories on multi-mat data in HOST/DEVICE
+  SyncEnvIndexes* m_sync_evi=nullptr;  //! EnvVarIndex(es) to synchronize
 };
 
 /*---------------------------------------------------------------------------*/
