@@ -22,44 +22,6 @@ using namespace Arcane;
 using namespace Arcane::Materials;
 
 /*---------------------------------------------------------------------------*/
-/* Encapsule une requête de synchronisation sur une variable globale         */
-/*---------------------------------------------------------------------------*/
-template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
-class GlobalSyncRequest {
- public:
-  GlobalSyncRequest(
-    SyncItems<ItemType>* sync_items,
-    SyncBuffers* sync_buffers,
-    IParallelMng* pm,
-    Int32ConstArrayView neigh_ranks,
-    Ref<RunQueue> ref_queue,
-    MeshVarRefT<ItemType, DataType> var);
-
-  virtual ~GlobalSyncRequest();
-
-  // Termine les comms de m_requests, synchronise la queue m_ref_queue, 
-  // met à jour les items fantômes de var
-  void wait();
-
- protected:
-  bool m_is_over=false;  //! Indique si la requête est terminée
-  IParallelMng* m_pm=nullptr;  //! pour effectuer les send/receive proprement dit
-  Int32ConstArrayView m_neigh_ranks;  //! Liste des rangs des voisins
-  UniqueArray<Parallel::Request> m_requests;  //! les requetes send/receive proprement dites
-
-  ConstMultiArray2View<Integer> m_ghost_item_idx_pn;  //! par voisin, items fantômes à mettre à jour
-  
-  // Les buffers pour tous les voisins envois/réceptions sur host et device
-  MultiBufView m_buf_snd_h;
-  MultiBufView m_buf_snd_d;
-  MultiBufView m_buf_rcv_h;
-  MultiBufView m_buf_rcv_d;
-
-  Ref<RunQueue> m_ref_queue;  //! la queue sur laquelle effectuer les opérations sur GPU
-  MeshVarRefT<ItemType, DataType> m_var;  //! variable Arcane dont il faut mettre les items fantômes à jour
-};
-
-/*---------------------------------------------------------------------------*/
 /* Gère les synchronisations des mailles fantômes par Message Passing        */
 /*---------------------------------------------------------------------------*/
 class VarSyncMng {
@@ -99,35 +61,6 @@ class VarSyncMng {
   void synchronize(MeshVariableSynchronizerList& vars, 
     Ref<RunQueue> ref_queue, eVarSyncVersion vs_version=VS_auto);
 
-  // Equivalent à un var.synchronize() où var est une variable globale (i.e. non multi-mat)
-  template<typename MeshVariableRefT>
-  void globalSynchronize(MeshVariableRefT var);
-
-  // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice
-  // La queue asynchrone ref_queue est synchronisé en fin d'appel
-  template<typename MeshVariableRefT>
-  void globalSynchronizeQueue(Ref<RunQueue> ref_queue, MeshVariableRefT var);
-
-  // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice
-  template<typename MeshVariableRefT>
-  void globalSynchronizeDevThr(MeshVariableRefT var);
-
-  // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice
-  template<typename MeshVariableRefT>
-  void globalSynchronizeDevQueues(MeshVariableRefT var);
-
-  // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice
-  template<typename MeshVariableRefT>
-  void globalSynchronizeQueueEvent(Ref<RunQueue> ref_queue, MeshVariableRefT var);
-
-  // Equivalent à un globalSynchronize pour lequel les données de var sont sur le DEVice et les comms se font avec les adresses du DEVICE
-  template<typename MeshVariableRefT>
-  void globalSynchronizeQueueEventD(Ref<RunQueue> ref_queue, MeshVariableRefT var);
-
-  // Amorce un globalSynchronizeQueue
-  template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
-  Ref<GlobalSyncRequest<ItemType, DataType, MeshVarRefT> > iGlobalSynchronizeQueue(Ref<RunQueue> ref_queue, MeshVarRefT<ItemType, DataType> var);
-
   /* computeAndSync */
 
   // Equivalent à un "var.synchronize()" (implem dépend de vs_version) + plus barrière sur ref_queue
@@ -142,57 +75,57 @@ class VarSyncMng {
   //! Equivalent à un var.synchronize() où var est une variable multi-mat
   template<typename DataType>
   void multiMatSynchronize(CellMaterialVariableScalarRef<DataType> var_menv, Ref<RunQueue> ref_queue, 
-      eVarSyncVersion vs_version=VS_bulksync_evqueue);
+      eVarSyncVersion vs_version=VS_auto);
 
   //! Maj des mailles fantômes d'une liste de variables multi-mat
   void multiMatSynchronize(MeshVariableSynchronizerList& vars, Ref<RunQueue> ref_queue, 
-      eVarSyncVersion vs_version=VS_bulksync_evqueue);
+      eVarSyncVersion vs_version=VS_auto);
 
   /* computeMatAndSync[OnEvents] */
 
   // Overlapping entre calcul et communications pour variable multi-mat
   template<typename Func, typename DataType>
   void computeMatAndSync(Func func, CellMaterialVariableScalarRef<DataType> var, 
-      eVarSyncVersion vs_version=VS_overlap_evqueue);
+      eVarSyncVersion vs_version=VS_auto);
 
   //! Une fois déroulés les événements de depends_on_evts, 
   // overlapping entre calcul et communications pour variable multi-mat
   template<typename Func, typename DataType>
   void computeMatAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
     Func func, CellMaterialVariableScalarRef<DataType> var, 
-    eVarSyncVersion vs_version=VS_overlap_evqueue);
+    eVarSyncVersion vs_version=VS_auto);
 
   // Overlapping entre calcul et communications pour une liste de variables multi-mat
   template<typename Func>
   void computeMatAndSync(Func func, MeshVariableSynchronizerList& vars, 
-      eVarSyncVersion vs_version=VS_overlap_evqueue);
+      eVarSyncVersion vs_version=VS_auto);
 
   //! Une fois déroulés les événements de depends_on_evts, 
   // overlapping entre calcul et communications pour une liste de variables multi-mat
   template<typename Func>
   void computeMatAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
       Func func, MeshVariableSynchronizerList& vars, 
-      eVarSyncVersion vs_version=VS_overlap_evqueue);
+      eVarSyncVersion vs_version=VS_auto);
 
   /* enumerateEnvAndSync[OnEvents] */
 
   template<typename Func, typename DataType>
   void enumerateEnvAndSync(Func func, CellMaterialVariableScalarRef<DataType> var, 
-      eVarSyncVersion vs_version=VS_overlap_evqueue);
+      eVarSyncVersion vs_version=VS_auto);
 
   template<typename Func, typename DataType>
   void enumerateEnvAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
     Func func, CellMaterialVariableScalarRef<DataType> var, 
-    eVarSyncVersion vs_version=VS_overlap_evqueue);
+    eVarSyncVersion vs_version=VS_auto);
 
   template<typename Func>
   void enumerateEnvAndSync(Func func, MeshVariableSynchronizerList& vars, 
-      eVarSyncVersion vs_version=VS_overlap_evqueue);
+      eVarSyncVersion vs_version=VS_auto);
 
   template<typename Func>
   void enumerateEnvAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
     Func func, MeshVariableSynchronizerList& vars, 
-    eVarSyncVersion vs_version=VS_overlap_evqueue);
+    eVarSyncVersion vs_version=VS_auto);
 
  protected:
   

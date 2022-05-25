@@ -236,7 +236,8 @@ _computeCqsAndVector_Varcgpu_v1() {
     } else {
       ARCANE_ASSERT(options()->getCcavCqsSyncVersion() == CCAV_CS_bulksync_sync,
           ("CCAV_CS_bulksync_sync obligatoire"));
-      m_acc_env->vsyncMng()->globalSynchronize(m_cell_cqs);
+      auto queue_sync = m_acc_env->refQueueAsync();
+      m_acc_env->vsyncMng()->globalSynchronize(queue_sync, m_cell_cqs);
     }
     PROF_ACC_END;
   }

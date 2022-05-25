@@ -59,24 +59,7 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
     ref_queue->barrier(); // on attend la fin du calcul sur tous les items "owns"
 
     // Puis comms
-    PROF_ACC_BEGIN("syncVar");
-    if (vs_version == VS_bulksync_std) {
-      tm->debug() << "bulksync_std";
-      var.synchronize();
-    } else if (vs_version == VS_bulksync_queue) {
-      tm->debug() << "bulksync_queue";
-      //this->globalSynchronize(var);
-      this->globalSynchronizeQueue(ref_queue, var);
-      //this->globalSynchronizeDevThr(var);
-      //this->globalSynchronizeDevQueues(var);
-    } else {
-      ARCANE_ASSERT(vs_version==VS_bulksync_evqueue,
-          ("Ici, option differente de bulksync_evqueue"));
-      tm->debug() << "bulksync_evqueue";
-      this->globalSynchronizeQueueEvent(ref_queue, var);
-    }
-    PROF_ACC_END;
-
+    this->globalSynchronize(ref_queue, var, vs_version);
   } 
   else if (vs_version == VS_overlap_evqueue ||
       vs_version == VS_overlap_evqueue_d) 
@@ -96,13 +79,7 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
     // Sur la même queue de bord m_ref_queue_bnd, on amorce le packing des données
     // puis les comms MPI sur CPU, puis unpacking des données et on synchronise 
     // la queue m_ref_queue_bnd
-    if (vs_version == VS_overlap_evqueue) {
-      tm->debug() << "overlap_evqueue";
-      this->globalSynchronizeQueueEvent(m_ref_queue_bnd, var);
-    } else if (vs_version == VS_overlap_evqueue_d) {
-      tm->debug() << "overlap_evqueue_d";
-      this->globalSynchronizeQueueEventD(m_ref_queue_bnd, var);
-    }
+    this->globalSynchronize(m_ref_queue_bnd, var, vs_version);
     // ici, après cet appel, m_ref_queue_bnd est synchronisée
 
     // On attend la terminaison des calculs intérieurs
@@ -110,6 +87,7 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
   } 
   else if (vs_version == VS_overlap_iqueue) 
   {
+#if 0
     tm->debug() << "overlap_iqueue";
     SyncItems<ItemType>* sync_items = this->getSyncItems<ItemType>();
 
@@ -134,6 +112,9 @@ computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version) {
 
     // On attend la terminaison des calculs intérieurs
     ref_queue_inr->barrier();
+#else
+    throw NotImplementedException(A_FUNCINFO, String("Non-blocking à implémenter"));
+#endif
   } 
   else
   {

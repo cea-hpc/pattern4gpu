@@ -286,7 +286,7 @@ syncNodeVector() {
   auto queue = makeQueueRef(m_acc_env->runner());
   queue->setAsync(true);
   auto vsync = m_acc_env->vsyncMng();
-  vsync->globalSynchronizeQueue(queue, m_node_vector);
+  vsync->globalSynchronize(queue, m_node_vector);
 
   PROF_ACC_END;
 }
@@ -385,8 +385,8 @@ initCellArr12()
         ARCANE_ASSERT(options()->getIca12SyncVersion()==ICA12_SV_bulksync_sync,
             ("Ici, ICA12_SV_bulksync_sync"));
         auto vsync = m_acc_env->vsyncMng();
-        vsync->globalSynchronize(m_cell_arr1);
-        vsync->globalSynchronize(m_cell_arr2);
+        vsync->globalSynchronize(ref_queue, m_cell_arr1);
+        vsync->globalSynchronize(ref_queue, m_cell_arr2);
       }
       PROF_ACC_END;
     }
@@ -398,8 +398,8 @@ initCellArr12()
       auto ref_queue_bnd = async_init_cell_arr12(sync_cells->sharedItems(), QP_high);
       auto ref_queue_inr = async_init_cell_arr12(sync_cells->privateItems());
       // TODO : aggréger les comms de m_cell_arr1 et m_cell_arr2
-      vsync->globalSynchronizeQueue(ref_queue_bnd, m_cell_arr1);
-      vsync->globalSynchronizeQueue(ref_queue_bnd, m_cell_arr2);
+      vsync->globalSynchronize(ref_queue_bnd, m_cell_arr1);
+      vsync->globalSynchronize(ref_queue_bnd, m_cell_arr2);
       ref_queue_inr->barrier();
     }
     else
