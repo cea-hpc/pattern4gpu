@@ -49,15 +49,6 @@ enum eInitCellArr12Version {
   IA12V_kokkos //! Implémentation Kokkos
 };
 
-/*! \brief Définit les implémentations de synchronisation de cell_arr1 et cell_arr2 dans InitCellArr12
- */
-enum eIca12SyncVersion {
-  ICA12_SV_nosync = 0, //! Pas de synchro
-  ICA12_SV_bulksync_std, //! 
-  ICA12_SV_bulksync_sync,
-  ICA12_SV_overlap1
-};
-
 /*! \brief Définit les implémentations de UpdateVectorFromTensor
  */
 enum eUpdateVectorFromTensorVersion {

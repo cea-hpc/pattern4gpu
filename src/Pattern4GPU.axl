@@ -284,15 +284,6 @@
     <enumvalue name="kokkos" genvalue="IA12V_kokkos" />
   </enumeration>
 
-  <!-- - - - - ica12-sync-version - - - - -->
-  <enumeration name="ica12-sync-version" type="eIca12SyncVersion" default="overlap1">
-    <description>Choix version implémentation de la synchronisation de cell_arr1 et cell_arr2 dans InitCellArr12 </description>
-    <enumvalue name="nosync" genvalue="ICA12_SV_nosync" />
-    <enumvalue name="bulksync_std" genvalue="ICA12_SV_bulksync_std" />
-    <enumvalue name="bulksync_sync" genvalue="ICA12_SV_bulksync_sync" />
-    <enumvalue name="overlap1" genvalue="ICA12_SV_overlap1" />
-  </enumeration>
-
   <!-- - - - - update-vector-from-tensor-version - - - - -->
   <enumeration name="update-vector-from-tensor-version" type="eUpdateVectorFromTensorVersion" default="ori">
     <description>Choix version implémentation UpdateVectorFromTensor </description>

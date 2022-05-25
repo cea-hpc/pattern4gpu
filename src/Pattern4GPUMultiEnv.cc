@@ -633,7 +633,7 @@ partialAndMean() {
     }; // fin lambda comp_var1
 
 #if 0
-    m_acc_env->vsyncMng()->computeMatAndSyncOnEvents(events,
+    m_acc_env->vsyncMng()->computeAndSyncOnEvents(events,
         comp_var1, m_menv_var1,
         options()->getPmeanVar1SyncVersion());
 #else
@@ -642,7 +642,7 @@ partialAndMean() {
 //    mvsl.add(m_menv_var2);
 //    mvsl.add(m_menv_var3);
 
-    m_acc_env->vsyncMng()->computeMatAndSyncOnEvents(events,
+    m_acc_env->vsyncMng()->computeAndSyncOnEvents<Cell>(events,
         comp_var1, mvsl,
         options()->getPmeanVar1SyncVersion());
 #endif
