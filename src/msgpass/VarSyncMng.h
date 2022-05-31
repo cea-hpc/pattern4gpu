@@ -124,6 +124,41 @@ class VarSyncMng {
     Func func, MeshVariableSynchronizerList& vars, 
     eVarSyncVersion vs_version=VS_auto);
 
+  /* syncAndCompute[OnEvents] */
+
+  // Overlapping entre calcul et communications pour variable multi-mat
+  template<typename ItemType, typename Func, typename DataType>
+  void syncAndCompute(CellMaterialVariableScalarRef<DataType> var, 
+      ItemGroupT<ItemType> item_group, Func func, 
+      eVarSyncVersion vs_version=VS_auto);
+
+  //! Une fois déroulés les événements de depends_on_evts, 
+  // overlapping entre calcul et communications pour variable multi-mat
+  template<typename ItemType, typename Func, typename DataType>
+  void syncAndComputeOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
+    CellMaterialVariableScalarRef<DataType> var, 
+    ItemGroupT<ItemType> item_group, Func func, 
+    eVarSyncVersion vs_version=VS_auto);
+
+  //! TODO
+  template<typename ItemType, typename Func, typename MeshVariableRefT>
+  void syncAndCompute(MeshVariableRefT var, 
+      ItemGroupT<ItemType> item_group, Func func, eVarSyncVersion vs_version=VS_auto);
+
+  // Overlapping entre calcul et communications pour une liste de variables
+  template<typename ItemType, typename Func>
+  void syncAndCompute(MeshVariableSynchronizerList& vars, 
+      ItemGroupT<ItemType> item_group, Func func, 
+      eVarSyncVersion vs_version=VS_auto);
+
+  //! Une fois déroulés les événements de depends_on_evts, 
+  // overlapping entre calcul et communications pour une liste de variables
+  template<typename ItemType, typename Func>
+  void syncAndComputeOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
+      MeshVariableSynchronizerList& vars, 
+      ItemGroupT<ItemType> item_group, Func func, 
+      eVarSyncVersion vs_version=VS_auto);
+
  protected:
   
   // Pré-allocation des buffers de communication pour miniser le nb de réallocations
@@ -176,6 +211,7 @@ class VarSyncMng {
 
 // Implementation template de computeAndSync
 #include "msgpass/ComputeAndSync.h"
+#include "msgpass/SyncAndCompute.h"
 #include "msgpass/EnumerateEnvAndSync.h"
 
 /*---------------------------------------------------------------------------*/
@@ -185,7 +221,7 @@ class VarSyncMng {
 template<typename ItemType, typename DataType, template<typename, typename> class MeshVarRefT>
 Integer get_var_degree(MeshVarRefT<ItemType, DataType> var) {
   // Ne devrait jamais être appelé
-  ARCANE_ASSERT(false, ("get_var_degree à spécifialiser"));
+  throw NotImplementedException(A_FUNCINFO, String("get_var_degree à spécialiser"));
   return 0;
 }
 template<typename ItemType, typename DataType>

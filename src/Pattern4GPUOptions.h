@@ -80,14 +80,6 @@ enum eComputeCqsVectorVersion {
   CCVV_kokkos //! Implémentation Kokkos
 };
 
-/*! \brief Définit les implémentations synchronisations de cell_cqs dans ComputeCqsAndVector
- */
-enum eCcavCqsSyncVersion {
-  CCAV_CS_nosync = 0,  // Pas de synchronisation
-  CCAV_CS_bulksync_std, // "Bulk-Synchronous" avec .synchronize() "classique" Arcane
-  CCAV_CS_bulksync_sync // "Bulk-Synchronous" avec globalSynchronize(m_cell_cqs) 
-};
-
 /*! \brief Définit les implémentations de InitMEnvVar
  */
 enum eInitMEnvVar {

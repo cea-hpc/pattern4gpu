@@ -302,9 +302,12 @@ initNodeCoordBis()
 
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
 
+  NodeGroup node_group = (options()->getCcavCqsSyncVersion() == VS_nosync ?
+      allNodes() : ownNodes());
+
   if (options()->getInitNodeCoordBisVersion() == INCBV_ori)
   {
-    ENUMERATE_NODE(node_i, allNodes()) {
+    ENUMERATE_NODE(node_i, node_group) {
       m_node_coord_bis[node_i]=node_coord[node_i];
     }
   }
@@ -316,13 +319,13 @@ initNodeCoordBis()
     auto in_node_coord = ax::viewIn(command, node_coord);
     auto out_node_coord_bis = ax::viewOut(command, m_node_coord_bis);
 
-    command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()) {
+    command << RUNCOMMAND_ENUMERATE(Node, nid, node_group) {
       out_node_coord_bis[nid]=in_node_coord[nid];
     };
   }
   else if (options()->getInitNodeCoordBisVersion() == INCBV_kokkos)
   {
-    m_kokkos_wrapper->initNodeCoordBis(node_coord, allNodes());
+    m_kokkos_wrapper->initNodeCoordBis(node_coord, node_group);
   }
 
   PROF_ACC_END;

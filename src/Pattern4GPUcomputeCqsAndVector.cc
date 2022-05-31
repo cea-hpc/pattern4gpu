@@ -206,11 +206,8 @@ _computeCqsAndVector_Varcgpu_v1() {
 
   P4GPU_DECLARE_TIMER(subDomain(), ComputeCqs); P4GPU_START_TIMER(ComputeCqs);
 
-  bool is_sync_cell_cqs=!(options()->getCcavCqsSyncVersion() == CCAV_CS_nosync);
-  CellGroup cell_group=(is_sync_cell_cqs ? ownCells() : allCells());
-  {
-    auto queue = m_acc_env->newQueue();
-    auto command = makeCommand(queue);
+  auto async_calc_cqs = [&](CellGroup cell_group, RunQueue* async_queue) {
+    auto command = makeCommand(async_queue);
 
     auto in_node_coord_bis = ax::viewIn(command,m_node_coord_bis);
     auto out_cell_cqs = ax::viewInOut(command,m_cell_cqs);
@@ -228,19 +225,15 @@ _computeCqsAndVector_Varcgpu_v1() {
       // Calcule les résultantes aux sommets
       computeCQs(pos, out_cell_cqs[cid]);
     };
-  }
-  if (is_sync_cell_cqs) {
-    PROF_ACC_BEGIN("syncCellCQs");
-    if (options()->getCcavCqsSyncVersion() == CCAV_CS_bulksync_std) {
-      m_cell_cqs.synchronize();
-    } else {
-      ARCANE_ASSERT(options()->getCcavCqsSyncVersion() == CCAV_CS_bulksync_sync,
-          ("CCAV_CS_bulksync_sync obligatoire"));
-      auto queue_sync = m_acc_env->refQueueAsync();
-      m_acc_env->vsyncMng()->globalSynchronize(queue_sync, m_cell_cqs);
-    }
-    PROF_ACC_END;
-  }
+  };
+
+  m_acc_env->vsyncMng()->syncAndCompute(
+      m_node_coord_bis, // --------------------> variable à synchroniser avant les calculs
+      allCells(),       // --------------------> groupe d'items sur lequel on itère
+      async_calc_cqs,   // --------------------> définition du calcul sur un CellGroup
+      options()->getCcavCqsSyncVersion() // ---> choix de l'overlapping entre calcul et comms
+      );
+
   P4GPU_STOP_TIMER(ComputeCqs);
 
   P4GPU_DECLARE_TIMER(subDomain(), NodeVectorUpdate); P4GPU_START_TIMER(NodeVectorUpdate);
@@ -327,9 +320,9 @@ _computeCqsAndVector_Varcgpu_v2()
 
   constexpr Arcane::Real k025 = 0.25;
 
-  auto queue = m_acc_env->newQueue();
+  auto async_calc_cqs = [&](CellGroup cell_group, RunQueue* async_queue) 
   {
-    auto command = makeCommand(queue);
+    auto command = makeCommand(async_queue);
 
     auto in_node_coord_bis = viewIn(command,m_node_coord_bis);
     //auto out_cell_cqs = viewInOut(command,m_numarray_cqs);
@@ -337,7 +330,7 @@ _computeCqsAndVector_Varcgpu_v2()
 
     auto cnc = m_acc_env->connectivityView().cellNode();
 
-    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()){
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, cell_group){
       Int32 cell_i = cid.localId();
       std::array<Real3,8> pos;
       auto nodes = cnc.nodes(cid);
@@ -354,7 +347,15 @@ _computeCqsAndVector_Varcgpu_v2()
       out_cell_cqs(6, cell_i) = -k025 * Arcane::math::cross(pos[5] - pos[2], pos[7] - pos[2]);
       out_cell_cqs(7, cell_i) = -k025 * Arcane::math::cross(pos[6] - pos[3], pos[4] - pos[3]);
     };
-  }
+  };
+
+  m_acc_env->vsyncMng()->syncAndCompute(
+      m_node_coord_bis, // --------------------> variable à synchroniser avant les calculs
+      allCells(),       // --------------------> groupe d'items sur lequel on itère
+      async_calc_cqs,   // --------------------> définition du calcul sur un CellGroup
+      options()->getCcavCqsSyncVersion() // ---> choix de l'overlapping entre calcul et comms
+      );
+
   P4GPU_STOP_TIMER(ComputeCqs);
 
   P4GPU_DECLARE_TIMER(subDomain(), NodeVectorUpdate); P4GPU_START_TIMER(NodeVectorUpdate);
