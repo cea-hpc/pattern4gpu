@@ -375,7 +375,8 @@ initCellArr12()
     mvsl.add(m_cell_arr1);
     mvsl.add(m_cell_arr2);
 
-    m_acc_env->vsyncMng()->computeAndSync<Cell>(
+    m_acc_env->vsyncMng()->computeAndSync(
+	ownCells(),
 	async_init_cell_arr12,
 	mvsl);
   }

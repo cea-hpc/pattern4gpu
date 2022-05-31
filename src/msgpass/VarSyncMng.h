@@ -77,31 +77,36 @@ class VarSyncMng {
   /* computeAndSync[OnEvents] */
 
   // Overlapping entre calcul et communications pour variable multi-mat
-  template<typename Func, typename DataType>
-  void computeAndSync(Func func, CellMaterialVariableScalarRef<DataType> var, 
+  template<typename ItemType, typename Func, typename DataType>
+  void computeAndSync(ItemGroupT<ItemType> item_group, Func func, 
+      CellMaterialVariableScalarRef<DataType> var, 
       eVarSyncVersion vs_version=VS_auto);
 
   //! Une fois déroulés les événements de depends_on_evts, 
   // overlapping entre calcul et communications pour variable multi-mat
-  template<typename Func, typename DataType>
+  template<typename ItemType, typename Func, typename DataType>
   void computeAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
-    Func func, CellMaterialVariableScalarRef<DataType> var, 
+    ItemGroupT<ItemType> item_group, Func func, 
+    CellMaterialVariableScalarRef<DataType> var, 
     eVarSyncVersion vs_version=VS_auto);
 
   //! TODO
   template<typename ItemType, typename Func, typename MeshVariableRefT>
-  void computeAndSync(Func func, MeshVariableRefT var, eVarSyncVersion vs_version=VS_auto);
+  void computeAndSync(ItemGroupT<ItemType> item_group, Func func, 
+      MeshVariableRefT var, eVarSyncVersion vs_version=VS_auto);
 
   // Overlapping entre calcul et communications pour une liste de variables
   template<typename ItemType, typename Func>
-  void computeAndSync(Func func, MeshVariableSynchronizerList& vars, 
+  void computeAndSync(ItemGroupT<ItemType> item_group, Func func, 
+      MeshVariableSynchronizerList& vars, 
       eVarSyncVersion vs_version=VS_auto);
 
   //! Une fois déroulés les événements de depends_on_evts, 
   // overlapping entre calcul et communications pour une liste de variables
   template<typename ItemType, typename Func>
   void computeAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
-      Func func, MeshVariableSynchronizerList& vars, 
+      ItemGroupT<ItemType> item_group, Func func, 
+      MeshVariableSynchronizerList& vars, 
       eVarSyncVersion vs_version=VS_auto);
 
   /* enumerateEnvAndSync[OnEvents] */

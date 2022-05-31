@@ -43,20 +43,22 @@ void VarSyncMng::multiMatSynchronize(
 /* CellMaterialVariableScalarRef<DataType> var : variable multi-mat qui doit */
 /* être synchronisée après les  calculs des items de bords                   */
 /*                                                                           */
-/* Applique le traitement func qui calcule var sur les items "own" de type   */
-/* Cell et synchronise les items fantômes de var                             */
+/* Applique le traitement func qui calcule var sur les items item_group      */
+/* de type ItemType et synchronise les items fantômes de var                 */
 /* Note : ceci peut se faire dans n'importe quel ordre (vs_version)          */
 /*---------------------------------------------------------------------------*/
-template<typename Func, typename DataType>
+template<typename ItemType, typename Func, typename DataType>
 void VarSyncMng::
-computeAndSync(Func func, CellMaterialVariableScalarRef<DataType> var, eVarSyncVersion vs_version) {
+computeAndSync(ItemGroupT<ItemType> item_group, Func func, 
+    CellMaterialVariableScalarRef<DataType> var, eVarSyncVersion vs_version) {
 
   // Liste avec une seule variable
   MeshVariableSynchronizerList mvsl(this);
   mvsl.add(var);
 
-  computeAndSyncOnEvents<Cell, Func>(UniqueArray<Ref<ax::RunQueueEvent>>() /*liste vide d'événements*/,
-      func, mvsl, vs_version);
+  computeAndSyncOnEvents<ItemType, Func>(
+      UniqueArray<Ref<ax::RunQueueEvent>>() /*liste vide d'événements*/,
+      item_group, func, mvsl, vs_version);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -67,21 +69,22 @@ computeAndSync(Func func, CellMaterialVariableScalarRef<DataType> var, eVarSyncV
 /* CellMaterialVariableScalarRef<DataType> var : variable multi-mat qui doit */
 /* être synchronisée après les  calculs des items de bords                   */
 /*                                                                           */
-/* Applique le traitement func qui calcule var sur les items "own" de type   */
-/* Cell et synchronise les items fantômes de var                             */
+/* Applique le traitement func qui calcule var sur les items item_group      */
+/* de type ItemType et synchronise les items fantômes de var                 */
 /* Note : ceci peut se faire dans n'importe quel ordre (vs_version)          */
 /*---------------------------------------------------------------------------*/
-template<typename Func, typename DataType>
+template<typename ItemType, typename Func, typename DataType>
 void VarSyncMng::
 computeAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
-    Func func, CellMaterialVariableScalarRef<DataType> var, eVarSyncVersion vs_version) {
+    ItemGroupT<ItemType> item_group, Func func, 
+    CellMaterialVariableScalarRef<DataType> var, eVarSyncVersion vs_version) {
 
   // Liste avec une seule variable
   MeshVariableSynchronizerList mvsl(this);
   mvsl.add(var);
 
   computeAndSyncOnEvents<Cell, Func>(depends_on_evts,
-      func, mvsl, vs_version);
+      item_group, func, mvsl, vs_version);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -89,14 +92,14 @@ computeAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
 /*---------------------------------------------------------------------------*/
 template<typename ItemType, typename Func, typename MeshVariableRefT>
 void VarSyncMng::
-computeAndSync(Func func, 
+computeAndSync(ItemGroupT<ItemType> item_group, Func func, 
     MeshVariableRefT var, eVarSyncVersion vs_version) {
 
   // Liste avec une seule variable
   MeshVariableSynchronizerList mvsl(this);
   mvsl.add(var);
 
-  computeAndSync<ItemType, Func>(func, mvsl, vs_version);
+  computeAndSync<ItemType, Func>(item_group, func, mvsl, vs_version);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -104,9 +107,12 @@ computeAndSync(Func func,
 /*---------------------------------------------------------------------------*/
 template<typename ItemType, typename Func>
 void VarSyncMng::
-computeAndSync(Func func, MeshVariableSynchronizerList& vars, eVarSyncVersion vs_version) {
-  computeAndSyncOnEvents<ItemType, Func>(UniqueArray<Ref<ax::RunQueueEvent>>() /*liste vide d'événements*/,
-      func, vars, vs_version);
+computeAndSync(ItemGroupT<ItemType> item_group, Func func, 
+    MeshVariableSynchronizerList& vars, eVarSyncVersion vs_version) 
+{
+  computeAndSyncOnEvents<ItemType, Func>(
+      UniqueArray<Ref<ax::RunQueueEvent>>() /*liste vide d'événements*/,
+      item_group, func, vars, vs_version);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -119,14 +125,31 @@ computeAndSync(Func func, MeshVariableSynchronizerList& vars, eVarSyncVersion vs
 /*  bords                                                                    */
 /*                                                                           */
 /* Applique le traitement func qui calcule les variables vars sur les items  */
-/* "own" de type ItemType et synchronise les items fantômes des vars         */
+/* item_group de type ItemType et synchronise les items fantômes des vars    */
 /* Note : ceci peut se faire dans n'importe quel ordre (vs_version)          */
 /*---------------------------------------------------------------------------*/
 template<typename ItemType, typename Func>
 void VarSyncMng::
 computeAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
-    Func func, MeshVariableSynchronizerList& vars, eVarSyncVersion vs_version) {
+    ItemGroupT<ItemType> item_group, Func func, 
+    MeshVariableSynchronizerList& vars, eVarSyncVersion vs_version) 
+{
   PROF_ACC_BEGIN(__FUNCTION__);
+
+  // Les seuls groupes supportés sont "own" ou "all"
+  typename SyncItems<ItemType>::eGroupCategory group_category;
+  if (item_group == get_own_items<ItemType>(m_mesh)) {
+    group_category = SyncItems<ItemType>::GC_own;
+  } else if (item_group == get_all_items<ItemType>(m_mesh)) {
+    group_category = SyncItems<ItemType>::GC_all;
+    if (vs_version != VS_nosync) {
+      throw NotSupportedException(A_FUNCINFO, 
+	  String::format("eVarSyncVersion={0} utilisé : \"all\" ne peut se combiner qu'avec VS_nosync", (int)vs_version));
+    }
+  } else {
+    throw NotSupportedException(A_FUNCINFO, 
+	String("Les seuls groupes supportés sont \"own\" ou \"all\""));
+  }
 
   // Pour qu'une queue attende des événements avant de commencer
   auto depends_on = [](Ref<RunQueue> rqueue, ArrayView<Ref<ax::RunQueueEvent>>& levts) {
@@ -144,16 +167,15 @@ computeAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
       vs_version == VS_bulksync_queue ||
       vs_version == VS_bulksync_evqueue) 
   {
-    // Calcul sur tous les items "own"
-    auto own_items = get_own_items<ItemType>(m_mesh);
+    // Calcul sur tous les items de item_group
     auto ref_queue = AcceleratorUtils::refQueueAsync(m_runner, QP_default); 
 
     // La queue va dépendre des événements de depends_on_evts
     depends_on(ref_queue, depends_on_evts);
 
-    // Le calcul sur les items "propres" (hors items fantômes)
-    func(own_items, ref_queue.get());
-    ref_queue->barrier(); // on attend la fin du calcul sur tous les items "owns"
+    // Le calcul sur les items demandés
+    func(item_group, ref_queue.get());
+    ref_queue->barrier(); // on attend la fin du calcul sur tous les items demandés
 
     // Puis comms
     this->synchronize(vars, ref_queue, vs_version);
@@ -164,10 +186,10 @@ computeAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
   {
     SyncItems<ItemType>* sync_items = this->getSyncItems<ItemType>();
 
-    // On amorce sur le DEVICE le calcul sur les items "own" sur le bord du
-    // sous-domaine sur la queue m_ref_queue_bnd (_bnd = boundary)
+    // On amorce sur le DEVICE le calcul sur les items dont dépendent
+    // les comms sur la queue m_ref_queue_bnd (_bnd = boundary)
     depends_on(m_ref_queue_bnd, depends_on_evts);
-    func(sync_items->sharedItems(), m_ref_queue_bnd.get());
+    func(sync_items->boundaryItems(group_category), m_ref_queue_bnd.get());
     // ici, le calcul n'est pas terminé sur le DEVICE
 
     // On amorce sur le DEVICE le calcul des items intérieurs dont ne dépendent
@@ -197,10 +219,9 @@ computeAndSyncOnEvents(ArrayView<Ref<ax::RunQueueEvent>> depends_on_evts,
     tm->debug() << "nosync";
     // Pas de synchro
     // Calcul sur tous les items "all"
-    auto all_items = get_all_items<ItemType>(m_mesh);
     auto ref_queue = AcceleratorUtils::refQueueAsync(m_runner, QP_default); 
     depends_on(ref_queue, depends_on_evts);
-    func(all_items, ref_queue.get());
+    func(item_group, ref_queue.get());
     ref_queue->barrier();
   }
   PROF_ACC_END;

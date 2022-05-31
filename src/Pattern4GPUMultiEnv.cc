@@ -634,6 +634,7 @@ partialAndMean() {
 
 #if 0
     m_acc_env->vsyncMng()->computeAndSyncOnEvents(events,
+	ownCells(),
         comp_var1, m_menv_var1,
         options()->getPmeanVar1SyncVersion());
 #else
@@ -642,7 +643,8 @@ partialAndMean() {
 //    mvsl.add(m_menv_var2);
 //    mvsl.add(m_menv_var3);
 
-    m_acc_env->vsyncMng()->computeAndSyncOnEvents<Cell>(events,
+    m_acc_env->vsyncMng()->computeAndSyncOnEvents(events,
+	ownCells(),
         comp_var1, mvsl,
         options()->getPmeanVar1SyncVersion());
 #endif
