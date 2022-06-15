@@ -1,16 +1,16 @@
 <?xml version='1.0'?>
 <case codeversion="1.0" codename="Pattern4GPU" xml:lang="en">
   <arcane>
-    <title>Benchmark pour évaluer maj grandeurs tenseurs multi-env</title>
-    <timeloop>UpdateTensorLoop</timeloop>
+    <title>Benchmark pour évaluer le calcul des Cqs sur allCells() et la maj du vecteur sur active_cells</title>
+    <timeloop>ComputeCqsAndVectorLoop</timeloop>
   </arcane>
 
 <!--   <arcane-post-processing> -->
 <!--     <output-period>1</output-period> -->
 <!--     <output> -->
 <!--       <variable>Nbenv</variable> -->
-<!--       <variable>VisuVolume</variable> -->
-<!--       <variable>Tensor</variable> -->
+<!--       <variable>VolumeVisu</variable> -->
+<!--       <variable>Volume</variable> -->
 <!--     </output> -->
 <!--     <format> -->
 <!--       <binary-file>false</binary-file> -->
@@ -31,13 +31,6 @@
     </meshgenerator>
   </mesh>
 
-<!--   <arcane-checkpoint> -->
-<!--     <period>0</period> -->
-    <!-- Mettre '0' si on souhaite ne pas faire de protections a la fin du calcul -->
-<!--     <do-dump-at-end>0</do-dump-at-end> -->
-<!--     <checkpoint-service name="ArcaneBasic2CheckpointWriter" /> -->
-<!--   </arcane-checkpoint> -->
-
   <!-- Configuration du module GeomEnv -->
   <geom-env>
     <visu-volume>false</visu-volume>
@@ -54,8 +47,11 @@
   <!-- Configuration du module Pattern4GPU -->
   <pattern4-g-p-u>
 
-    <!-- <update-tensor-version>ori</update-tensor-version> -->
-    <!-- <update-tensor-version>ori_v2</update-tensor-version> -->
-    <update-tensor-version>ori_v3</update-tensor-version>
+    <init-cqs-version>arcgpu_v1</init-cqs-version>
+    <init-node-vector-version>arcgpu_v1</init-node-vector-version>
+    <init-node-coord-bis-version>arcgpu_v1</init-node-coord-bis-version>
+    <init-cell-arr12-version>arcgpu_v1</init-cell-arr12-version>
+    <!-- <compute-cqs-vector-version>ori</compute-cqs-vector-version> -->
+    <compute-cqs-vector-version>arcgpu_v1</compute-cqs-vector-version>
   </pattern4-g-p-u>
 </case>
