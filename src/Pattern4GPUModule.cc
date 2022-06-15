@@ -286,7 +286,7 @@ syncNodeVector() {
   auto queue = makeQueueRef(m_acc_env->runner());
   queue->setAsync(true);
   auto vsync = m_acc_env->vsyncMng();
-  vsync->globalSynchronizeQueue(queue, m_node_vector);
+  vsync->globalSynchronize(queue, m_node_vector);
 
   PROF_ACC_END;
 }
@@ -302,9 +302,12 @@ initNodeCoordBis()
 
   const VariableNodeReal3& node_coord = defaultMesh()->nodesCoordinates();
 
+  NodeGroup node_group = (options()->getCcavCqsSyncVersion() == VS_nosync ?
+      allNodes() : ownNodes());
+
   if (options()->getInitNodeCoordBisVersion() == INCBV_ori)
   {
-    ENUMERATE_NODE(node_i, allNodes()) {
+    ENUMERATE_NODE(node_i, node_group) {
       m_node_coord_bis[node_i]=node_coord[node_i];
     }
   }
@@ -316,13 +319,13 @@ initNodeCoordBis()
     auto in_node_coord = ax::viewIn(command, node_coord);
     auto out_node_coord_bis = ax::viewOut(command, m_node_coord_bis);
 
-    command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()) {
+    command << RUNCOMMAND_ENUMERATE(Node, nid, node_group) {
       out_node_coord_bis[nid]=in_node_coord[nid];
     };
   }
   else if (options()->getInitNodeCoordBisVersion() == INCBV_kokkos)
   {
-    m_kokkos_wrapper->initNodeCoordBis(node_coord, allNodes());
+    m_kokkos_wrapper->initNodeCoordBis(node_coord, node_group);
   }
 
   PROF_ACC_END;
@@ -349,9 +352,8 @@ initCellArr12()
   }
   else if (options()->getInitCellArr12Version() == IA12V_arcgpu_v1)
   {
-    auto async_init_cell_arr12 = [&](CellGroup cell_group, eQueuePriority qp=QP_default) -> Ref<RunQueue> {
-      auto ref_queue = m_acc_env->refQueueAsync(qp);
-      auto command = makeCommand(ref_queue.get());
+    auto async_init_cell_arr12 = [&](CellGroup cell_group, RunQueue* async_queue) {
+      auto command = makeCommand(async_queue);
 
       auto in_node_coord = ax::viewIn(command, node_coord);
 
@@ -366,50 +368,17 @@ initCellArr12()
         out_cell_arr1[cid]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
         out_cell_arr2[cid]=2.+math::abs(cos(c.x+2)*sin(c.y+1)*cos(c.z+1));
       };
-
-      return ref_queue;
     };
 
-    if (options()->getIca12SyncVersion()==ICA12_SV_bulksync_std ||
-        options()->getIca12SyncVersion()==ICA12_SV_bulksync_sync)
-    {
-      // Calcul que sur les mailles intérieures
-      auto ref_queue = async_init_cell_arr12(ownCells());
-      ref_queue->barrier();
+    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng());
 
-      PROF_ACC_BEGIN("syncCellArr12");
-      if (options()->getIca12SyncVersion()==ICA12_SV_bulksync_std) {
-        m_cell_arr1.synchronize();
-        m_cell_arr2.synchronize();
-      } else {
-        ARCANE_ASSERT(options()->getIca12SyncVersion()==ICA12_SV_bulksync_sync,
-            ("Ici, ICA12_SV_bulksync_sync"));
-        auto vsync = m_acc_env->vsyncMng();
-        vsync->globalSynchronize(m_cell_arr1);
-        vsync->globalSynchronize(m_cell_arr2);
-      }
-      PROF_ACC_END;
-    }
-    else if (options()->getIca12SyncVersion()==ICA12_SV_overlap1)
-    {
-      auto vsync = m_acc_env->vsyncMng();
-      SyncItems<Cell>* sync_cells = vsync->getSyncItems<Cell>();
+    mvsl.add(m_cell_arr1);
+    mvsl.add(m_cell_arr2);
 
-      auto ref_queue_bnd = async_init_cell_arr12(sync_cells->sharedItems(), QP_high);
-      auto ref_queue_inr = async_init_cell_arr12(sync_cells->privateItems());
-      // TODO : aggréger les comms de m_cell_arr1 et m_cell_arr2
-      vsync->globalSynchronizeQueue(ref_queue_bnd, m_cell_arr1);
-      vsync->globalSynchronizeQueue(ref_queue_bnd, m_cell_arr2);
-      ref_queue_inr->barrier();
-    }
-    else
-    {
-      ARCANE_ASSERT(options()->getIca12SyncVersion()==ICA12_SV_nosync,
-          ("Pas de synchro normalement"));
-      // Pas de synchro avec les voisins
-      auto ref_queue = async_init_cell_arr12(allCells());
-      ref_queue->barrier();
-    }
+    m_acc_env->vsyncMng()->computeAndSync(
+	ownCells(),
+	async_init_cell_arr12,
+	mvsl);
   }
   else if (options()->getInitCellArr12Version() == IA12V_kokkos)
   {

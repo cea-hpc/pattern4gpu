@@ -77,20 +77,21 @@ initMEnvVar() {
       m_menv_var2.synchronize(mmvsl);
       m_menv_var3.synchronize(mmvsl);
       mmvsl.apply();
-#elif 1
+#elif 0
       auto ref_queue = m_acc_env->refQueueAsync();
       m_acc_env->vsyncMng()->multiMatSynchronize(m_menv_var1, ref_queue);
       m_acc_env->vsyncMng()->multiMatSynchronize(m_menv_var2, ref_queue);
       m_acc_env->vsyncMng()->multiMatSynchronize(m_menv_var3, ref_queue);
 #else
-      MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng()->bufAddrMng());
+      MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng());
       mvsl.add(m_menv_var1);
       mvsl.add(m_menv_iv1);
       mvsl.add(m_menv_var2);
       mvsl.add(m_tensor);
+      mvsl.add(m_node_vector); // grandeur globale
       mvsl.add(m_menv_var3);
       auto ref_queue = m_acc_env->refQueueAsync();
-      m_acc_env->vsyncMng()->multiMatSynchronize(mvsl, ref_queue);
+      m_acc_env->vsyncMng()->synchronize(mvsl, ref_queue);
 #endif
     }
   }
@@ -153,14 +154,14 @@ initMEnvVar() {
     }
     menv_queue->waitAllQueues();
 
-    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng()->bufAddrMng());
+    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng());
     mvsl.add(m_menv_var1);
     mvsl.add(m_menv_iv1);
     mvsl.add(m_menv_var2);
     mvsl.add(m_tensor);
     mvsl.add(m_menv_var3);
     auto ref_queue = m_acc_env->refQueueAsync();
-    m_acc_env->vsyncMng()->multiMatSynchronize(mvsl, ref_queue);
+    m_acc_env->vsyncMng()->synchronize(mvsl, ref_queue);
   }
 
   // Sortie des variables multi-environnement pour la visu
@@ -632,16 +633,18 @@ partialAndMean() {
     }; // fin lambda comp_var1
 
 #if 0
-    m_acc_env->vsyncMng()->computeMatAndSyncOnEvents(events,
+    m_acc_env->vsyncMng()->computeAndSyncOnEvents(events,
+	ownCells(),
         comp_var1, m_menv_var1,
         options()->getPmeanVar1SyncVersion());
 #else
-    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng()->bufAddrMng());
+    MeshVariableSynchronizerList mvsl(m_acc_env->vsyncMng());
     mvsl.add(m_menv_var1);
 //    mvsl.add(m_menv_var2);
 //    mvsl.add(m_menv_var3);
 
-    m_acc_env->vsyncMng()->computeMatAndSyncOnEvents(events,
+    m_acc_env->vsyncMng()->computeAndSyncOnEvents(events,
+	ownCells(),
         comp_var1, mvsl,
         options()->getPmeanVar1SyncVersion());
 #endif

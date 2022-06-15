@@ -49,13 +49,6 @@ target_link_libraries(libaccenv PUBLIC arcane_core)
 
 # Message Passing
 add_library(libmsgpass msgpass/VarSyncMng.cc 
-                       msgpass/GlobalSynchronize.cc
-                       msgpass/GlobalSynchronizeQueue.cc
-                       msgpass/GlobalSynchronizeQueueEvent.cc
-                       msgpass/GlobalSynchronizeQueueEventD.cc
-                       msgpass/GlobalSynchronizeDevThr.cc
-                       msgpass/GlobalSynchronizeDevQueues.cc
-                       msgpass/IncompleteGlobalSynchronizeQueue.cc
                        msgpass/IsCommDeviceAware.cc
                        msgpass/MsgPassInit.cc
                        msgpass/PackTransfer.cc
@@ -63,8 +56,8 @@ add_library(libmsgpass msgpass/VarSyncMng.cc
                        msgpass/SyncBuffers.cc
                        msgpass/SyncEnvIndexes.cc
                        msgpass/MeshVariableSynchronizerList.cc
-                       msgpass/Algo1SyncDataMMatDH.cc
-                       msgpass/Algo1SyncDataMMatD.cc
+	               msgpass/Algo1SyncDataD.cc
+	               msgpass/Algo1SyncDataDH.cc
                        msgpass/VarSyncAlgo1.cc)
 target_include_directories(libmsgpass PUBLIC .)
 target_link_libraries(libmsgpass PUBLIC arcane_core)
@@ -107,13 +100,6 @@ arcane_accelerator_add_source_files(cartesian/NodeDirectionMng.cc)
 arcane_accelerator_add_source_files(cartesian/CartesianItemSorter.cc)
 arcane_accelerator_add_source_files(accenv/AccEnvDefaultService.cc)
 arcane_accelerator_add_source_files(msgpass/VarSyncMng.cc)
-arcane_accelerator_add_source_files(msgpass/GlobalSynchronize.cc)
-arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeQueue.cc)
-arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeQueueEvent.cc)
-arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeQueueEventD.cc)
-arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeDevThr.cc)
-arcane_accelerator_add_source_files(msgpass/GlobalSynchronizeDevQueues.cc)
-arcane_accelerator_add_source_files(msgpass/IncompleteGlobalSynchronizeQueue.cc)
 arcane_accelerator_add_source_files(msgpass/IsCommDeviceAware.cc)
 arcane_accelerator_add_source_files(msgpass/MsgPassInit.cc)
 arcane_accelerator_add_source_files(msgpass/PackTransfer.cc)
@@ -121,8 +107,8 @@ arcane_accelerator_add_source_files(msgpass/SyncItems.cc)
 arcane_accelerator_add_source_files(msgpass/SyncEnvIndexes.cc)
 arcane_accelerator_add_source_files(msgpass/SyncBuffers.cc)
 arcane_accelerator_add_source_files(msgpass/MeshVariableSynchronizerList.cc)
-arcane_accelerator_add_source_files(msgpass/Algo1SyncDataMMatDH.cc)
-arcane_accelerator_add_source_files(msgpass/Algo1SyncDataMMatD.cc)
+arcane_accelerator_add_source_files(msgpass/Algo1SyncDataD.cc)
+arcane_accelerator_add_source_files(msgpass/Algo1SyncDataDH.cc)
 arcane_accelerator_add_source_files(msgpass/VarSyncAlgo1.cc)
 arcane_accelerator_add_to_target(libpattern4gpu)
 arcane_accelerator_add_to_target(libgeomenv)

@@ -28,7 +28,7 @@
   <!-- Configuration du service AccEnvDefault -->
   <acc-env-default>
     <acc-mem-advise>true</acc-mem-advise>
-    <device-affinity>cu_node_rank</device-affinity>
+    <device-affinity>node_rank</device-affinity>
     <!-- <heterog-partition>none</heterog-partition> -->
   </acc-env-default>
 

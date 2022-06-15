@@ -30,6 +30,7 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
   m_nb_nei = m_neigh_ranks.size();
 
   m_sync_cells = new SyncItems<Cell>(m_mesh,m_neigh_ranks, m_acc_mem_adv);
+  m_sync_faces = new SyncItems<Face>(m_mesh,m_neigh_ranks, m_acc_mem_adv);
   m_sync_nodes = new SyncItems<Node>(m_mesh,m_neigh_ranks, m_acc_mem_adv);
   m_sync_buffers = new SyncBuffers(isAcceleratorAvailable());
   m_neigh_queues = new MultiAsyncRunQueue(m_runner, m_nb_nei, /*unlimited=*/true);
@@ -49,12 +50,20 @@ VarSyncMng::VarSyncMng(IMesh* mesh, ax::Runner& runner, AccMemAdviser* acc_mem_a
   m_ref_queue_bnd  = AcceleratorUtils::refQueueAsync(m_runner, QP_high);
   m_ref_queue_data = AcceleratorUtils::refQueueAsync(m_runner, QP_high);
 
+  // Version par défaut de implem pour synchronisation var globale
+  setDefaultVarSyncVersion((isAcceleratorAvailable() ? VS_overlap_evqueue : VS_bulksync_std));
+
   // Pour synchro algo1
   m_vsync_algo1 = new VarSyncAlgo1(m_pm, m_neigh_ranks);
+  m_a1_dh_pi = 
+    new Algo1SyncDataDH::PersistentInfo(m_nb_nei, m_runner, m_sync_buffers);
+  m_a1_d_pi = 
+    new Algo1SyncDataD::PersistentInfo(m_is_device_aware, m_nb_nei, m_runner, m_sync_buffers);
 }
 
 VarSyncMng::~VarSyncMng() {
   delete m_sync_cells;
+  delete m_sync_faces;
   delete m_sync_nodes;
   delete m_sync_buffers;
   delete m_neigh_queues;
@@ -67,8 +76,8 @@ VarSyncMng::~VarSyncMng() {
   delete m_buf_addr_mng;
 
   delete m_vsync_algo1;
-  delete m_a1_mmat_dh_pi;
-  delete m_a1_mmat_d_pi;
+  delete m_a1_dh_pi;
+  delete m_a1_d_pi;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -80,15 +89,6 @@ void VarSyncMng::initSyncMultiEnv(IMeshMaterialMng* mesh_material_mng) {
     m_sync_evi = new SyncEnvIndexes(
         MatVarSpace::MaterialAndEnvironment, m_mesh_material_mng,
         m_neigh_ranks, m_sync_cells, m_acc_mem_adv);
-
-    // m_sync_evi doit être créé pour construire m_a1_*
-    // _dh_ = Device-Host
-    m_a1_mmat_dh_pi = 
-      new Algo1SyncDataMMatDH::PersistentInfo(m_nb_nei, m_runner, m_sync_evi, m_sync_buffers);
-    // _d_ = only Device
-    m_a1_mmat_d_pi = 
-      new Algo1SyncDataMMatD::PersistentInfo(m_is_device_aware,
-          m_nb_nei, m_runner, m_sync_evi, m_sync_buffers);
   }
 
   // Pour les traitements multi-env "intérieurs" ou de "bord"
@@ -133,6 +133,32 @@ bool VarSyncMng::isDeviceAware() const {
 }
 
 /*---------------------------------------------------------------------------*/
+/* Affecte la version par défaut de implem pour synchronisation var globale  */
+/*---------------------------------------------------------------------------*/
+void VarSyncMng::setDefaultVarSyncVersion(eVarSyncVersion vs_version) {
+  if (vs_version == VS_auto)
+  {
+    // Détermination automatique
+    if (isAcceleratorAvailable())
+      m_deflt_vs_version = VS_overlap_evqueue;
+    else
+      m_deflt_vs_version = VS_bulksync_std; // .synchronize() Arcane
+  }
+  else
+  {
+    // Choix imposé par l'utilisateur
+    m_deflt_vs_version = vs_version;
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/* Retourne la version par défaut de implem pour synchronisation var globale */
+/*---------------------------------------------------------------------------*/
+eVarSyncVersion VarSyncMng::defaultVarSyncVersion() const {
+  return m_deflt_vs_version;
+}
+
+/*---------------------------------------------------------------------------*/
 /* Buffer d'adresses pour gérer les côuts des allocations                    */
 /*---------------------------------------------------------------------------*/
 BufAddrMng* VarSyncMng::bufAddrMng() {
@@ -158,6 +184,11 @@ SyncItems<ItemType>* VarSyncMng::getSyncItems() {
 template<>
 SyncItems<Cell>* VarSyncMng::getSyncItems() {
   return m_sync_cells;
+}
+
+template<>
+SyncItems<Face>* VarSyncMng::getSyncItems() {
+  return m_sync_faces;
 }
 
 template<>
@@ -192,21 +223,71 @@ void VarSyncMng::_preAllocBuffers() {
 void VarSyncMng::multiMatSynchronize(MeshVariableSynchronizerList& vars, 
     Ref<RunQueue> ref_queue, eVarSyncVersion vs_version)
 {
-  IAlgo1SyncData* sync_data=nullptr;
-  if (vs_version==VS_bulksync_evqueue || vs_version==VS_overlap_evqueue) 
-  {
-    sync_data = new Algo1SyncDataMMatDH(vars, ref_queue, *m_a1_mmat_dh_pi);
-  } 
-  else if (vs_version == VS_bulksync_evqueue_d || vs_version==VS_overlap_evqueue_d) 
-  {
-    sync_data = new Algo1SyncDataMMatD(vars, ref_queue, *m_a1_mmat_d_pi);
-  } 
-  else 
-  {
-    throw NotSupportedException(A_FUNCINFO, 
-        String::format("Invalid eVarSyncVersion for this method ={0}",(int)vs_version));
+  this->synchronize(vars, ref_queue, vs_version);
+}
+
+/*---------------------------------------------------------------------------*/
+/* Maj des mailles fantômes d'une liste de variables (pour l'instant globales) */
+/*---------------------------------------------------------------------------*/
+void VarSyncMng::synchronize(MeshVariableSynchronizerList& vars, 
+    Ref<RunQueue> ref_queue, eVarSyncVersion vs_version)
+{
+  PROF_ACC_BEGIN(__FUNCTION__);
+
+  if (vs_version == VS_auto) {
+    vs_version = defaultVarSyncVersion();
   }
-  m_vsync_algo1->synchronize(sync_data);
-  delete sync_data;
+
+  if (vs_version == VS_bulksync_std)
+  {
+    // On va construire autant de liste de variables qu'il y a de types d'items
+    constexpr Integer MAX_ItemKind = IK_DoF;
+    UniqueArray<VariableCollection> all_vc(MAX_ItemKind); // pour regrouper les comms globales par type d'items
+    MeshMaterialVariableSynchronizerList mmvsl(m_mesh_material_mng); // pour regrouper les comms multi-mat
+
+    auto lvars = vars.varsList();
+    for(auto var : lvars) {
+      auto matv = var->materialVariable();
+      if (matv) 
+      {
+	mmvsl.add(matv);
+      }
+      else
+      {
+	// Si on est ici, c'est que la variable est globale
+	IVariable* v = var->variable();
+	eItemKind item_kind = v->itemKind();
+	all_vc[item_kind].add(v);
+      }
+    }
+    // Synchronisation type d'items par type d'item
+    for(Integer ik = 0 ; ik<MAX_ItemKind ; ++ik) {
+      eItemKind item_kind = static_cast<eItemKind>(ik);
+      IItemFamily* item_family = m_mesh->itemFamily(item_kind);
+      item_family->synchronize(all_vc[ik]);
+    }
+    mmvsl.apply(); // les synchros multi-mat regroupées en une
+  }
+  else
+  {
+    IAlgo1SyncData* sync_data=nullptr;
+    if (vs_version==VS_bulksync_evqueue || vs_version==VS_overlap_evqueue) 
+    {
+      sync_data = new Algo1SyncDataDH(vars, ref_queue, *m_a1_dh_pi);
+    } 
+    else if (vs_version==VS_bulksync_evqueue_d || vs_version==VS_overlap_evqueue_d) 
+    {
+      sync_data = new Algo1SyncDataD(vars, ref_queue, *m_a1_d_pi);
+    } 
+    else 
+    {
+      throw NotSupportedException(A_FUNCINFO, 
+	  String::format("Invalid eVarSyncVersion for this method ={0}",(int)vs_version));
+    }
+    m_vsync_algo1->synchronize(sync_data);
+    delete sync_data;
+  }
+  
+  PROF_ACC_END;
 }
 

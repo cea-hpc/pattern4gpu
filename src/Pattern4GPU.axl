@@ -160,7 +160,7 @@
 
   <!-- GLOBAL CELL	 -->
   <variable field-name="global_cell" name="GlobalCell" data-type="integer" item-kind="cell"
-	    dim="0" material="true" dump="false" need-sync="false" />
+	    dim="0" material="true" dump="false" need-sync="false" sub-domain-depend="true" />
 
   <!-- ENV ID -->
   <variable field-name="env_id" name="EnvId" data-type="integer" item-kind="cell"
@@ -284,15 +284,6 @@
     <enumvalue name="kokkos" genvalue="IA12V_kokkos" />
   </enumeration>
 
-  <!-- - - - - ica12-sync-version - - - - -->
-  <enumeration name="ica12-sync-version" type="eIca12SyncVersion" default="overlap1">
-    <description>Choix version implémentation de la synchronisation de cell_arr1 et cell_arr2 dans InitCellArr12 </description>
-    <enumvalue name="nosync" genvalue="ICA12_SV_nosync" />
-    <enumvalue name="bulksync_std" genvalue="ICA12_SV_bulksync_std" />
-    <enumvalue name="bulksync_sync" genvalue="ICA12_SV_bulksync_sync" />
-    <enumvalue name="overlap1" genvalue="ICA12_SV_overlap1" />
-  </enumeration>
-
   <!-- - - - - update-vector-from-tensor-version - - - - -->
   <enumeration name="update-vector-from-tensor-version" type="eUpdateVectorFromTensorVersion" default="ori">
     <description>Choix version implémentation UpdateVectorFromTensor </description>
@@ -325,11 +316,15 @@
   </enumeration>
 
   <!-- - - - - ccav-cqs-sync-version - - - - -->
-  <enumeration name="ccav-cqs-sync-version" type="eCcavCqsSyncVersion" default="nosync">
-    <description>Choix version implémentation synchronisation de cell_cqs dans ComputeCqsAndVector </description>
-    <enumvalue name="nosync"          genvalue="CCAV_CS_nosync" />
-    <enumvalue name="bulksync_std"    genvalue="CCAV_CS_bulksync_std" />
-    <enumvalue name="bulksync_sync"   genvalue="CCAV_CS_bulksync_sync" />
+  <enumeration name="ccav-cqs-sync-version" type="eVarSyncVersion" default="nosync">
+    <description>Choix version implémentation synchronisation de node_coord_bis dans calcul cell_cqs dans ComputeCqsAndVector </description>
+    <enumvalue name="auto"            genvalue="VS_auto" />
+    <enumvalue name="nosync"          genvalue="VS_nosync" />
+    <enumvalue name="bulksync_std"    genvalue="VS_bulksync_std" />
+    <enumvalue name="bulksync_evqueue" genvalue="VS_bulksync_evqueue" />
+    <enumvalue name="overlap_evqueue" genvalue="VS_overlap_evqueue" />
+    <enumvalue name="overlap_evqueue_d" genvalue="VS_overlap_evqueue_d" />
+    <enumvalue name="overlap_iqueue"  genvalue="VS_overlap_iqueue" />
   </enumeration>
 
   <!-- - - - - ccav-vector-sync-version - - - - -->
@@ -337,7 +332,6 @@
     <description>Choix version implémentation synchronisation de node_vector dans ComputeCqsAndVector </description>
     <enumvalue name="nosync"          genvalue="VS_nosync" />
     <enumvalue name="bulksync_std"    genvalue="VS_bulksync_std" />
-    <enumvalue name="bulksync_queue"  genvalue="VS_bulksync_queue" />
     <enumvalue name="bulksync_evqueue" genvalue="VS_bulksync_evqueue" />
     <enumvalue name="overlap_evqueue" genvalue="VS_overlap_evqueue" />
     <enumvalue name="overlap_evqueue_d" genvalue="VS_overlap_evqueue_d" />
