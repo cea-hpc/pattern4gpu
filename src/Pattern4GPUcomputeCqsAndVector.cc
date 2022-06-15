@@ -241,7 +241,7 @@ _computeCqsAndVector_Varcgpu_v1() {
   // On fait le calcul sur les noeuds "own" m_node_vector 
   // et on synchronise les noeuds fantômes de m_node_vector
   m_acc_env->vsyncMng()->computeAndSync(
-      ownNodes(), // -------------------------------> Ensemble des noeuds sur lequel il fau itérer
+      ownNodes(), // -------------------------------> Ensemble des noeuds sur lequel il faut itérer
       [&](NodeGroup node_group, RunQueue* async_queue) {
         // On inverse boucle Cell <-> Node car la boucle originelle sur les mailles n'est parallélisable
         // Du coup, on boucle sur les Node

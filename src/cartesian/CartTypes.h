@@ -2,6 +2,7 @@
 #define CARTESIAN_CART_TYPES_H
 
 #include "arcane/utils/ArcaneGlobal.h"
+#include <array>
 
 namespace Cartesian {
 

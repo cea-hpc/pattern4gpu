@@ -321,7 +321,6 @@
     <enumvalue name="auto"            genvalue="VS_auto" />
     <enumvalue name="nosync"          genvalue="VS_nosync" />
     <enumvalue name="bulksync_std"    genvalue="VS_bulksync_std" />
-    <enumvalue name="bulksync_queue"  genvalue="VS_bulksync_queue" />
     <enumvalue name="bulksync_evqueue" genvalue="VS_bulksync_evqueue" />
     <enumvalue name="overlap_evqueue" genvalue="VS_overlap_evqueue" />
     <enumvalue name="overlap_evqueue_d" genvalue="VS_overlap_evqueue_d" />
@@ -333,7 +332,6 @@
     <description>Choix version implémentation synchronisation de node_vector dans ComputeCqsAndVector </description>
     <enumvalue name="nosync"          genvalue="VS_nosync" />
     <enumvalue name="bulksync_std"    genvalue="VS_bulksync_std" />
-    <enumvalue name="bulksync_queue"  genvalue="VS_bulksync_queue" />
     <enumvalue name="bulksync_evqueue" genvalue="VS_bulksync_evqueue" />
     <enumvalue name="overlap_evqueue" genvalue="VS_overlap_evqueue" />
     <enumvalue name="overlap_evqueue_d" genvalue="VS_overlap_evqueue_d" />
