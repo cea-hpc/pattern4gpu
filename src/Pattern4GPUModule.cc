@@ -362,7 +362,7 @@ initCellArr12()
 
       auto cnc = m_acc_env->connectivityView().cellNode();
 
-      command << RUNCOMMAND_ENUMERATE(Cell, cid, ownCells()) {
+      command << RUNCOMMAND_ENUMERATE(Cell, cid, cell_group) {
         NodeLocalId first_nid(cnc.nodes(cid)[0]);
         Real3 c=in_node_coord[first_nid];
         out_cell_arr1[cid]=1.+math::abs(sin(c.x+1)*cos(c.y+1)*sin(c.z+2));
