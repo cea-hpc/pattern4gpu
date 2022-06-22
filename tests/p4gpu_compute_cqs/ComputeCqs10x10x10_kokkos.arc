@@ -38,9 +38,14 @@
     <geom-scene>env5m3</geom-scene>
   </geom-env>
 
+  <!-- Configuration du service AccEnvDefault -->
+  <acc-env-default>
+    <acc-mem-advise>true</acc-mem-advise>
+    <device-affinity>none</device-affinity>
+  </acc-env-default>
+
   <!-- Configuration du module Pattern4GPU -->
   <pattern4-g-p-u>
-    <acc-mem-advise>true</acc-mem-advise>
     <with-kokkos>true</with-kokkos>
 
     <init-cqs-version>kokkos</init-cqs-version>
