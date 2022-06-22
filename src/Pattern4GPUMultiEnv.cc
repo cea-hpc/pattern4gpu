@@ -138,11 +138,12 @@ initMEnvVar() {
       Span<Real>          out_menv_var3 (envView(m_menv_var3, env));
       Span<Integer>       out_menv_iv1  (envView(m_menv_iv1 , env));
 
-      // Nombre de mailles impures (mixtes) de l'environnement
-      Integer nb_imp = env->impureEnvItems().nbItem();
+      // Pour les mailles impures (mixtes), liste des indices valides
+      Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+      Integer nb_imp = in_imp_idx.size();
 
       command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-        auto [imix] = iter(); // imix \in [0,nb_imp[
+	auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
         CellLocalId cid(in_global_cell[imix]); // on récupère l'identifiant de la maille globale
 
         out_menv_var1[imix] = 0;
@@ -223,11 +224,12 @@ partialImpureOnly() {
       Span<const Integer> in_global_cell(envView(m_global_cell, env));
       Span<Real>          out_menv_var1 (envView(m_menv_var1, env));
 
-      // Nombre de mailles impures (mixtes) de l'environnement
-      Integer nb_imp = env->impureEnvItems().nbItem();
+      // Pour les mailles impures (mixtes), liste des indices valides
+      Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+      Integer nb_imp = in_imp_idx.size();
 
       command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-        auto [imix] = iter(); // imix \in [0,nb_imp[
+	auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
         CellLocalId cid(in_global_cell[imix]); // on récupère l'identifiant de la maille globale
 
         out_menv_var1[imix] = in_frac_vol[imix] * in_menv_var1_g[cid];
@@ -315,8 +317,9 @@ partialOnly() {
       {
         auto command = makeCommand(queue_mix);
 
-        // Nombre de mailles impures (mixtes) de l'environnement
-        Integer nb_imp = env->impureEnvItems().nbItem();
+	// Pour les mailles impures (mixtes), liste des indices valides
+	Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+	Integer nb_imp = in_imp_idx.size();
 
         // suffixe _i = _impure
         Span<const Real> in_menv_var2_i (envView(m_menv_var2, env));
@@ -325,7 +328,7 @@ partialOnly() {
         Span<Real> out_menv_var1_i    (envView(m_menv_var1, env));
 
         command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-          auto [imix] = iter(); // imix \in [0,nb_imp[
+	  auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
 
           out_menv_var1_i[imix] = math::sqrt(in_menv_var2_i[imix]/in_menv_var3_i[imix]);
 
@@ -370,8 +373,9 @@ partialOnly() {
       // Mailles mixtes
       auto command = makeCommand(menv_queue->queue(env->id()));
 
-      // Nombre de mailles impures (mixtes) de l'environnement
-      Integer nb_imp = env->impureEnvItems().nbItem();
+      // Pour les mailles impures (mixtes), liste des indices valides
+      Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+      Integer nb_imp = in_imp_idx.size();
 
       // suffixe _i = _impure
       Span<const Real> in_menv_var2_i (envView(m_menv_var2, env));
@@ -380,7 +384,7 @@ partialOnly() {
       Span<Real> out_menv_var1_i    (envView(m_menv_var1, env));
 
       command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-        auto [imix] = iter(); // imix \in [0,nb_imp[
+	auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
 
         out_menv_var1_i[imix] = math::sqrt(in_menv_var2_i[imix]/in_menv_var3_i[imix]);
 
@@ -548,11 +552,12 @@ partialAndMean() {
 
       auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
 
-      // Nombre de mailles impures (mixtes) de l'environnement
-      Integer nb_imp = env->impureEnvItems().nbItem();
+      // Pour les mailles impures (mixtes), liste des indices valides
+      Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+      Integer nb_imp = in_imp_idx.size();
 
       command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-        auto [imix] = iter(); // imix \in [0,nb_imp[
+	auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
         CellLocalId cid(in_global_cell[imix]); // on récupère l'identifiant de la maille globale
 
         // Calcul de la valeur partielle
@@ -782,11 +787,12 @@ partialAndMean4() {
       auto in_menv_var2_g    = ax::viewIn(command, m_menv_var2.globalVariable());
       auto out_sum2_g        = ax::viewOut(command, m_tmp1);
 
-      // Nombre de mailles impures (mixtes) de l'environnement
-      Integer nb_imp = env->impureEnvItems().nbItem();
+      // Pour les mailles impures (mixtes), liste des indices valides
+      Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+      Integer nb_imp = in_imp_idx.size();
 
       command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-        auto [imix] = iter(); // imix \in [0,nb_imp[
+	auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
         CellLocalId cid(in_global_cell[imix]); // on récupère l'identifiant de la maille globale
 
         // Contribution à la moyenne (globale)
@@ -839,11 +845,12 @@ partialAndMean4() {
       auto inout_menv_var1_g = ax::viewInOut(command, m_menv_var1.globalVariable());
 
 
-      // Nombre de mailles impures (mixtes) de l'environnement
-      Integer nb_imp = env->impureEnvItems().nbItem();
+      // Pour les mailles impures (mixtes), liste des indices valides
+      Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+      Integer nb_imp = in_imp_idx.size();
 
       command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-        auto [imix] = iter(); // imix \in [0,nb_imp[
+	auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
         CellLocalId cid(in_global_cell[imix]); // on récupère l'identifiant de la maille globale
 
         // Calcul de valeur partielle et de la contibution à la somme

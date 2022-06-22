@@ -230,11 +230,12 @@ _asyncUpdateVariableV2Mix(IMeshEnvironment* env,
   Span<const Real> in_volume(envView(volume, env));
   Span<Real>       inout_f  (envView(f     , env));
 
-  // Nombre de mailles impures (mixtes) de l'environnement
-  Integer nb_imp = env->impureEnvItems().nbItem();
+  // Pour les mailles impures (mixtes), liste des indices valides
+  Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+  Integer nb_imp = in_imp_idx.size();
 
   command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-    auto [imix] = iter(); // imix \in [0,nb_imp[
+    auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
 
     inout_f[imix] /= in_volume[imix];
 
@@ -257,11 +258,12 @@ _updateTensorImpure_arcgpu_v2a()
     Span<Real>         out_compxy(envView(m_compxy, env));
     Span<Real>         out_compyy(envView(m_compyy, env));
 
-    // Nombre de mailles impures (mixtes) de l'environnement
-    Integer nb_imp = env->impureEnvItems().nbItem();
+    // Pour les mailles impures (mixtes), liste des indices valides
+    Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+    Integer nb_imp = in_imp_idx.size();
 
     command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-      auto [imix] = iter(); // imix \in [0,nb_imp[
+      auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
 
       const Real3x3& real3x3 = in_tensor[imix];
       out_compxx[imix] = real3x3.x.x;
@@ -292,11 +294,12 @@ _updateTensorImpure_arcgpu_v2a()
     Span<const Real>  in_compyy   (envView(m_compyy, env));
     Span<Real3x3>     inout_tensor(envView(m_tensor, env));
 
-    // Nombre de mailles impures (mixtes) de l'environnement
-    Integer nb_imp = env->impureEnvItems().nbItem();
+    // Pour les mailles impures (mixtes), liste des indices valides
+    Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+    Integer nb_imp = in_imp_idx.size();
 
     command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-      auto [imix] = iter(); // imix \in [0,nb_imp[
+      auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
 
       Real3x3& real3x3 = inout_tensor[imix];
 
@@ -324,11 +327,12 @@ _updateTensorImpure_arcgpu_v2a()
       Span<Real>         out_compxx(envView(m_compxx, env));
       Span<Real>         out_compyy(envView(m_compyy, env));
 
-      // Nombre de mailles impures (mixtes) de l'environnement
-      Integer nb_imp = env->impureEnvItems().nbItem();
+      // Pour les mailles impures (mixtes), liste des indices valides
+      Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+      Integer nb_imp = in_imp_idx.size();
 
       command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-        auto [imix] = iter(); // imix \in [0,nb_imp[
+	auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
 
         const Real3x3& real3x3 = in_tensor[imix];
         out_compxx[imix] = real3x3.x.z;
@@ -357,11 +361,12 @@ _updateTensorImpure_arcgpu_v2a()
       Span<const Real>  in_compyy   (envView(m_compyy, env));
       Span<Real3x3>     inout_tensor(envView(m_tensor, env));
 
-      // Nombre de mailles impures (mixtes) de l'environnement
-      Integer nb_imp = env->impureEnvItems().nbItem();
+      // Pour les mailles impures (mixtes), liste des indices valides
+      Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+      Integer nb_imp = in_imp_idx.size();
 
       command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-        auto [imix] = iter(); // imix \in [0,nb_imp[
+	auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
 
         Real3x3& real3x3 = inout_tensor[imix];
 
@@ -424,11 +429,12 @@ _updateTensor3D_arcgpu_v2b()
     Span<const Real>  in_volume   (envView(m_volume, env));
     Span<Real3x3>     inout_tensor(envView(m_tensor, env));
 
-    // Nombre de mailles impures (mixtes) de l'environnement
-    Integer nb_imp = env->impureEnvItems().nbItem();
+    // Pour les mailles impures (mixtes), liste des indices valides
+    Span<const Int32> in_imp_idx(env->impureEnvItems().valueIndexes());
+    Integer nb_imp = in_imp_idx.size();
 
     command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-      auto [imix] = iter(); // imix \in [0,nb_imp[
+      auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
 
       Real3x3& real3x3 = inout_tensor[imix];
 
