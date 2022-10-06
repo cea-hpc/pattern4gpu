@@ -413,7 +413,7 @@ partialOnly() {
     auto in_menv_var3   (menv_menv_var3.spanD());
 
     // Description du traitement pour un environnement
-    auto comp_var1 = [&](IMeshEnvironment* env, 
+    auto comp_var1 = [&]([[maybe_unused]] IMeshEnvironment* env, 
         ConstArrayView<EnvVarIndex> levis, RunQueue* async_queue) {
       auto command = makeCommand(async_queue);
 

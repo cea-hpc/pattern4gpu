@@ -2,6 +2,13 @@ set(EXAMPLE_NAME Pattern4GPU)
 project(Pattern4GPU LANGUAGES C CXX)
 include(../samples.common.cmake)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+#set(CMAKE_CXX_FLAGS "-Werror -Wall -Wextra -pedantic -Wnon-virtual-dtor -g " CACHE STRING "" FORCE)
+
+# Pour avoir des #warning explicites
+add_compile_definitions(P4GPU_HAS_WARNING_INFO)
+
 add_executable(Pattern4GPU main.cc)
 target_link_libraries(Pattern4GPU PUBLIC libpattern4gpu arcane_core)
 

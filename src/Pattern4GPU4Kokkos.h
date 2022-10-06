@@ -96,21 +96,22 @@ struct KokkosWrapper {
 #else
 // Empty placeholder to build Pattern4GPUModule without Kokkos
 struct KokkosWrapper {
-  void init(const Arcane::CellGroup& all_cells, const Arcane::NodeGroup& all_nodes,
-            const Arcane::VariableCellByte& is_active_cell,
-            const Arcane::Span<const Arcane::Int16>& node_index_in_cells)
+  void init([[maybe_unused]] const Arcane::CellGroup& all_cells, 
+            [[maybe_unused]] const Arcane::NodeGroup& all_nodes,
+            [[maybe_unused]] const Arcane::VariableCellByte& is_active_cell,
+            [[maybe_unused]] const Arcane::Span<const Arcane::Int16>& node_index_in_cells)
   {
     std::cerr << "[ERROR] Trying to use KokkosWrapper without a Kokkos build." << std::endl;
   }
   
-  void initNodeVector(const Arcane::VariableNodeReal3& node_coord,
-                      const Arcane::NodeGroup& all_nodes)
+  void initNodeVector([[maybe_unused]] const Arcane::VariableNodeReal3& node_coord,
+                      [[maybe_unused]] const Arcane::NodeGroup& all_nodes)
   {
     std::cerr << "[ERROR] Trying to use KokkosWrapper without a Kokkos build." << std::endl;
   }
   
-  void initNodeCoordBis(const Arcane::VariableNodeReal3& node_coord,
-                        const Arcane::NodeGroup& all_nodes)
+  void initNodeCoordBis([[maybe_unused]] const Arcane::VariableNodeReal3& node_coord,
+                        [[maybe_unused]] const Arcane::NodeGroup& all_nodes)
   {
     std::cerr << "[ERROR] Trying to use KokkosWrapper without a Kokkos build." << std::endl;
   }
@@ -120,8 +121,8 @@ struct KokkosWrapper {
     std::cerr << "[ERROR] Trying to use KokkosWrapper without a Kokkos build." << std::endl;
   }
   
-  void initCellArr12(const Arcane::CellGroup& all_cells,
-                     const Arcane::VariableNodeReal3& node_coord)
+  void initCellArr12([[maybe_unused]] const Arcane::CellGroup& all_cells,
+                     [[maybe_unused]] const Arcane::VariableNodeReal3& node_coord)
   {
     std::cerr << "[ERROR] Trying to use KokkosWrapper without a Kokkos build." << std::endl;
   }
@@ -135,10 +136,13 @@ struct KokkosWrapper {
     std::cerr << "[ERROR] Trying to use KokkosWrapper without a Kokkos build." << std::endl;
   }
   
-  void syncHostData(const Arcane::CellGroup& all_cells, const Arcane::NodeGroup& all_nodes,
-                    Arcane::VariableNodeReal3 node_vector, Arcane::VariableNodeReal3 node_coord_bis,
-                    Arcane::VariableCellArrayReal3 cell_cqs, Arcane::VariableCellReal cell_arr1,
-                    Arcane::VariableCellReal cell_arr2)
+  void syncHostData([[maybe_unused]] const Arcane::CellGroup& all_cells, 
+                    [[maybe_unused]] const Arcane::NodeGroup& all_nodes,
+                    [[maybe_unused]] Arcane::VariableNodeReal3 node_vector, 
+		    [[maybe_unused]] Arcane::VariableNodeReal3 node_coord_bis,
+                    [[maybe_unused]] Arcane::VariableCellArrayReal3 cell_cqs, 
+		    [[maybe_unused]] Arcane::VariableCellReal cell_arr1,
+                    [[maybe_unused]] Arcane::VariableCellReal cell_arr2)
   {
     std::cerr << "[ERROR] Trying to use KokkosWrapper without a Kokkos build." << std::endl;
   }
