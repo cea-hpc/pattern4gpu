@@ -329,14 +329,15 @@ template<typename T>
 class MinMaxSumRed {
  public:
   MinMaxSumRed(Integer nvals, IParallelMng* parallel_mng) :
-  m_parallel_mng (parallel_mng),
-  m_nvals (nvals),
   values (nvals),
   min_values (nvals),
   max_values (nvals),
   sum_values (nvals),
   min_ranks (nvals),
-  max_ranks (nvals) {
+  max_ranks (nvals), 
+  m_parallel_mng (parallel_mng),
+  m_nvals (nvals)
+  {
     m_comm_size=m_parallel_mng->commSize();
   }
 
@@ -389,7 +390,7 @@ initGeomEnv()
   MeshBlockBuildInfo mbbi("BLOCK1",allCells());
 
   // Définition des différents objets qui vont composer la scene géométrique
-  IGeometricScene* geom_scene;
+  IGeometricScene* geom_scene=nullptr;
   switch (options()->getGeomScene()) {
     case GS_env5m3: geom_scene=new GeometricSceneEnv5M3(mesh()); break;
     case GS_4layers: geom_scene=new GeometricScene4Layers(mesh()); break;
@@ -522,11 +523,11 @@ initGeomEnv()
     }
     // On vérifie à un epsilon pres que la somme des volumes des environnements
     //  ne dépasse pas le volume de maille, d'où l'absence de math:abs sur le calcul de l'écart
-    Real ecart_sup=(vol_sum-vol_ref)/vol_ref;
+    [[maybe_unused]] Real ecart_sup=(vol_sum-vol_ref)/vol_ref;
     ARCANE_ASSERT(ecart_sup<1.e-10, ("La somme des volumes des env dépasse le volume de maille"));
     m_volume[icell]=vol_sum;
     // Pour la fraction de présence, elle ne doit pas dépasser 1.
-    Real fecart_sup=(frac_sum-1.);
+    [[maybe_unused]] Real fecart_sup=(frac_sum-1.);
     ARCANE_ASSERT(fecart_sup<1.e-10, ("La somme des fractions volumuiques des env dépasse 1."));
     m_frac_vol[icell]=frac_sum;
   }

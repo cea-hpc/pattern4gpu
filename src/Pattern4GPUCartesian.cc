@@ -140,8 +140,6 @@ _computeVolDir(const Integer dir, const Real dt) {
   Integer dir_perp_1=(dir+2)%3;
 
   using CellDirectionMngType = typename CartesianMeshT::CellDirectionMngType;
-  using FaceDirectionMngType = typename CartesianMeshT::FaceDirectionMngType;
-  using ConnectivityCellNode = typename CartesianMeshT::ConnectivityCellNode;
   using ConnectivityCellFaceNode = typename CartesianMeshT::ConnectivityCellFaceNode;
   using CellGroupType = typename CartesianMeshT::CellGroupType;
 

@@ -532,6 +532,7 @@ burnConnectivity() {
       Integer index = 0;
       Integer sum = 0;
       for( CellLocalId cid : nc_cty.cells(nid) ){
+	(void)cid; // pour éviter un warning du type "unused-but-set-variable"
         Int16 node_index = node_index_in_cells[first_pos + index];
         sum += node_index;
         ++index;
@@ -550,6 +551,7 @@ burnConnectivity() {
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
       Integer index = 0;
       for( NodeLocalId nid : cnc.nodes(cid) ){
+	(void)nid; // pour éviter un warning du type "unused-but-set-variable"
         ++index;
       }
       out_tmp2[cid] = index;

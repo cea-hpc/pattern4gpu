@@ -475,7 +475,6 @@ _computeCqsAndVector_Varcgpu_v5()
     auto out_node_vector = ax::viewOut(command, m_node_vector);
 
     auto node_index_in_cells = m_acc_env->nodeIndexInCells();
-    const Integer max_node_cell = m_acc_env->maxNodeCell();
 
     auto nc_cty = m_acc_env->connectivityView().nodeCell();
 
