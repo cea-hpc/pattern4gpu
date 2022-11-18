@@ -40,7 +40,9 @@ target_include_directories(libcartesian PUBLIC .)
 target_link_libraries(libcartesian PUBLIC arcane_core)
 
 # Services communs pour les accélérateurs
-add_library(libaccenv accenv/AccEnvDefaultService.cc)
+add_library(libaccenv accenv/AccEnvDefaultService.cc
+                      accenv/AccEnvModule.cc
+                      accenv/ProfAcc.cc)
 target_include_directories(libaccenv PUBLIC .)
 ## Pour HWLOC (en attendant un FindHWLOC.cmake)
 #set(ENV_HWLOC_INCDIR "$ENV{HWLOC_INCDIR}")
@@ -69,16 +71,18 @@ add_library(libmsgpass msgpass/VarSyncMng.cc
 target_include_directories(libmsgpass PUBLIC .)
 target_link_libraries(libmsgpass PUBLIC arcane_core)
 # Pour MPI
-find_package(MPI)
-if(MPI_FOUND)
-  target_compile_definitions(libmsgpass PRIVATE OMPI_SKIP_MPICXX)
-  target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI)
-  target_include_directories(libmsgpass PRIVATE "${MPI_INCLUDE_PATH}")
-  find_path(P4GPU_MPI_EXT NAMES "mpi-ext.h" PATHS "${MPI_C_HEADER_DIR}")
-  if(P4GPU_MPI_EXT)
-    target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI_EXT)
-  endif()
-endif()
+#find_package(MPI)
+#if(MPI_FOUND)
+#  target_compile_definitions(libmsgpass PRIVATE OMPI_SKIP_MPICXX)
+#  target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI)
+#  target_include_directories(libmsgpass PRIVATE "${MPI_INCLUDE_PATH}")
+#  find_path(P4GPU_MPI_EXT NAMES "mpi-ext.h" PATHS "${MPI_C_HEADER_DIR}")
+#  if(P4GPU_MPI_EXT)
+#    target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI_EXT)
+#  endif()
+#endif()
+# On force is_comm_device_aware() == true
+target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_COMM_DEVICE_AWARE)
 # fin MPI
 
 if(WANT_KOKKOS)
@@ -150,6 +154,7 @@ endif()
 arcane_generate_axl(Pattern4GPU)
 arcane_target_add_axl(libgeomenv geomenv/GeomEnv)
 arcane_target_add_axl(libaccenv accenv/AccEnvDefault)
+arcane_target_add_axl(libaccenv accenv/AccEnv)
 
 configure_file(Pattern4GPU.config ${CMAKE_CURRENT_BINARY_DIR} @ONLY)
 #configure_file(${EXAMPLE_NAME}.arc ${CMAKE_CURRENT_BINARY_DIR} @ONLY)

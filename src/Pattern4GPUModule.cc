@@ -12,7 +12,6 @@
 #include <arcane/utils/ArcaneGlobal.h>
 #include <arcane/utils/StringBuilder.h>
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
-#include <arcane/ServiceBuilder.h>
 
 #include "msgpass/VarSyncMng.h"
 #include <arcane/IVariableSynchronizer.h>
@@ -21,6 +20,9 @@
 #include "P4GPUTimer.h"
 
 #include "Pattern4GPU4Kokkos.h"
+
+#include "accenv/SingletonIAccEnv.h"
+
 
 using namespace Arcane;
 using namespace Arcane::Materials;
@@ -61,8 +63,7 @@ accBuild()
 {
   PROF_ACC_BEGIN(__FUNCTION__);
 
-  m_acc_env = ServiceBuilder<IAccEnv>(subDomain()).getSingleton();
-  m_acc_env->initAcc();
+  m_acc_env = SingletonIAccEnv::accEnv(subDomain());
 
   PROF_ACC_END;
 }
@@ -84,8 +85,6 @@ initKokkosWrapper()
 void Pattern4GPUModule::
 initP4GPU()
 {
-  PROF_ACC_START_CAPTURE; // la capture du profiling commence réellement ici
-
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans initP4GPU";
 
@@ -96,15 +95,9 @@ initP4GPU()
   // On impose un pas de temps (pour l'instant, non paramétrable)
   m_global_deltat = 1.e-3;
 
-  // Pour accélérateur
-  m_acc_env->initMesh(mesh());
-
   // init kokkos
   if (options()->getWithKokkos())
     initKokkosWrapper();
-
-  // Pour le multi-environnement
-  m_acc_env->initMultiEnv(m_mesh_material_mng); 
 
   // TEST : pour amortir le cout des allocs pour GPU
   if (!m_buf_addr_mng) {
