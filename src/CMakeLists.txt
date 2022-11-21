@@ -42,6 +42,7 @@ target_link_libraries(libcartesian PUBLIC arcane_core)
 # Services communs pour les accélérateurs
 add_library(libaccenv accenv/AccEnvDefaultService.cc
                       accenv/AccEnvModule.cc
+                      accenv/MultiEnvMng.cc
                       accenv/ProfAcc.cc)
 target_include_directories(libaccenv PUBLIC .)
 ## Pour HWLOC (en attendant un FindHWLOC.cmake)
@@ -110,6 +111,9 @@ arcane_accelerator_add_source_files(cartesian/FaceDirectionMng.cc)
 arcane_accelerator_add_source_files(cartesian/NodeDirectionMng.cc)
 arcane_accelerator_add_source_files(cartesian/CartesianItemSorter.cc)
 arcane_accelerator_add_source_files(accenv/AccEnvDefaultService.cc)
+arcane_accelerator_add_source_files(accenv/AccEnvModule.cc)
+arcane_accelerator_add_source_files(accenv/MultiEnvMng.cc)
+arcane_accelerator_add_source_files(accenv/ProfAcc.cc)
 arcane_accelerator_add_source_files(msgpass/VarSyncMng.cc)
 arcane_accelerator_add_source_files(msgpass/IsCommDeviceAware.cc)
 arcane_accelerator_add_source_files(msgpass/MsgPassInit.cc)

@@ -170,7 +170,7 @@ initTensor()
       auto inout_tensor(menv_tensor.span());
 
       // Pour décrire l'accés multi-env sur GPU
-      auto in_menv_cell(m_acc_env->multiEnvCellStorage()->viewIn(command));
+      auto in_menv_cell(m_acc_env->multiEnvMng()->viewIn(command));
 
       auto cnc = m_acc_env->connectivityView().cellNode();
 

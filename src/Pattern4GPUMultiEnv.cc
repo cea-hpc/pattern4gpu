@@ -120,7 +120,7 @@ initMEnvVar() {
     }
 
     // Les calculs des mailles mixtes par environnement sont indépendants
-    auto menv_queue = m_acc_env->multiEnvQueue();
+    auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
     ENUMERATE_ENV(ienv,m_mesh_material_mng){
       IMeshEnvironment* env = *ienv;
       Integer env_id = env->id();
@@ -131,7 +131,7 @@ initMEnvVar() {
       auto in_menv_var3_g = ax::viewIn(command, m_menv_var3.globalVariable());
 
       Span<const Real>    in_frac_vol   (envView(m_frac_vol , env));
-      Span<const Integer> in_global_cell(envView(m_global_cell, env));
+      Span<const Integer> in_global_cell(envView(m_acc_env->multiEnvMng()->globalCell(), env));
 
       Span<Real>          out_menv_var1 (envView(m_menv_var1, env));
       Span<Real>          out_menv_var2 (envView(m_menv_var2, env));
@@ -213,7 +213,7 @@ partialImpureOnly() {
   else if (options()->getPartialImpureOnlyVersion() == PIOV_arcgpu_v1)
   {
     // Les calculs des mailles mixtes par environnement sont indépendants
-    auto menv_queue = m_acc_env->multiEnvQueue();
+    auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
     ENUMERATE_ENV(ienv,m_mesh_material_mng){
       IMeshEnvironment* env = *ienv;
 
@@ -221,7 +221,7 @@ partialImpureOnly() {
 
       auto in_menv_var1_g = ax::viewIn(command, m_menv_var1.globalVariable());
       Span<const Real>    in_frac_vol   (envView(m_frac_vol , env));
-      Span<const Integer> in_global_cell(envView(m_global_cell, env));
+      Span<const Integer> in_global_cell(envView(m_acc_env->multiEnvMng()->globalCell(), env));
       Span<Real>          out_menv_var1 (envView(m_menv_var1, env));
 
       // Pour les mailles impures (mixtes), liste des indices valides
@@ -278,7 +278,7 @@ partialOnly() {
   }
   else if (options()->getPartialOnlyVersion() == POV_arcgpu_v1)
   {
-    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+    m_acc_env->multiEnvMng()->checkMultiEnvGlobalCellId();
 
     // On traite séquentiellement les environnements, 
     // chaque environnement étant calculé en parallèle
@@ -340,7 +340,7 @@ partialOnly() {
   }
   else if (options()->getPartialOnlyVersion() == POV_arcgpu_v2)
   {
-    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+    m_acc_env->multiEnvMng()->checkMultiEnvGlobalCellId();
 
     // Comme le traitement est uniforme sur tous les environnements
     // on peut traiter toutes les mailles pures de tous les env simultanément
@@ -350,7 +350,7 @@ partialOnly() {
     {
       auto command = makeCommand(queue_glob);
 
-      auto in_env_id              = ax::viewIn(command, m_env_id);
+      auto in_env_id              = ax::viewIn(command, m_acc_env->multiEnvMng()->envId());
       // suffixe _p = _pure
       auto in_menv_var2_p         = ax::viewIn(command, m_menv_var2.globalVariable());
       auto in_menv_var3_p         = ax::viewIn(command, m_menv_var3.globalVariable());
@@ -366,7 +366,7 @@ partialOnly() {
 
     // On traite en concurrence les mailles mixtes des environnements, 
     // chaque environnement étant calculé en parallèle
-    auto menv_queue = m_acc_env->multiEnvQueue();
+    auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
     ENUMERATE_ENV(ienv, m_mesh_material_mng) {
       IMeshEnvironment* env = *ienv;
 
@@ -396,7 +396,7 @@ partialOnly() {
   }
   else if (options()->getPartialOnlyVersion() == POV_arcgpu_v3)
   {
-    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+    m_acc_env->multiEnvMng()->checkMultiEnvGlobalCellId();
     
     auto queue = m_acc_env->newQueue();
     queue.setAsync(true);
@@ -520,7 +520,7 @@ partialAndMean() {
     {
       auto command = makeCommand(queue);
 
-      auto in_env_id         = ax::viewIn(command, m_env_id);
+      auto in_env_id         = ax::viewIn(command, m_acc_env->multiEnvMng()->envId());
       auto in_menv_var2_g    = ax::viewIn(command, m_menv_var2.globalVariable());
       auto in_menv_var3_g    = ax::viewIn(command, m_menv_var3.globalVariable());
       auto out_menv_var1_g   = ax::viewOut(command, m_menv_var1.globalVariable());
@@ -544,7 +544,7 @@ partialAndMean() {
       // Les kernels sont lancés environnement par environnement les uns après les autres
       auto command = makeCommand(queue);
 
-      Span<const Integer> in_global_cell    (envView(m_global_cell, env));
+      Span<const Integer> in_global_cell    (envView(m_acc_env->multiEnvMng()->globalCell(), env));
       Span<const Real>    in_frac_vol       (envView(m_frac_vol,    env)); 
       Span<const Real>    in_menv_var2      (envView(m_menv_var2,   env)); 
       Span<const Real>    in_menv_var3      (envView(m_menv_var3,   env)); 
@@ -608,11 +608,11 @@ partialAndMean() {
     auto comp_var1 = [&](CellGroup cell_group, RunQueue* async_queue) {
       auto command = makeCommand(async_queue);
 
-      auto in_env_id       = ax::viewIn(command, m_env_id);
+      auto in_env_id       = ax::viewIn(command, m_acc_env->multiEnvMng()->envId());
       auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
 
       // Pour décrire l'accés multi-env sur GPU
-      auto in_menv_cell(m_acc_env->multiEnvCellStorage()->viewIn(command));
+      auto in_menv_cell(m_acc_env->multiEnvMng()->viewIn(command));
 
       command << RUNCOMMAND_ENUMERATE(Cell, cid, cell_group) {
 
@@ -756,7 +756,7 @@ partialAndMean4() {
     {
       auto command = makeCommand(queue);
 
-      auto in_env_id         = ax::viewIn(command, m_env_id);
+      auto in_env_id         = ax::viewIn(command, m_acc_env->multiEnvMng()->envId());
       auto in_menv_var2_g    = ax::viewIn(command, m_menv_var2.globalVariable());
       auto out_sum2_g        = ax::viewOut(command, m_tmp1);
 
@@ -781,7 +781,7 @@ partialAndMean4() {
       // Les kernels sont lancés environnement par environnement les uns après les autres
       auto command = makeCommand(queue);
 
-      Span<const Integer> in_global_cell    (envView(m_global_cell, env));
+      Span<const Integer> in_global_cell    (envView(m_acc_env->multiEnvMng()->globalCell(), env));
       Span<const Real>    in_menv_var2      (envView(m_menv_var2,   env)); 
 
       auto in_menv_var2_g    = ax::viewIn(command, m_menv_var2.globalVariable());
@@ -806,7 +806,7 @@ partialAndMean4() {
     {
       auto command = makeCommand(queue);
 
-      auto in_env_id         = ax::viewIn(command, m_env_id);
+      auto in_env_id         = ax::viewIn(command, m_acc_env->multiEnvMng()->envId());
       auto in_sum2_g         = ax::viewIn(command, m_tmp1);
       auto in_menv_var2_g    = ax::viewIn(command, m_menv_var2.globalVariable());
       auto out_menv_var1_g   = ax::viewOut(command, m_menv_var1.globalVariable());
@@ -835,7 +835,7 @@ partialAndMean4() {
       // Les kernels sont lancés environnement par environnement les uns après les autres
       auto command = makeCommand(queue);
 
-      Span<const Integer> in_global_cell  (envView(m_global_cell, env));
+      Span<const Integer> in_global_cell  (envView(m_acc_env->multiEnvMng()->globalCell(), env));
       Span<const Real>    in_menv_var2    (envView(m_menv_var2,   env)); 
       Span<Real>          out_menv_var3   (envView(m_menv_var3,   env)); 
 
@@ -881,7 +881,7 @@ partialAndMean4() {
     auto out_menv_var1_g   = ax::viewOut(command, m_menv_var1.globalVariable());
 
     // Pour décrire l'accés multi-env sur GPU
-    auto in_menv_cell(m_acc_env->multiEnvCellStorage()->viewIn(command));
+    auto in_menv_cell(m_acc_env->multiEnvMng()->viewIn(command));
 
 
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
