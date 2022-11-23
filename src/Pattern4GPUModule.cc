@@ -76,7 +76,8 @@ initKokkosWrapper()
 {
   // Tout est déporté dans le wrapper pour s'assurer de la séparation de l'environnement Kokkos et de l'environnement Arcane
   m_kokkos_wrapper = new KokkosWrapper();
-  m_kokkos_wrapper->init(allCells(), allNodes(), m_is_active_cell, m_acc_env->nodeIndexInCells());
+  m_kokkos_wrapper->init(allCells(), allNodes(), 
+      m_acc_env->multiEnvMng()->isActiveCell(), m_acc_env->nodeIndexInCells());
 }
 
 /*---------------------------------------------------------------------------*/
@@ -91,6 +92,11 @@ initP4GPU()
   // On peut créer maintenant l'objet car la composition des environnements
   // est connue car le le pt d'entree GeomEnv.InitGeomEnv a été appelé
   m_allenvcell_converter=new CellToAllEnvCellConverter(m_mesh_material_mng);
+
+  // Les groupes actives_cells et active_nodes ont été créés par GeomEnv.InitGeomEnv
+  CellGroup active_cells = defaultMesh()->cellFamily()->findGroup("active_cells");
+  NodeGroup active_nodes = defaultMesh()->nodeFamily()->findGroup("active_nodes");
+  m_acc_env->multiEnvMng()->setActiveItemsFromGroups(active_cells, active_nodes);
 
   // On impose un pas de temps (pour l'instant, non paramétrable)
   m_global_deltat = 1.e-3;
@@ -564,7 +570,7 @@ burnIsActiveCell() {
     auto command = makeCommand(queue);
 
     VariableCellInteger tmp2(VariableBuildInfo(mesh(), "TemporaryTmp2"));
-    auto in_is_active_cell = ax::viewIn(command, m_is_active_cell);
+    auto in_is_active_cell = ax::viewIn(command, m_acc_env->multiEnvMng()->isActiveCell());
     auto out_tmp2 = ax::viewOut(command, tmp2);
 
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {

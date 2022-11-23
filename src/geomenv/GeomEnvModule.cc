@@ -562,22 +562,25 @@ initGeomEnv()
   }
 
   // Statistiques
-  auto str_ratio = [](Integer part, Integer tot) {
-    Integer pourmille=(1000*part)/tot;
+  auto str_ratio = [](Int64 part, Int64 tot) {
+    Int64 pourmille=(1000*part)/tot;
     StringBuilder strb("ratio=");
     strb+=Real(pourmille)/1000.;
     return strb.toString();
   };
   IParallelMng* parallel_mng = defaultMesh()->parallelMng();
-  MinMaxSumRed<Integer> ncell(2, parallel_mng);
-  ncell.values[0]=allCells().size();
-  ncell.values[1]=allCells().own().size();
-  ARCANE_ASSERT(ncell.values[1]==ownCells().size(), ("allCells().own().size() != ownCells().size()"));
-  ncell.allreduce();
-  Integer nb_tot_cells=ncell.sum_values[0];
-  Integer nb_tot_cells_inner=ncell.sum_values[1];
-  info() << "Nb total de mailles intérieures     : " << ncell.strSumMinMaxAvg(1);
-  info() << "Nb total de mailles intérieures+ftm : " << ncell.strSumMinMaxAvg(0);
+  MinMaxSumRed<Integer> nitem(3, parallel_mng);
+  nitem.values[0]=allCells().size();
+  nitem.values[1]=allCells().own().size();
+  nitem.values[2]=allNodes().size();
+  ARCANE_ASSERT(nitem.values[1]==ownCells().size(), ("allCells().own().size() != ownCells().size()"));
+  nitem.allreduce();
+  Integer nb_tot_cells=nitem.sum_values[0];
+  Integer nb_tot_cells_inner=nitem.sum_values[1];
+  Integer nb_tot_nodes=nitem.sum_values[2];
+  info() << "Nb total de mailles intérieures     : " << nitem.strSumMinMaxAvg(1);
+  info() << "Nb total de mailles intérieures+ftm : " << nitem.strSumMinMaxAvg(0);
+  info() << "Nb total de noeuds  intérieurs+ftm  : " << nitem.strSumMinMaxAvg(2);
 
   MinMaxSumRed<Integer> npurmix(2*max_nb_env, parallel_mng);
   ENUMERATE_ENV(ienv, m_mesh_material_mng) {
@@ -601,7 +604,9 @@ initGeomEnv()
   ncell_env.values.fill(0);
   
   // On en profite pour créer la liste des mailles actives
-  Int32UniqueArray lids;
+  Int32UniqueArray cids;
+  Int32UniqueArray nids;
+  UniqueArray<bool> untreated_node(allNodes().size(), true);
   ENUMERATE_CELL(icell, allCells()) {
     Cell cell(*icell);
     AllEnvCell all_env_cell = allenvcell_converter[cell];
@@ -614,10 +619,15 @@ initGeomEnv()
     m_nbenv[icell]=Real(nb_env);
 
     if (nb_env>0) {
-      lids.add(icell.localId());
-      m_is_active_cell[icell]=true;
-    } else {
-      m_is_active_cell[icell]=false;
+      cids.add(icell.localId());
+      // On rajoute les noeuds de la maille s'ils n'ont pas déjà été ajoutés
+      ENUMERATE_NODE(inode, icell->nodes()) {
+	auto nid = inode.localId();
+	if (untreated_node[nid]) {
+	  nids.add(nid);
+	  untreated_node[nid]=false;
+	}
+      }
     }
   }
   ncell_env.allreduce();
@@ -631,11 +641,13 @@ initGeomEnv()
   info() << "Nb de mailles mixtes intérieures+ftm : " << ncell_env.strSumMinMaxAvg(0+2) << ", " << str_ratio(nb_cell_env[2], nb_tot_cells);
 
   // On crée le groupe des mailles actives "active_cells"
-  IItemFamily* family = allCells().itemFamily();
-  m_active_cells = family->createGroup("active_cells",lids,true);
-  MinMaxSumRed<Integer> nactiv(2, parallel_mng); // [0] = ftm comprise   ,  [1] = inner
-  nactiv.values[0]=m_active_cells.size();
-  nactiv.values[1]=m_active_cells.own().size();
+  CellGroup active_cells = defaultMesh()->cellFamily()->createGroup("active_cells",cids,true);
+  // On crée le groupe des noeuds actifs "active_nodes"
+  NodeGroup active_nodes = defaultMesh()->nodeFamily()->createGroup("active_nodes",nids,true);
+  MinMaxSumRed<Integer> nactiv(3, parallel_mng); // [0] = ftm comprise,  [1] = inner,  [2] = noeuds ftm compris
+  nactiv.values[0]=active_cells.size();
+  nactiv.values[1]=active_cells.own().size();
+  nactiv.values[2]=active_nodes.size();
   nactiv.allreduce();
   ARCANE_ASSERT((nactiv.sum_values[0]+nb_cell_env[0])==nb_tot_cells, ("Nbs de mailles actives + vides != nb total de mailles int+ftm"));
   ARCANE_ASSERT((nactiv.sum_values[1]+nb_cell_env_inner[0])==nb_tot_cells_inner, ("Nbs de mailles actives + vides != nb total de mailles only int"));
@@ -643,6 +655,8 @@ initGeomEnv()
     << ", " << str_ratio(nactiv.sum_values[1], nb_tot_cells_inner);
   info() << "Nb mailles actives intérieures+ftm : " << nactiv.strSumMinMaxAvg(0)
     << ", " << str_ratio(nactiv.sum_values[0], nb_tot_cells);
+  info() << "Nb noeuds  actifs  intérieurs+ftm  : " << nactiv.strSumMinMaxAvg(2)
+    << ", " << str_ratio(nactiv.sum_values[2], nb_tot_nodes);
   PROF_ACC_END;
 }
 

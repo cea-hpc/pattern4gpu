@@ -135,7 +135,6 @@ class Pattern4GPUModule
 
   IMeshMaterialMng* m_mesh_material_mng;
   CellToAllEnvCellConverter* m_allenvcell_converter=nullptr;
-  CellGroup m_active_cells;
   MaterialVariableCellReal m_compxx;
   MaterialVariableCellReal m_compxy;
   MaterialVariableCellReal m_compyy;
