@@ -422,7 +422,7 @@ initCqs()
   }
   else if (options()->getInitCqsVersion() == ICQV_arcgpu_v5)
   {
-    m_numarray_cqs = new NumArray<Real3,2>();
+    m_numarray_cqs = new NumArray<Real3,MD_Dim2>();
     m_numarray_cqs->resize(8,allCells().size());
     
     auto queue = m_acc_env->newQueue();
@@ -481,8 +481,8 @@ initCqs1()
     auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
 
-    NumArray<Real,1> cos_inode(8);
-    NumArray<Real,1> sin_inode(8);
+    NumArray<Real,MD_Dim1> cos_inode(8);
+    NumArray<Real,MD_Dim1> sin_inode(8);
     Span<Real> out_cos_inode(cos_inode.to1DSpan());
     Span<Real> out_sin_inode(sin_inode.to1DSpan());
     for(Integer inode(0) ; inode<8 ; ++inode) {

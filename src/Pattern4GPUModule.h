@@ -151,7 +151,7 @@ class Pattern4GPUModule
   IAccEnv* m_acc_env=nullptr;
 
   // Pour les structures Arcane "à la Kokkos"
-  Arcane::NumArray<Arcane::Real3,2>* m_numarray_cqs = nullptr;
+  Arcane::NumArray<Arcane::Real3,MD_Dim2>* m_numarray_cqs = nullptr;
 
   // Encapsulation pour Kokkos
   KokkosWrapper* m_kokkos_wrapper;
