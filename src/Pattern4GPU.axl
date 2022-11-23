@@ -154,18 +154,6 @@
   <variable field-name="cell_env_order" name="CellEnvOrder" data-type="integer" item-kind="cell"
 	    dim="1" dump="false" need-sync="false" />
 
-  <!-- IS-ACTIVE-CELL -->
-  <variable field-name="is_active_cell" name="IsActiveCell" data-type="bool" item-kind="cell"
-      dim="0" dump="false" need-sync="false" />
-
-  <!-- GLOBAL CELL	 -->
-  <variable field-name="global_cell" name="GlobalCell" data-type="integer" item-kind="cell"
-	    dim="0" material="true" dump="false" need-sync="false" sub-domain-depend="true" />
-
-  <!-- ENV ID -->
-  <variable field-name="env_id" name="EnvId" data-type="integer" item-kind="cell"
-	    dim="0" dump="false" need-sync="false" />
-
   <!-- MENV-IV1 -->
   <variable field-name="menv_iv1" name="MEnvIv1" data-type="integer" item-kind="cell"
       dim="0" dump="false" need-sync="false" material="true" />

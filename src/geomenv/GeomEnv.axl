@@ -58,16 +58,6 @@
       need-sync="false" 
       material="false" />
 
-  <!-- IS-ACTIVE-CELL -->
-  <variable
-      field-name="is_active_cell"
-      name="IsActiveCell"
-      data-type="bool"
-      item-kind="cell"
-      dim="0"
-      dump="false"
-      need-sync="false" />
-
 </variables>
 
 <entry-points>

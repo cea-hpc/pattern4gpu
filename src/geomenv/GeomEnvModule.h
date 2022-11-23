@@ -41,7 +41,6 @@ class GeomEnvModule
  private:
 
   IMeshMaterialMng* m_mesh_material_mng;
-  CellGroup m_active_cells;
 };
 
 #endif

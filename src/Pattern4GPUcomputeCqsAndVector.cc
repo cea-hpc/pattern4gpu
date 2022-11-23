@@ -93,6 +93,7 @@ _computeCqsAndVector_Vmt() {
 
   auto node_index_in_cells = m_acc_env->nodeIndexInCells();
   const Integer max_node_cell = m_acc_env->maxNodeCell();
+  auto is_active_cell = m_acc_env->multiEnvMng()->isActiveCell();
 
   // Puis, on applique les CQs sur les noeuds
   arcaneParallelForeach(allNodes(), options, [&](NodeVectorView nodes) {
@@ -100,7 +101,7 @@ _computeCqsAndVector_Vmt() {
       Int32 first_pos = node_i.localId() * max_node_cell;
       Real3 node_vec = Real3::zero();
       ENUMERATE_CELL(cell_i, node_i->cells()) {
-        if (m_is_active_cell[cell_i]) { // la maille ne contribue que si elle est active
+        if (is_active_cell[cell_i]) { // la maille ne contribue que si elle est active
           Int16 node_index = node_index_in_cells[first_pos + cell_i.index()];
           node_vec += (m_cell_arr1[cell_i]+m_cell_arr2[cell_i])
             * m_cell_cqs[cell_i][node_index];
@@ -247,7 +248,7 @@ _computeCqsAndVector_Varcgpu_v1() {
         // Du coup, on boucle sur les Node
         // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
         // Mais ici, on a pré-construit un tableau global aux mailles qui indique si une maille fait partie
-        // du groupe active_cells ou pas (m_is_active_cell)
+        // du groupe active_cells ou pas (m_acc_env->multiEnvMng()->isActiveCell())
         // Rem : en décomp. de dom., pour la plupart des sous-dom. on aura : active_cells = allCells
         // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
         //   1- on initialise le vecteur à 0
@@ -257,7 +258,7 @@ _computeCqsAndVector_Varcgpu_v1() {
         auto in_cell_arr1 = ax::viewIn(command, m_cell_arr1);
         auto in_cell_arr2 = ax::viewIn(command, m_cell_arr2);
         auto in_cell_cqs  = ax::viewIn(command, m_cell_cqs);
-        auto in_is_active_cell = ax::viewIn(command, m_is_active_cell);
+        auto in_is_active_cell = ax::viewIn(command, m_acc_env->multiEnvMng()->isActiveCell());
 
         auto out_node_vector = ax::viewOut(command, m_node_vector);
 
@@ -366,7 +367,7 @@ _computeCqsAndVector_Varcgpu_v2()
     // Du coup, on boucle sur les Node
     // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
     // Mais ici, on a pré-construit un tableau global au mailles qui indique si une maille fait partie
-    // du groupe active_cells ou pas (m_is_active_cell)
+    // du groupe active_cells ou pas (m_acc_env->multiEnvMng()->isActiveCell())
     // Rem : en décomp. de dom., pour la plupart des sous-dom. on aura : active_cells = allCells
     // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
     //   1- on initialise le vecteur à 0
@@ -377,7 +378,7 @@ _computeCqsAndVector_Varcgpu_v2()
     auto in_cell_arr2 = viewIn(command, m_cell_arr2);
     //auto in_cell_cqs  = viewIn(command, m_numarray_cqs);
     auto in_cell_cqs = Real3_View8(*m_numarray_cqs);
-    auto in_is_active_cell = viewIn(command, m_is_active_cell);
+    auto in_is_active_cell = viewIn(command, m_acc_env->multiEnvMng()->isActiveCell());
 
     auto out_node_vector = ax::viewOut(command, m_node_vector);
 
@@ -459,7 +460,7 @@ _computeCqsAndVector_Varcgpu_v5()
     // Du coup, on boucle sur les Node
     // On pourrait construire un groupe de noeuds des mailles active_cells et boucler sur ce groupe
     // Mais ici, on a pré-construit un tableau global au mailles qui indique si une maille fait partie
-    // du groupe active_cells ou pas (m_is_active_cell)
+    // du groupe active_cells ou pas (m_acc_env->multiEnvMng()->isActiveCell())
     // Rem : en décomp. de dom., pour la plupart des sous-dom. on aura : active_cells = allCells
     // Ainsi, en bouclant sur tous les noeuds allNodes(), pour un noeud donné :
     //   1- on initialise le vecteur à 0
@@ -470,7 +471,7 @@ _computeCqsAndVector_Varcgpu_v5()
     auto in_cell_arr2 = viewIn(command, m_cell_arr2);
     //auto in_cell_cqs  = viewIn(command, m_numarray_cqs);
     auto in_cell_cqs = Real3_View8(*m_numarray_cqs);
-    auto in_is_active_cell = viewIn(command, m_is_active_cell);
+    auto in_is_active_cell = viewIn(command, m_acc_env->multiEnvMng()->isActiveCell());
 
     auto out_node_vector = ax::viewOut(command, m_node_vector);
 

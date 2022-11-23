@@ -72,7 +72,7 @@ _asyncUpdateVariableV2Pur(const char* kernel_name,
   {
       auto command = makeCommand(queue_ref.get());
 
-      auto in_env_id     = ax::viewIn(command, m_env_id);
+      auto in_env_id     = ax::viewIn(command, m_acc_env->multiEnvMng()->envId());
       // suffixe _p = _pure
       auto in_volume_p   = ax::viewIn(command, volume.globalVariable());
       auto inout_f_p     = ax::viewInOut(command, f.globalVariable());
@@ -102,7 +102,7 @@ _updateTensorPure_arcgpu_v2a()
   {
     auto command = makeCommand(queue_pur);
 
-    auto in_env_id     = ax::viewIn(command, m_env_id);
+    auto in_env_id     = ax::viewIn(command, m_acc_env->multiEnvMng()->envId());
     // suffixe _p = _pure
     auto in_tensor_p   = ax::viewIn(command, m_tensor.globalVariable());
     auto out_compxx_p  = ax::viewOut(command, m_compxx.globalVariable());
@@ -134,7 +134,7 @@ _updateTensorPure_arcgpu_v2a()
   {
     auto command = makeCommand(queue_pur);
 
-    auto in_env_id     = ax::viewIn(command, m_env_id);
+    auto in_env_id     = ax::viewIn(command, m_acc_env->multiEnvMng()->envId());
     // suffixe _p = _pure
     auto in_compxx_p    = ax::viewIn(command, m_compxx.globalVariable());
     auto in_compxy_p    = ax::viewIn(command, m_compxy.globalVariable());
@@ -166,7 +166,7 @@ _updateTensorPure_arcgpu_v2a()
     {
       auto command = makeCommand(queue_pur);
 
-      auto in_env_id     = ax::viewIn(command, m_env_id);
+      auto in_env_id     = ax::viewIn(command, m_acc_env->multiEnvMng()->envId());
       // suffixe _p = _pure
       auto in_tensor_p   = ax::viewIn(command, m_tensor.globalVariable());
       auto out_compxx_p  = ax::viewOut(command, m_compxx.globalVariable());
@@ -193,7 +193,7 @@ _updateTensorPure_arcgpu_v2a()
     {
       auto command = makeCommand(queue_pur);
 
-      auto in_env_id     = ax::viewIn(command, m_env_id);
+      auto in_env_id     = ax::viewIn(command, m_acc_env->multiEnvMng()->envId());
       // suffixe _p = _pure
       auto in_compxx_p    = ax::viewIn(command, m_compxx.globalVariable());
       auto in_compyy_p    = ax::viewIn(command, m_compyy.globalVariable());
@@ -224,7 +224,7 @@ void Pattern4GPUModule::
 _asyncUpdateVariableV2Mix(IMeshEnvironment* env,
     MaterialVariableCellReal& volume, MaterialVariableCellReal& f)
 {
-  auto menv_queue = m_acc_env->multiEnvQueue();
+  auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
   auto command = makeCommand(menv_queue->queue(env->id()));
 
   Span<const Real> in_volume(envView(volume, env));
@@ -247,7 +247,7 @@ _updateTensorImpure_arcgpu_v2a()
 {
   // Les calculs des mailles mixtes par environnement sont indépendants
   // Remplir les variables composantes
-  auto menv_queue = m_acc_env->multiEnvQueue();
+  auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
   ENUMERATE_ENV(ienv,m_mesh_material_mng){
     IMeshEnvironment* env = *ienv;
 
@@ -392,7 +392,7 @@ _updateTensor3D_arcgpu_v2b()
   {
     auto command = makeCommand(queue_pur);
 
-    auto in_env_id       = ax::viewIn   (command, m_env_id);
+    auto in_env_id       = ax::viewIn   (command, m_acc_env->multiEnvMng()->envId());
     // suffixe _p = _pure
     auto in_volume_p     = ax::viewIn   (command, m_volume.globalVariable());
     auto inout_tensor_p  = ax::viewInOut(command, m_tensor.globalVariable());
@@ -420,7 +420,7 @@ _updateTensor3D_arcgpu_v2b()
     };
   }
 
-  auto menv_queue = m_acc_env->multiEnvQueue();
+  auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
   ENUMERATE_ENV(ienv,m_mesh_material_mng){
     IMeshEnvironment* env = *ienv;
 
@@ -478,7 +478,7 @@ _updateTensor3D_arcgpu_v3b()
     auto inout_tensor(menv_tensor.span());
 
     // Pour décrire l'accés multi-env sur GPU
-    auto in_menv_cell(m_acc_env->multiEnvCellStorage()->viewIn(command));
+    auto in_menv_cell(m_acc_env->multiEnvMng()->viewIn(command));
 
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
 
@@ -662,7 +662,7 @@ updateTensor()
     // Même résultats numériques que ori
     // Mais _updateVariableV2 ne calcule que les valeurs partielles
 
-    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+    m_acc_env->multiEnvMng()->checkMultiEnvGlobalCellId();
 
     _updateTensorPure_arcgpu_v2a();
     _updateTensorImpure_arcgpu_v2a();
@@ -673,7 +673,7 @@ updateTensor()
     // On n'utilise pas des tableaux temporaires,
     // on travaille directement sur m_tensor
 
-    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+    m_acc_env->multiEnvMng()->checkMultiEnvGlobalCellId();
 
     if (defaultMesh()->dimension() == 3) 
     {
@@ -776,7 +776,7 @@ updateTensor()
     // On n'utilise pas des tableaux temporaires,
     // on travaille directement sur m_tensor
 
-    m_acc_env->checkMultiEnvGlobalCellId(m_mesh_material_mng);
+    m_acc_env->multiEnvMng()->checkMultiEnvGlobalCellId();
 
     if (defaultMesh()->dimension() == 3) 
     {

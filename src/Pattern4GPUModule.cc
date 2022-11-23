@@ -12,7 +12,6 @@
 #include <arcane/utils/ArcaneGlobal.h>
 #include <arcane/utils/StringBuilder.h>
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
-#include <arcane/ServiceBuilder.h>
 
 #include "msgpass/VarSyncMng.h"
 #include <arcane/IVariableSynchronizer.h>
@@ -21,6 +20,9 @@
 #include "P4GPUTimer.h"
 
 #include "Pattern4GPU4Kokkos.h"
+
+#include "accenv/SingletonIAccEnv.h"
+
 
 using namespace Arcane;
 using namespace Arcane::Materials;
@@ -61,8 +63,7 @@ accBuild()
 {
   PROF_ACC_BEGIN(__FUNCTION__);
 
-  m_acc_env = ServiceBuilder<IAccEnv>(subDomain()).getSingleton();
-  m_acc_env->initAcc();
+  m_acc_env = SingletonIAccEnv::accEnv(subDomain());
 
   PROF_ACC_END;
 }
@@ -75,7 +76,8 @@ initKokkosWrapper()
 {
   // Tout est déporté dans le wrapper pour s'assurer de la séparation de l'environnement Kokkos et de l'environnement Arcane
   m_kokkos_wrapper = new KokkosWrapper();
-  m_kokkos_wrapper->init(allCells(), allNodes(), m_is_active_cell, m_acc_env->nodeIndexInCells());
+  m_kokkos_wrapper->init(allCells(), allNodes(), 
+      m_acc_env->multiEnvMng()->isActiveCell(), m_acc_env->nodeIndexInCells());
 }
 
 /*---------------------------------------------------------------------------*/
@@ -84,8 +86,6 @@ initKokkosWrapper()
 void Pattern4GPUModule::
 initP4GPU()
 {
-  PROF_ACC_START_CAPTURE; // la capture du profiling commence réellement ici
-
   PROF_ACC_BEGIN(__FUNCTION__);
   debug() << "Dans initP4GPU";
 
@@ -93,18 +93,17 @@ initP4GPU()
   // est connue car le le pt d'entree GeomEnv.InitGeomEnv a été appelé
   m_allenvcell_converter=new CellToAllEnvCellConverter(m_mesh_material_mng);
 
+  // Les groupes actives_cells et active_nodes ont été créés par GeomEnv.InitGeomEnv
+  CellGroup active_cells = defaultMesh()->cellFamily()->findGroup("active_cells");
+  NodeGroup active_nodes = defaultMesh()->nodeFamily()->findGroup("active_nodes");
+  m_acc_env->multiEnvMng()->setActiveItemsFromGroups(active_cells, active_nodes);
+
   // On impose un pas de temps (pour l'instant, non paramétrable)
   m_global_deltat = 1.e-3;
-
-  // Pour accélérateur
-  m_acc_env->initMesh(mesh());
 
   // init kokkos
   if (options()->getWithKokkos())
     initKokkosWrapper();
-
-  // Pour le multi-environnement
-  m_acc_env->initMultiEnv(m_mesh_material_mng); 
 
   // TEST : pour amortir le cout des allocs pour GPU
   if (!m_buf_addr_mng) {
@@ -177,7 +176,7 @@ initTensor()
       auto inout_tensor(menv_tensor.span());
 
       // Pour décrire l'accés multi-env sur GPU
-      auto in_menv_cell(m_acc_env->multiEnvCellStorage()->viewIn(command));
+      auto in_menv_cell(m_acc_env->multiEnvMng()->viewIn(command));
 
       auto cnc = m_acc_env->connectivityView().cellNode();
 
@@ -423,7 +422,7 @@ initCqs()
   }
   else if (options()->getInitCqsVersion() == ICQV_arcgpu_v5)
   {
-    m_numarray_cqs = new NumArray<Real3,2>();
+    m_numarray_cqs = new NumArray<Real3,MD_Dim2>();
     m_numarray_cqs->resize(8,allCells().size());
     
     auto queue = m_acc_env->newQueue();
@@ -482,8 +481,8 @@ initCqs1()
     auto queue = m_acc_env->newQueue();
     auto command = makeCommand(queue);
 
-    NumArray<Real,1> cos_inode(8);
-    NumArray<Real,1> sin_inode(8);
+    NumArray<Real,MD_Dim1> cos_inode(8);
+    NumArray<Real,MD_Dim1> sin_inode(8);
     Span<Real> out_cos_inode(cos_inode.to1DSpan());
     Span<Real> out_sin_inode(sin_inode.to1DSpan());
     for(Integer inode(0) ; inode<8 ; ++inode) {
@@ -571,7 +570,7 @@ burnIsActiveCell() {
     auto command = makeCommand(queue);
 
     VariableCellInteger tmp2(VariableBuildInfo(mesh(), "TemporaryTmp2"));
-    auto in_is_active_cell = ax::viewIn(command, m_is_active_cell);
+    auto in_is_active_cell = ax::viewIn(command, m_acc_env->multiEnvMng()->isActiveCell());
     auto out_tmp2 = ax::viewOut(command, tmp2);
 
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {

@@ -135,7 +135,6 @@ class Pattern4GPUModule
 
   IMeshMaterialMng* m_mesh_material_mng;
   CellToAllEnvCellConverter* m_allenvcell_converter=nullptr;
-  CellGroup m_active_cells;
   MaterialVariableCellReal m_compxx;
   MaterialVariableCellReal m_compxy;
   MaterialVariableCellReal m_compyy;
@@ -152,7 +151,7 @@ class Pattern4GPUModule
   IAccEnv* m_acc_env=nullptr;
 
   // Pour les structures Arcane "à la Kokkos"
-  Arcane::NumArray<Arcane::Real3,2>* m_numarray_cqs = nullptr;
+  Arcane::NumArray<Arcane::Real3,MD_Dim2>* m_numarray_cqs = nullptr;
 
   // Encapsulation pour Kokkos
   KokkosWrapper* m_kokkos_wrapper;
