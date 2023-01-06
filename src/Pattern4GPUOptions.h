@@ -121,4 +121,12 @@ enum ePartialAndMean4Version {
   PM4V_arcgpu_v2  //! Implémentation API GPU Arcane version 2
 };
 
+/*! \brief Définit les implémentations de PartialAndGlobal5
+ */
+enum ePartialAndGlobal5Version {
+  PG5V_ori = 0,   //! Version CPU d'origine
+  PG5V_alter,     //! Version CPU alternative
+  PG5V_arcgpu_v1  //! Implémentation API GPU Arcane version 1
+};
+
 #endif

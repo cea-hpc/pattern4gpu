@@ -82,6 +82,7 @@ class Pattern4GPUModule
   void partialOnly() override; // PartialOnly
   void partialAndMean() override; // PartialAndMean
   void partialAndMean4() override; // PartialAndMean4
+  void partialAndGlobal5() override; // PartialAndGlobal5
 
  public:
   // Implémentations des points d'entrées, devrait être private mais 
