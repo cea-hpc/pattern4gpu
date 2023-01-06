@@ -2,6 +2,7 @@
 
 #include <arcane/materials/ComponentPartItemVectorView.h>
 #include <arcane/materials/MeshMaterialVariableSynchronizerList.h>
+#include <arcane/materials/EnvItemVector.h>
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
 
 using namespace Arcane;
@@ -911,5 +912,219 @@ partialAndMean4() {
   PROF_ACC_END;
 }
 
+/*---------------------------------------------------------------------------*/
+/*                               PATTERN 5                                   */
+/*---------------------------------------------------------------------------*/
+
+/*---------------------------------------------------------------------------*/
+/* On calcule les grandeurs partielles sur les mailles de chaque environnement
+ * (mailles pures et mixtes) à partir des mailles partielles et globales
+ * En outre, par environnement, la liste des mailles peut être un sous-ensemble
+ *
+ *  for(env : ) {
+ *    for(ev : subset(env)) { // Mailles pures et mixtes d'un sous-ensemble
+ *      gpart1[ev] = calcpart1(ev, ev.globalCell());  
+ *    } 
+ *    for(ev : subset(env)) { // Mailles pures et mixtes d'un sous-ensemble
+ *      gpart3[ev] = calcpart3(ev, ev.globalCell());  
+ *    } 
+ *  }
+ *                                                                           */
+/*---------------------------------------------------------------------------*/
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+partialAndGlobal5() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+
+  if (options()->getPartialAndGlobal5Version() == PG5V_ori)
+  {
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+
+      EnvCellVectorView envcellsv = env->envView();
+
+      // Boucle 1
+      ENUMERATE_ENVCELL(iev,envcellsv)
+      {
+	Cell cell = (*iev).globalCell();
+        m_menv_var1[iev] = m_frac_vol[iev] * m_menv_var1[cell];
+      }
+
+      // Boucle 3
+      ENUMERATE_ENVCELL(iev,envcellsv)
+      {
+	Cell cell = (*iev).globalCell();
+        m_menv_var3[iev] += m_menv_var1[iev] / m_menv_var2[cell];
+      }
+    }
+  }
+  else if (options()->getPartialAndGlobal5Version() == PG5V_alter)
+  {
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+
+      EnvCellVectorView envcellsv = env->envView();
+
+      // Boucle 1
+      auto global_cell = m_acc_env->multiEnvMng()->globalCell();
+      auto in_menv_var1 = m_menv_var1.globalVariable().asArray();
+      ENUMERATE_ENVCELL(iev,envcellsv)
+      {
+        Integer cid = global_cell[iev];
+        m_menv_var1[iev] = m_frac_vol[iev] * in_menv_var1[cid];
+      }    
+
+      // Boucle 3
+      auto in_menv_var2 = m_menv_var2.globalVariable().asArray();
+      ENUMERATE_ENVCELL(iev,envcellsv)
+      {    
+        Integer cid = global_cell[iev];
+        m_menv_var3[iev] += m_menv_var1[iev] / in_menv_var2[cid];
+      }    
+    }    
+  }
+  else if (options()->getPartialAndGlobal5Version() == PG5V_arcgpu_v1)
+  {
+    auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
+
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+
+      EnvCellVectorView envcellsv = env->envView();
+
+      // Boucle 1
+      {
+	auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
+
+	// kernel 1
+	auto calc1 = [] ARCCORE_HOST_DEVICE 
+	  (Real fvol_part, Real var1_glob) -> Real 
+	{
+	  return fvol_part * var1_glob;
+	};
+
+	// Mailles pures
+	{
+	  auto command = makeCommand(menv_queue->queue(env->id()));
+
+	  auto env_items = envcellsv.component()->pureItems();
+
+	  // Nombre de mailles pures de l'environnement
+	  Integer nb_pur = env_items.nbItem();
+
+	  // Pour les mailles pures, valueIndexes() est la liste des ids locaux des mailles
+	  Span<const Int32> in_cell_id(env_items.valueIndexes());
+
+	  auto in_menv_var1_g  = ax::viewIn(command, m_menv_var1.globalVariable());
+	  auto in_frac_vol     = ax::viewIn(command, m_frac_vol.globalVariable());
+
+	  auto out_menv_var1   = ax::viewOut(command, m_menv_var1.globalVariable());
+
+	  command << RUNCOMMAND_LOOP1(iter, nb_pur) {
+	    auto [ipur] = iter(); // ipur \in [0,nb_pur[
+	    CellLocalId cid(in_cell_id[ipur]); // accés indirect à la valeur de la maille
+
+	    out_menv_var1[cid] = calc1(in_frac_vol[cid], in_menv_var1_g[cid]);
+	  }; 
+	} // fin pures
+
+	// Mailles mixtes
+	{
+	  auto command = makeCommand(menv_queue->queue(env->id()));
+
+	  auto env_items = envcellsv.component()->impureItems();
+
+	  // Pour les mailles impures (mixtes), liste des indices valides 
+	  Span<const Int32> in_imp_idx(env_items.valueIndexes());
+	  Integer nb_imp = in_imp_idx.size();
+
+	  auto in_menv_var1_g  = ax::viewIn(command, m_menv_var1.globalVariable());
+
+	  Span<const Integer> in_global_cell (envView(m_acc_env->multiEnvMng()->globalCell(), env));
+	  Span<const Real> in_frac_vol_i     (envView(m_frac_vol, env));
+
+	  Span<Real> out_menv_var1_i    (envView(m_menv_var1, env));
+
+	  command << RUNCOMMAND_LOOP1(iter, nb_imp) {
+	    auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
+	    CellLocalId cid(in_global_cell[imix]); // on récupère l'identifiant de la maille globale
+
+	    out_menv_var1_i[imix] = calc1(in_frac_vol_i[imix], in_menv_var1_g[cid]);
+
+	  };
+	} // fin mixtes
+      } // fin Boucle 1
+
+      // Boucle 3
+      {
+	auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
+
+	// kernel 3
+	auto calc3 = [] ARCCORE_HOST_DEVICE 
+	  (Real var1_part, Real var2_glob) -> Real
+	{
+	  return var1_part / var2_glob;
+	};
+
+	// Mailles pures
+	{
+	  auto command = makeCommand(menv_queue->queue(env->id()));
+
+	  auto env_items = envcellsv.component()->pureItems();
+
+	  // Nombre de mailles pures de l'environnement
+	  Integer nb_pur = env_items.nbItem();
+
+	  // Pour les mailles pures, valueIndexes() est la liste des ids locaux des mailles
+	  Span<const Int32> in_cell_id(env_items.valueIndexes());
+
+	  auto in_menv_var1    = ax::viewIn(command, m_menv_var1.globalVariable());
+	  auto in_menv_var2_g  = ax::viewIn(command, m_menv_var2.globalVariable());
+
+	  auto inout_menv_var3  = ax::viewInOut(command, m_menv_var3.globalVariable());
+
+	  command << RUNCOMMAND_LOOP1(iter, nb_pur) {
+	    auto [ipur] = iter(); // ipur \in [0,nb_pur[
+	    CellLocalId cid(in_cell_id[ipur]); // accés indirect à la valeur de la maille
+
+	    inout_menv_var3[cid] += calc3(in_menv_var1[cid], in_menv_var2_g[cid]);
+	  }; 
+	} // fin pures
+
+	// Mailles mixtes
+	{
+	  auto command = makeCommand(menv_queue->queue(env->id()));
+
+	  auto env_items = envcellsv.component()->impureItems();
+
+	  // Pour les mailles impures (mixtes), liste des indices valides 
+	  Span<const Int32> in_imp_idx(env_items.valueIndexes());
+	  Integer nb_imp = in_imp_idx.size();
+
+	  auto in_menv_var2_g  = ax::viewIn(command, m_menv_var2.globalVariable());
+
+	  Span<const Integer> in_global_cell (envView(m_acc_env->multiEnvMng()->globalCell(), env));
+	  Span<const Real> in_menv_var1_i    (envView(m_menv_var1, env));
+
+	  Span<Real> inout_menv_var3_i    (envView(m_menv_var3, env));
+
+	  command << RUNCOMMAND_LOOP1(iter, nb_imp) {
+	    auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
+	    CellLocalId cid(in_global_cell[imix]); // on récupère l'identifiant de la maille globale
+
+	    inout_menv_var3_i[imix] += calc3(in_menv_var1_i[imix], in_menv_var2_g[cid]);
+	  };
+	} // fin mixtes
+      } // fin Boucle 3
+    }
+    menv_queue->waitAllQueues();
+  }
+
+  _dumpVisuMEnvVar();
+
+  PROF_ACC_END;
+}
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/

@@ -215,6 +215,7 @@
   <entry-point method-name="partialOnly" name="PartialOnly" where="compute-loop" property="none" />
   <entry-point method-name="partialAndMean" name="PartialAndMean" where="compute-loop" property="none" />
   <entry-point method-name="partialAndMean4" name="PartialAndMean4" where="compute-loop" property="none" />
+  <entry-point method-name="partialAndGlobal5" name="PartialAndGlobal5" where="compute-loop" property="none" />
 </entry-points>
 
 <options>
@@ -387,6 +388,14 @@
     <enumvalue name="ori_v2" genvalue="PM4V_ori_v2" />
     <enumvalue name="arcgpu_v1" genvalue="PM4V_arcgpu_v1" />
     <enumvalue name="arcgpu_v2" genvalue="PM4V_arcgpu_v2" />
+  </enumeration>
+
+  <!-- - - - - partial-and-global5-version - - - - -->
+  <enumeration name="partial-and-global5-version" type="ePartialAndGlobal5Version" default="ori">
+    <description>Choix version implémentation PartialAndGlobal5 </description>
+    <enumvalue name="ori" genvalue="PG5V_ori" />
+    <enumvalue name="alter" genvalue="PG5V_alter" />
+    <enumvalue name="arcgpu_v1" genvalue="PG5V_arcgpu_v1" />
   </enumeration>
 </options>
 </module>
