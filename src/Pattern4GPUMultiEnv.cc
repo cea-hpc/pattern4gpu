@@ -5,8 +5,54 @@
 #include <arcane/materials/EnvItemVector.h>
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
 
+#include <arcane/accelerator/MaterialVariableViews.h>
+
 using namespace Arcane;
 using namespace Arcane::Materials;
+
+
+#include <arcane/core/materials/ComponentItemVectorView.h>
+
+
+/* Simple test function */
+// envcells = subset of EnvCell for only one environment
+void func(EnvCellVectorView envcells, const VariableCellReal& arr3, const MaterialVariableCellReal& arr2, MaterialVariableCellReal arr1)
+{
+  ENUMERATE_ENVCELL(envcell_i, envcells)
+  {
+    const EnvCell& envcell = *envcell_i;
+    const Cell& cell = envcell.globalCell();
+    
+    arr1[envcell] = arr2[envcell] / arr3[cell];
+  }
+}
+
+void func_async(EnvCellVectorView envcells, Ref<RunQueue> async_queue, const VariableCellReal& arr3,
+                const MaterialVariableCellReal& arr2, MaterialVariableCellReal arr1)
+{
+  auto command = makeCommand(async_queue.get());
+
+  auto in_arr_3 = ax::viewIn (command, arr3);
+  auto in_arr2  = ax::viewIn (command, arr2);
+  auto out_arr1 = ax::viewOut(command, arr1);
+
+  // command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+  command << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcells) {
+
+  // wish:
+  // command << RUNCOMMAND_ENUMERATE_ENVCELL(evi, envcells)
+
+    // [ MatVarIndex, CellLocalId ]
+    auto [mvi, cid] = evi();
+
+    // or
+    // auto mvi = evi.partial();
+    // auto cid = evi.global();
+    
+    out_arr1[mvi] = in_arr2[mvi] / in_arr_3[cid];
+  };
+}
+
 
 /*---------------------------------------------------------------------------*/
 /* INITIALISATION DES VARIABLES MULTI-ENVIRONNMENT                           */
@@ -436,6 +482,24 @@ partialOnly() {
         comp_var1, m_menv_var1,
         options()->ponlyVar1SyncVersion()
         );
+  }
+  else if (options()->getPartialOnlyVersion() == POV_arcgpu_v4)
+  {
+    auto queue = m_acc_env->newQueue();
+    auto cmd = makeCommand(queue);
+
+    auto out_menv_var1 = ax::viewOut(cmd, m_menv_var1);
+    auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2);
+    auto in_menv_var3 = ax::viewIn(cmd, m_menv_var3);
+
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+      cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, env->envView()) {
+        auto [mvi, cid] = evi();
+        out_menv_var1[mvi] = math::sqrt(in_menv_var2[mvi]/in_menv_var3[mvi]);
+        // printf("%d, ", static_cast<int>(cid));
+      };
+    }
   }
 
   _dumpVisuMEnvVar();
