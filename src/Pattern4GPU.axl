@@ -409,6 +409,8 @@
     <enumvalue name="ori" genvalue="PG5V_ori" />
     <enumvalue name="alter" genvalue="PG5V_alter" />
     <enumvalue name="arcgpu_v1" genvalue="PG5V_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2" genvalue="PG5V_arcgpu_v2" />
+    <enumvalue name="arcgpu_v3" genvalue="PG5V_arcgpu_v3" />
   </enumeration>
 </options>
 </module>

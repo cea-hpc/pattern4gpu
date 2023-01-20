@@ -1,58 +1,15 @@
 #include "Pattern4GPUModule.h"
 
+#include <arcane/core/materials/ComponentItemVectorView.h>
 #include <arcane/materials/ComponentPartItemVectorView.h>
 #include <arcane/materials/EnvItemVector.h>
 #include <arcane/materials/MeshMaterialVariableSynchronizerList.h>
 #include <arcane/materials/EnvItemVector.h>
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
-
 #include <arcane/accelerator/MaterialVariableViews.h>
 
 using namespace Arcane;
 using namespace Arcane::Materials;
-
-
-#include <arcane/core/materials/ComponentItemVectorView.h>
-
-
-/* Simple test function */
-// envcells = subset of EnvCell for only one environment
-void func(EnvCellVectorView envcells, const VariableCellReal& arr3, const MaterialVariableCellReal& arr2, MaterialVariableCellReal arr1)
-{
-  ENUMERATE_ENVCELL(envcell_i, envcells)
-  {
-    const EnvCell& envcell = *envcell_i;
-    const Cell& cell = envcell.globalCell();
-    
-    arr1[envcell] = arr2[envcell] / arr3[cell];
-  }
-}
-
-void func_async(EnvCellVectorView envcells, Ref<RunQueue> async_queue, const VariableCellReal& arr3,
-                const MaterialVariableCellReal& arr2, MaterialVariableCellReal arr1)
-{
-  auto command = makeCommand(async_queue.get());
-
-  auto in_arr_3 = ax::viewIn (command, arr3);
-  auto in_arr2  = ax::viewIn (command, arr2);
-  auto out_arr1 = ax::viewOut(command, arr1);
-
-  // command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
-  command << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcells) {
-
-  // wish:
-  // command << RUNCOMMAND_ENUMERATE_ENVCELL(evi, envcells)
-
-    // [ MatVarIndex, CellLocalId ]
-    auto [mvi, cid] = evi();
-
-    // or
-    // auto mvi = evi.partial();
-    // auto cid = evi.global();
-    
-    out_arr1[mvi] = in_arr2[mvi] / in_arr_3[cid];
-  };
-}
 
 
 /*---------------------------------------------------------------------------*/
@@ -432,7 +389,7 @@ partialOnly() {
       Span<Real> out_menv_var1_i    (envView(m_menv_var1, env));
 
       command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-	auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
+	    auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
 
         out_menv_var1_i[imix] = math::sqrt(in_menv_var2_i[imix]/in_menv_var3_i[imix]);
 
@@ -495,10 +452,9 @@ partialOnly() {
 
     ENUMERATE_ENV(ienv, m_mesh_material_mng) {
       IMeshEnvironment* env = *ienv;
-      cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, env->envView()) {
+      cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, env) {
         auto [mvi, cid] = evi();
         out_menv_var1[mvi] = math::sqrt(in_menv_var2[mvi]/in_menv_var3[mvi]);
-        // printf("%d, ", static_cast<int>(cid));
       };
     }
   }
@@ -1403,11 +1359,76 @@ partialAndGlobal5() {
     }
     menv_queue->waitAllQueues();
   }
+  else if (options()->getPartialAndGlobal5Version() == PG5V_arcgpu_v2)
+  {
+    auto queue = m_acc_env->newQueue();
+    auto cmd = makeCommand(queue);
+
+    auto in_menv_var1 = ax::viewIn(cmd, m_menv_var1.globalVariable());
+    auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2.globalVariable());
+    auto in_frac_vol = ax::viewIn(cmd, m_frac_vol);
+    auto inout_menv_var1 = ax::viewInOut(cmd, m_menv_var1);
+    auto out_menv_var3 = ax::viewOut(cmd, m_menv_var3);
+
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+      EnvCellVectorView envcellsv = env->envView();
+
+      // Boucle 1
+      {
+        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+          auto [mvi, cid] = evi();
+          inout_menv_var1[mvi] = in_frac_vol[mvi] * in_menv_var1[cid];
+        };
+      }
+
+      // Boucle 3
+      {
+        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+          auto [mvi, cid] = evi();
+          out_menv_var3[mvi] += inout_menv_var1[mvi] / in_menv_var2[cid];
+        };
+      }
+    }
+  }
+  else if (options()->getPartialAndGlobal5Version() == PG5V_arcgpu_v3)
+  {
+    auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
+
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+      EnvCellVectorView envcellsv = env->envView();
+
+      auto cmd = makeCommand(menv_queue->queue(env->id()));
+      
+      auto in_menv_var1 = ax::viewIn(cmd, m_menv_var1.globalVariable());
+      auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2.globalVariable());
+      auto in_frac_vol = ax::viewIn(cmd, m_frac_vol);
+      auto inout_menv_var1 = ax::viewInOut(cmd, m_menv_var1);
+      auto out_menv_var3 = ax::viewOut(cmd, m_menv_var3);
+
+      // Boucle 1
+      {
+        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+          auto [mvi, cid] = evi();
+          inout_menv_var1[mvi] = in_frac_vol[mvi] * in_menv_var1[cid];
+        };
+      }
+
+      // Boucle 3
+      {
+        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+          auto [mvi, cid] = evi();
+          out_menv_var3[mvi] += inout_menv_var1[mvi] / in_menv_var2[cid];
+        };
+      }
+    }
+    menv_queue->waitAllQueues();
+  }
 
   _dumpVisuMEnvVar();
 
   PROF_ACC_END;
 }
-
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/

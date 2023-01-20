@@ -135,7 +135,9 @@ enum ePartialAndMean4Version {
 enum ePartialAndGlobal5Version {
   PG5V_ori = 0,   //! Version CPU d'origine
   PG5V_alter,     //! Version CPU alternative
-  PG5V_arcgpu_v1  //! Implémentation API GPU Arcane version 1
+  PG5V_arcgpu_v1, //! Implémentation API GPU Arcane version 1
+  PG5V_arcgpu_v2, //! Implémentation API GPU Arcane version 2, draft support multimat
+  PG5V_arcgpu_v3  //! Implémentation API GPU Arcane version 2, draft support multimat, queues async % nb env
 };
 
 #endif
