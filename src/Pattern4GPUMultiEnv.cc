@@ -1,16 +1,12 @@
 #include "Pattern4GPUModule.h"
 
-#include <arcane/core/materials/ComponentItemVectorView.h>
 #include <arcane/materials/ComponentPartItemVectorView.h>
-#include <arcane/materials/EnvItemVector.h>
 #include <arcane/materials/MeshMaterialVariableSynchronizerList.h>
 #include <arcane/materials/EnvItemVector.h>
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
-#include <arcane/accelerator/MaterialVariableViews.h>
 
 using namespace Arcane;
 using namespace Arcane::Materials;
-
 
 /*---------------------------------------------------------------------------*/
 /* INITIALISATION DES VARIABLES MULTI-ENVIRONNMENT                           */
@@ -389,7 +385,7 @@ partialOnly() {
       Span<Real> out_menv_var1_i    (envView(m_menv_var1, env));
 
       command << RUNCOMMAND_LOOP1(iter, nb_imp) {
-	    auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
+	auto imix = in_imp_idx[iter()[0]]; // iter()[0] \in [0,nb_imp[
 
         out_menv_var1_i[imix] = math::sqrt(in_menv_var2_i[imix]/in_menv_var3_i[imix]);
 
@@ -452,10 +448,10 @@ partialOnly() {
 
     ENUMERATE_ENV(ienv, m_mesh_material_mng) {
       IMeshEnvironment* env = *ienv;
-      cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, env) {
-        auto [mvi, cid] = evi();
-        out_menv_var1[mvi] = math::sqrt(in_menv_var2[mvi]/in_menv_var3[mvi]);
-      };
+  //     cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, env) {
+  //       auto [mvi, cid] = evi();
+  //       out_menv_var1[mvi] = math::sqrt(in_menv_var2[mvi]/in_menv_var3[mvi]);
+  //     };
     }
   }
 
@@ -963,7 +959,6 @@ partialAndGlobal5() {
   {
     ENUMERATE_ENV(ienv, m_mesh_material_mng) {
       IMeshEnvironment* env = *ienv;
-
       EnvCellVectorView envcellsv = env->envView();
 
       // Boucle 1
@@ -1401,30 +1396,30 @@ partialAndGlobal5() {
 
       auto cmd = makeCommand(menv_queue->queue(env->id()));
       
-      auto in_menv_var1 = ax::viewIn(cmd, m_menv_var1.globalVariable());
-      auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2.globalVariable());
-      auto in_frac_vol = ax::viewIn(cmd, m_frac_vol);
-      auto inout_menv_var1 = ax::viewInOut(cmd, m_menv_var1);
-      auto out_menv_var3 = ax::viewOut(cmd, m_menv_var3);
+  //     auto in_menv_var1 = ax::viewIn(cmd, m_menv_var1.globalVariable());
+  //     auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2.globalVariable());
+  //     auto in_frac_vol = ax::viewIn(cmd, m_frac_vol);
+  //     auto inout_menv_var1 = ax::viewInOut(cmd, m_menv_var1);
+  //     auto out_menv_var3 = ax::viewOut(cmd, m_menv_var3);
 
-      // Boucle 1
-      {
-        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
-          auto [mvi, cid] = evi();
-          inout_menv_var1[mvi] = in_frac_vol[mvi] * in_menv_var1[cid];
-        };
-      }
+  //     // Boucle 1
+  //     {
+  //       cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+  //         auto [mvi, cid] = evi();
+  //         inout_menv_var1[mvi] = in_frac_vol[mvi] * in_menv_var1[cid];
+  //       };
+  //     }
 
-      // Boucle 3
-      {
-        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
-          auto [mvi, cid] = evi();
-          out_menv_var3[mvi] += inout_menv_var1[mvi] / in_menv_var2[cid];
-        };
-      }
-    }
-    menv_queue->waitAllQueues();
-  }
+  //     // Boucle 3
+  //     {
+  //       cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+  //         auto [mvi, cid] = evi();
+  //         out_menv_var3[mvi] += inout_menv_var1[mvi] / in_menv_var2[cid];
+  //       };
+  //     }
+  //   }
+  //   menv_queue->waitAllQueues();
+  // }
 
   _dumpVisuMEnvVar();
 
