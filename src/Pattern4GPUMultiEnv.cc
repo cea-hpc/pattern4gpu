@@ -437,6 +437,9 @@ partialOnly() {
         options()->ponlyVar1SyncVersion()
         );
   }
+  /*
+   *  Test API Arcane MultiMat
+   */
   else if (options()->getPartialOnlyVersion() == POV_arcgpu_v4)
   {
     auto queue = m_acc_env->newQueue();
@@ -448,10 +451,10 @@ partialOnly() {
 
     ENUMERATE_ENV(ienv, m_mesh_material_mng) {
       IMeshEnvironment* env = *ienv;
-  //     cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, env) {
-  //       auto [mvi, cid] = evi();
-  //       out_menv_var1[mvi] = math::sqrt(in_menv_var2[mvi]/in_menv_var3[mvi]);
-  //     };
+       cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, env) {
+         auto [mvi, cid] = evi();
+         out_menv_var1[mvi] = math::sqrt(in_menv_var2[mvi]/in_menv_var3[mvi]);
+       };
     }
   }
 
@@ -1354,6 +1357,9 @@ partialAndGlobal5() {
     }
     menv_queue->waitAllQueues();
   }
+    /*
+   *  Test API Arcane MultiMat
+   */
   else if (options()->getPartialAndGlobal5Version() == PG5V_arcgpu_v2)
   {
     auto queue = m_acc_env->newQueue();
@@ -1386,6 +1392,9 @@ partialAndGlobal5() {
       }
     }
   }
+  /*
+   *  Test API Arcane MultiMat + Asynchronous queues
+   */
   else if (options()->getPartialAndGlobal5Version() == PG5V_arcgpu_v3)
   {
     auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
@@ -1396,30 +1405,30 @@ partialAndGlobal5() {
 
       auto cmd = makeCommand(menv_queue->queue(env->id()));
       
-  //     auto in_menv_var1 = ax::viewIn(cmd, m_menv_var1.globalVariable());
-  //     auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2.globalVariable());
-  //     auto in_frac_vol = ax::viewIn(cmd, m_frac_vol);
-  //     auto inout_menv_var1 = ax::viewInOut(cmd, m_menv_var1);
-  //     auto out_menv_var3 = ax::viewOut(cmd, m_menv_var3);
+      auto in_menv_var1 = ax::viewIn(cmd, m_menv_var1.globalVariable());
+      auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2.globalVariable());
+      auto in_frac_vol = ax::viewIn(cmd, m_frac_vol);
+      auto inout_menv_var1 = ax::viewInOut(cmd, m_menv_var1);
+      auto out_menv_var3 = ax::viewOut(cmd, m_menv_var3);
 
-  //     // Boucle 1
-  //     {
-  //       cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
-  //         auto [mvi, cid] = evi();
-  //         inout_menv_var1[mvi] = in_frac_vol[mvi] * in_menv_var1[cid];
-  //       };
-  //     }
+      // Boucle 1
+      {
+        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+          auto [mvi, cid] = evi();
+          inout_menv_var1[mvi] = in_frac_vol[mvi] * in_menv_var1[cid];
+        };
+      }
 
-  //     // Boucle 3
-  //     {
-  //       cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
-  //         auto [mvi, cid] = evi();
-  //         out_menv_var3[mvi] += inout_menv_var1[mvi] / in_menv_var2[cid];
-  //       };
-  //     }
-  //   }
-  //   menv_queue->waitAllQueues();
-  // }
+      // Boucle 3
+      {
+        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+          auto [mvi, cid] = evi();
+          out_menv_var3[mvi] += inout_menv_var1[mvi] / in_menv_var2[cid];
+        };
+      }
+    }
+    menv_queue->waitAllQueues();
+  }
 
   _dumpVisuMEnvVar();
 
