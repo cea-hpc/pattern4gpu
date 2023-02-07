@@ -1179,17 +1179,24 @@ partialAndGlobal5() {
     }
   }
   /*
-   *  Test API Arcane MultiMat + Asynchronous queues
+   *  Test API Arcane MultiMat + Asynchronous queues de pattern4gpu
    */
   else if (options()->getPartialAndGlobal5Version() == PG5V_arcgpu_v3)
   {
-    auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
+    // API Pattern4GPU
+    // auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
+    // API Arcane
+    auto async_queues = makeAsyncQueuePool(m_acc_env->runner(),
+                                           m_mesh_material_mng->environments().size());
 
     ENUMERATE_ENV(ienv, m_mesh_material_mng) {
       IMeshEnvironment* env = *ienv;
       EnvCellVectorView envcellsv = env->envView();
 
-      auto cmd = makeCommand(menv_queue->queue(env->id()));
+      // API Pattern4GPU
+      // auto cmd = makeCommand(menv_queue->queue(env->id()));
+      // API Arcane
+      auto cmd = makeCommand(async_queues[env->id()]);
       
       auto in_menv_var1 = ax::viewIn(cmd, m_menv_var1.globalVariable());
       auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2.globalVariable());
@@ -1213,7 +1220,10 @@ partialAndGlobal5() {
         };
       }
     }
-    menv_queue->waitAllQueues();
+    // API Pattern4GPU
+    // menv_queue->waitAllQueues();
+    // API Arcane
+    async_queues.waitAll();
   }
 
   _dumpVisuMEnvVar();
