@@ -123,6 +123,8 @@ class Pattern4GPUModule
 
   void _updateTensor3D_arcgpu_v3b();
 
+  void _computeVol_Varcgpu_v2();
+
  private:
 
   void _updateVariable(const MaterialVariableCellReal& volume, MaterialVariableCellReal& f);
