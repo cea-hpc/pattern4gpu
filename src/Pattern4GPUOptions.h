@@ -127,7 +127,11 @@ enum ePartialAndMean4Version {
   PM4V_ori = 0, //! Version CPU d'origine
   PM4V_ori_v2, //! Implem Arcane CPU version 2
   PM4V_arcgpu_v1, //! Implémentation API GPU Arcane version 1
-  PM4V_arcgpu_v2  //! Implémentation API GPU Arcane version 2
+  PM4V_arcgpu_v2, //! Implémentation API GPU Arcane version 2
+  PM4V_arcgpu_v3, //! Implémentation API GPU version 3 test FL span<span<MatVarIndex>
+  PM4V_arcgpu_v4, //! Implémentation API GPU version 4 test FL MatVarIndex**
+  PM4V_arcgpu_v5, //! Implémentation API GPU version 5 test FL {MatVarIndex*,size}*
+  PM4V_arcgpu_v6  //! Implémentation API GPU version 6 test FL Span<MatVarIndex>* DANS Arcane
 };
 
 /*! \brief Définit les implémentations de PartialAndGlobal5

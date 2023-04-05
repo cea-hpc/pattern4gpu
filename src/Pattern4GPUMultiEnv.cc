@@ -164,6 +164,60 @@ initMEnvVar() {
     mvsl.add(m_menv_var3);
     auto ref_queue = m_acc_env->refQueueAsync();
     m_acc_env->vsyncMng()->synchronize(mvsl, ref_queue);
+
+
+    // TEST : Construction de la structure pour stocker la "connectivité" cell->all_envcell
+    auto f_allCells2EnvCells = [&](){
+      UniqueArray<UniqueArray<MatVarIndex>> all_cells_2_env_cells(platform::getDefaultDataAllocator(), allCells().size());
+
+      for (Int64 i(0); i < all_cells_2_env_cells.size(); ++i) {
+        UniqueArray<MatVarIndex> array(platform::getDefaultDataAllocator());
+        all_cells_2_env_cells[i].swap(array);
+      }
+
+      ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+        for (auto i(0); i < (*ienv)->variableIndexer()->localIds().size(); ++i) {
+          auto id = (*ienv)->variableIndexer()->localIds()[i];
+          all_cells_2_env_cells[id].add((*ienv)->variableIndexer()->matvarIndexes()[i]);
+        }
+      }
+
+      return all_cells_2_env_cells;
+    };
+    m_all_cells_2_env_cells = f_allCells2EnvCells();
+    Span<MatVarIndex>* mvis = reinterpret_cast<Span<MatVarIndex>*>(
+        platform::getDefaultDataAllocator()->allocate(sizeof(Span<MatVarIndex>) * allCells().size()));
+    Span<Span<MatVarIndex>> mvis_span(mvis, allCells().size());
+    for (decltype(mvis_span)::size_type i(0); i < mvis_span.size(); ++i) {
+      mvis_span[i] = m_all_cells_2_env_cells[i];
+    }
+    m_all_cells_envcells_span = mvis_span;
+
+    /*
+    std::cout << "mvis_span: " << std::endl;
+    for (decltype(mvis_span)::size_type i(0); i < mvis_span.size(); ++i) {
+      std::cout << "[" << i << "] -> ";
+      for (auto j : mvis_span[i]) {
+        std::cout << "(" << j.arrayIndex() << "," << j.valueIndex() << "), ";
+      }
+      std::cout << std::endl;
+    }
+    std::cout << std::endl;
+    */
+
+   m_all_cells_2_all_env_cells = new AllCell2AllEnvCell_P4GPU(m_mesh_material_mng, platform::getDefaultDataAllocator());
+   m_all_cells_2_all_env_cells_alter = new AllCell2AllEnvCellAlter(m_mesh_material_mng, platform::getDefaultDataAllocator());
+
+  Span<MatVarIndex>* mvis2 = reinterpret_cast<Span<MatVarIndex>*>(
+        platform::getDefaultDataAllocator()->allocate(sizeof(Span<MatVarIndex>) * allCells().size()));
+  Span<Span<MatVarIndex>> mvis_span2(mvis2, allCells().size());
+  for (decltype(mvis_span2)::size_type i(0); i < mvis_span2.size(); ++i) {
+      mvis_span2[i] = Span<MatVarIndex>(m_all_cells_2_all_env_cells->m_envcell_mvis[i], m_all_cells_2_all_env_cells->m_envcell_nb_env[i]);
+    }
+  m_all_cells_envcells_span2 = mvis_span2;
+
+  AllCell2AllEnvCell::getInstance().init(m_mesh_material_mng, platform::getDefaultDataAllocator());
+
   }
 
   // Sortie des variables multi-environnement pour la visu
@@ -926,6 +980,145 @@ partialAndMean4() {
       out_menv_var1_g[cid] = sum3;
     };
   }
+  else if (options()->getPartialAndMean4Version() == PM4V_arcgpu_v3)
+  {
+    debug() << "PM4V_arcgpu_v3";
+
+    auto queue = m_acc_env->newQueue();
+    auto command = makeCommand(queue);
+
+    auto in_menv_var2    = ax::viewIn(command, m_menv_var2);
+    auto out_menv_var3   = ax::viewOut(command, m_menv_var3);
+    auto in_menv_var2_g  = ax::viewIn(command, m_menv_var2.globalVariable());
+    auto in_menv_var3_g  = ax::viewIn(command, m_menv_var3.globalVariable());
+    auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+
+      //auto cell_all_envcell(m_all_cells_envcells_span[cid]);
+      auto cell_all_envcell(m_all_cells_envcells_span2[cid]);
+
+      Real sum2=0.;
+      for (decltype(cell_all_envcell)::size_type i(0); i < cell_all_envcell.size(); ++i) {
+        auto mvi(cell_all_envcell[i]);
+        sum2 += in_menv_var2[mvi]/in_menv_var2_g[cid];
+      }
+
+      Real sum3=0.;
+      for (decltype(cell_all_envcell)::size_type i(0); i < cell_all_envcell.size(); ++i) {
+        auto mvi(cell_all_envcell[i]);
+        Real contrib2 = (in_menv_var2[mvi]/in_menv_var2_g[cid])*(sum2+1.);
+        out_menv_var3[mvi] = contrib2 * in_menv_var3_g[cid];
+        sum3 += contrib2;
+      }
+
+      out_menv_var1_g[cid] = sum3;
+    };
+  }
+  else if (options()->getPartialAndMean4Version() == PM4V_arcgpu_v4)
+  {
+    debug() << "PM4V_arcgpu_v4";
+
+    auto queue = m_acc_env->newQueue();
+    auto command = makeCommand(queue);
+
+    auto in_menv_var2    = ax::viewIn(command, m_menv_var2);
+    auto out_menv_var3   = ax::viewOut(command, m_menv_var3);
+    auto in_menv_var2_g  = ax::viewIn(command, m_menv_var2.globalVariable());
+    auto in_menv_var3_g  = ax::viewIn(command, m_menv_var3.globalVariable());
+    auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+
+      Real sum2=0.;
+      for (Int32 i(0); i < m_all_cells_2_all_env_cells->m_envcell_nb_env[cid]; ++i) {
+        auto mvi(m_all_cells_2_all_env_cells->m_envcell_mvis[cid][i]);
+        sum2 += in_menv_var2[mvi]/in_menv_var2_g[cid];
+      }
+
+      Real sum3=0.;
+      for (Int32 i(0); i < m_all_cells_2_all_env_cells->m_envcell_nb_env[cid]; ++i) {
+        auto mvi(m_all_cells_2_all_env_cells->m_envcell_mvis[cid][i]);
+        Real contrib2 = (in_menv_var2[mvi]/in_menv_var2_g[cid])*(sum2+1.);
+        out_menv_var3[mvi] = contrib2 * in_menv_var3_g[cid];
+        sum3 += contrib2;
+      }
+
+      out_menv_var1_g[cid] = sum3;
+    };
+  }
+  else if (options()->getPartialAndMean4Version() == PM4V_arcgpu_v5)
+  {
+    debug() << "PM4V_arcgpu_v5";
+
+    auto queue = m_acc_env->newQueue();
+    auto command = makeCommand(queue);
+
+    auto in_menv_var2    = ax::viewIn(command, m_menv_var2);
+    auto out_menv_var3   = ax::viewOut(command, m_menv_var3);
+    auto in_menv_var2_g  = ax::viewIn(command, m_menv_var2.globalVariable());
+    auto in_menv_var3_g  = ax::viewIn(command, m_menv_var3.globalVariable());
+    auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+
+      Real sum2=0.;
+      for (Int32 i(0); i < m_all_cells_2_all_env_cells_alter->m_allcellenvcell[cid].m_size; ++i) {
+        auto mvi(m_all_cells_2_all_env_cells_alter->m_allcellenvcell[cid].m_mvis[i]);
+        sum2 += in_menv_var2[mvi]/in_menv_var2_g[cid];
+      }
+
+      Real sum3=0.;
+      for (Int32 i(0); i < m_all_cells_2_all_env_cells_alter->m_allcellenvcell[cid].m_size; ++i) {
+        auto mvi(m_all_cells_2_all_env_cells_alter->m_allcellenvcell[cid].m_mvis[i]);
+        Real contrib2 = (in_menv_var2[mvi]/in_menv_var2_g[cid])*(sum2+1.);
+        out_menv_var3[mvi] = contrib2 * in_menv_var3_g[cid];
+        sum3 += contrib2;
+      }
+
+      out_menv_var1_g[cid] = sum3;
+    };
+  }
+  else if (options()->getPartialAndMean4Version() == PM4V_arcgpu_v6)
+  {
+    debug() << "PM4V_arcgpu_v6";
+
+    auto queue = m_acc_env->newQueue();
+    auto command = makeCommand(queue);
+
+    auto in_menv_var2    = ax::viewIn(command, m_menv_var2);
+    auto out_menv_var3   = ax::viewOut(command, m_menv_var3);
+    auto in_menv_var2_g  = ax::viewIn(command, m_menv_var2.globalVariable());
+    auto in_menv_var3_g  = ax::viewIn(command, m_menv_var3.globalVariable());
+    auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
+
+    //auto* ac2aec(&AllCell2AllEnvCell::getInstance());
+
+    command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+
+      Real sum2=0.;
+      ENUMERATE_CELL_ALLENVCELL(iev, cid) {
+        sum2 += in_menv_var2[*iev]/in_menv_var2_g[cid];
+      // Le for est plus performant (en tout cas par rapport à l'ENUMERATE ci-dessus avec Arcane en mode CHECK
+      //for (Int32 i(0); i < ac2aec->getAllCell2AllEnvCellTable()[cid].size(); ++i) {
+      //  const auto& mvi(ac2aec->getAllCell2AllEnvCellTable()[cid][i]);
+      //  sum2 += in_menv_var2[mvi]/in_menv_var2_g[cid];
+      }
+
+      Real sum3=0.;
+      ENUMERATE_CELL_ALLENVCELL(iev, cid) {
+        Real contrib2 = (in_menv_var2[*iev]/in_menv_var2_g[cid])*(sum2+1.);
+        out_menv_var3[*iev] = contrib2 * in_menv_var3_g[cid];
+      //for (Int32 i(0); i < ac2aec->getAllCell2AllEnvCellTable()[cid].size(); ++i) {
+        //const auto& mvi(ac2aec->getAllCell2AllEnvCellTable()[cid][i]);
+        //Real contrib2 = (in_menv_var2[mvi]/in_menv_var2_g[cid])*(sum2+1.);
+        //out_menv_var3[mvi] = contrib2 * in_menv_var3_g[cid];
+        sum3 += contrib2;
+      }
+
+      out_menv_var1_g[cid] = sum3;
+    };
+  }
 
   _dumpVisuMEnvVar();
 
@@ -1183,19 +1376,14 @@ partialAndGlobal5() {
    */
   else if (options()->getPartialAndGlobal5Version() == PG5V_arcgpu_v3)
   {
-    // API Pattern4GPU
-    // auto menv_queue = m_acc_env->multiEnvMng()->multiEnvQueue();
-    // API Arcane
-    auto async_queues = makeAsyncQueuePool(m_acc_env->runner(),
-                                           m_mesh_material_mng->environments().size());
+    auto async_queues = makeAsyncQueuePool(
+      m_acc_env->runner(),
+      m_mesh_material_mng->environments().size());
 
     ENUMERATE_ENV(ienv, m_mesh_material_mng) {
       IMeshEnvironment* env = *ienv;
       EnvCellVectorView envcellsv = env->envView();
 
-      // API Pattern4GPU
-      // auto cmd = makeCommand(menv_queue->queue(env->id()));
-      // API Arcane
       auto cmd = makeCommand(async_queues[env->id()]);
       
       auto in_menv_var1 = ax::viewIn(cmd, m_menv_var1.globalVariable());
@@ -1220,9 +1408,6 @@ partialAndGlobal5() {
         };
       }
     }
-    // API Pattern4GPU
-    // menv_queue->waitAllQueues();
-    // API Arcane
     async_queues.waitAll();
   }
 

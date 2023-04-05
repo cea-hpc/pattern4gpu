@@ -15,6 +15,8 @@
 #include "arcane/materials/IMeshEnvironment.h"
 #include "arcane/materials/MeshMaterialVariableRef.h"
 
+#include <arcane/materials/CellToAllEnvCellConverter.h>
+
 /*---------------------------------------------------------------------------*/
 /* Pour créer une vue sur les valeurs d'un environnement                     */
 /*---------------------------------------------------------------------------*/
@@ -301,6 +303,90 @@ class MultiEnvCellViewIn {
   Span<const Int16> m_l_env_arrays_idx_in;
   ax::ItemVariableArrayInViewT<Cell,Int32> m_l_env_values_idx_in;
   ax::VariableCellInt32InView m_env_id_in;
+};
+
+
+// TEST
+// Structure pour gérer les all env cells sur gpu, à brancher dans Arcane
+struct AllCell2AllEnvCell_P4GPU {
+  explicit AllCell2AllEnvCell_P4GPU(IMeshMaterialMng* mm, IMemoryAllocator* alloc)
+  : m_envcell_mvis(nullptr), m_envcell_nb_env(nullptr)
+  {
+    Int32 nb_all_cells(mm->mesh()->allCells().size());
+    m_envcell_mvis = reinterpret_cast<MatVarIndex**>(alloc->allocate(sizeof(MatVarIndex*) * nb_all_cells));
+    m_envcell_nb_env = reinterpret_cast<Int32*>(alloc->allocate(sizeof(Int32) * nb_all_cells));
+ 
+    CellToAllEnvCellConverter all_env_cell_converter(mm);
+    ENUMERATE_CELL(icell, mm->mesh()->allCells())
+    {
+      Cell cell = * icell;
+      Integer cid = cell.localId();
+      AllEnvCell all_env_cell = all_env_cell_converter[cell];
+      m_envcell_mvis[cid] = nullptr;
+      Int32 nb_env(all_env_cell.nbEnvironment());
+      m_envcell_nb_env[cid] = nb_env;
+      if (nb_env) {
+        m_envcell_mvis[cid] = reinterpret_cast<MatVarIndex*>(alloc->allocate(sizeof(MatVarIndex) * nb_env));
+        Int32 i(0);
+        ENUMERATE_CELL_ENVCELL(ienvcell,all_env_cell) {
+          EnvCell ev = *ienvcell;
+          m_envcell_mvis[cid][i] = ev._varIndex();
+          ++i;
+        }
+      }
+    }
+    /*
+    std::cout << "[CellId] -> size: (mvis),..." << std::endl;
+    for (Int32 i(0); i < mm->mesh()->allCells().size(); ++i) {
+      std::cout << "[" << i << "] -> " << m_envcell_nb_env[i] << ": ";
+      for (Int32 j(0); j < m_envcell_nb_env[i]; ++j) {
+        std::cout << "(" << m_envcell_mvis[i][j].arrayIndex() << "," << m_envcell_mvis[i][j].valueIndex() << "), ";
+      }
+      std::cout << std::endl;
+    }
+    std::cout << std::endl;
+    */
+  }
+  MatVarIndex** m_envcell_mvis;
+  Int32*        m_envcell_nb_env;
+};
+
+// TEST
+// Structure alternative pour voir si le fait de "rajouter" la taille dans une structure détériore les perfs
+struct AllCell2AllEnvCellAlter {
+  struct AllCell2AllEnvCellAlterInternal {
+    AllCell2AllEnvCellAlterInternal() : m_mvis(nullptr), m_size(0) {}
+    MatVarIndex* m_mvis;
+    Int32        m_size;
+  };
+
+  explicit AllCell2AllEnvCellAlter(IMeshMaterialMng* mm, IMemoryAllocator* alloc)
+  : m_allcellenvcell(nullptr)
+  {
+    Int32 nb_all_cells(mm->mesh()->allCells().size());
+    m_allcellenvcell = reinterpret_cast<AllCell2AllEnvCellAlterInternal*>(alloc->allocate(sizeof(AllCell2AllEnvCellAlterInternal) * nb_all_cells));
+ 
+    CellToAllEnvCellConverter all_env_cell_converter(mm);
+    ENUMERATE_CELL(icell, mm->mesh()->allCells())
+    {
+      Cell cell = * icell;
+      Integer cid = cell.localId();
+      AllEnvCell all_env_cell = all_env_cell_converter[cell];
+      m_allcellenvcell[cid] = AllCell2AllEnvCellAlterInternal();
+      Int32 nb_env(all_env_cell.nbEnvironment());
+      m_allcellenvcell[cid].m_size = nb_env;
+      if (nb_env) {
+        m_allcellenvcell[cid].m_mvis = reinterpret_cast<MatVarIndex*>(alloc->allocate(sizeof(MatVarIndex) * nb_env));
+        Int32 i(0);
+        ENUMERATE_CELL_ENVCELL(ienvcell,all_env_cell) {
+          EnvCell ev = *ienvcell;
+          m_allcellenvcell[cid].m_mvis[i] = ev._varIndex();
+          ++i;
+        }
+      }
+    }
+  }
+  AllCell2AllEnvCellAlterInternal* m_allcellenvcell;
 };
 
 #endif
