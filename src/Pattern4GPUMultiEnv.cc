@@ -8,6 +8,25 @@
 using namespace Arcane;
 using namespace Arcane::Materials;
 
+const char* cudaMemoryType2Str(const cudaMemoryType& ptr_attr_type)
+{
+  switch (ptr_attr_type)
+  {
+    case 0: return "Unregistered memory"; break;
+    case 1: return "Host memory"; break;
+    case 2: return "Device memory"; break;
+    case 3: return "Managed memory"; break;
+    default: return "ERROR: Unable to get memory type";break;
+  }
+}
+
+void gpu_check_ptr(void* ptr, const char* msg = "")
+{
+  cudaPointerAttributes ptr_attr;
+  cudaPointerGetAttributes (&ptr_attr, ptr);
+  printf("[GPU DEBUG %s] : ptr=%p pointer attribute type=%s\n", msg, ptr, cudaMemoryType2Str(ptr_attr.type));
+}
+
 /*---------------------------------------------------------------------------*/
 /* INITIALISATION DES VARIABLES MULTI-ENVIRONNMENT                           */
 /*---------------------------------------------------------------------------*/
@@ -164,61 +183,85 @@ initMEnvVar() {
     mvsl.add(m_menv_var3);
     auto ref_queue = m_acc_env->refQueueAsync();
     m_acc_env->vsyncMng()->synchronize(mvsl, ref_queue);
+  }
 
 
-    // TEST : Construction de la structure pour stocker la "connectivité" cell->all_envcell
-    auto f_allCells2EnvCells = [&](){
-      UniqueArray<UniqueArray<MatVarIndex>> all_cells_2_env_cells(platform::getDefaultDataAllocator(), allCells().size());
+  // TEST : Construction de la structure pour stocker la "connectivité" cell->all_envcell
+  auto f_allCells2EnvCells = [&](){
+    UniqueArray<UniqueArray<ComponentItemLocalId>> all_cells_2_env_cells(platform::getDefaultDataAllocator(), allCells().size());
 
-      for (Int64 i(0); i < all_cells_2_env_cells.size(); ++i) {
-        UniqueArray<MatVarIndex> array(platform::getDefaultDataAllocator());
-        all_cells_2_env_cells[i].swap(array);
-      }
-
-      ENUMERATE_ENV(ienv, m_mesh_material_mng) {
-        for (auto i(0); i < (*ienv)->variableIndexer()->localIds().size(); ++i) {
-          auto id = (*ienv)->variableIndexer()->localIds()[i];
-          all_cells_2_env_cells[id].add((*ienv)->variableIndexer()->matvarIndexes()[i]);
-        }
-      }
-
-      return all_cells_2_env_cells;
-    };
-    m_all_cells_2_env_cells = f_allCells2EnvCells();
-    Span<MatVarIndex>* mvis = reinterpret_cast<Span<MatVarIndex>*>(
-        platform::getDefaultDataAllocator()->allocate(sizeof(Span<MatVarIndex>) * allCells().size()));
-    Span<Span<MatVarIndex>> mvis_span(mvis, allCells().size());
-    for (decltype(mvis_span)::size_type i(0); i < mvis_span.size(); ++i) {
-      mvis_span[i] = m_all_cells_2_env_cells[i];
+    for (Int64 i(0); i < all_cells_2_env_cells.size(); ++i) {
+      UniqueArray<ComponentItemLocalId> array(platform::getDefaultDataAllocator());
+      all_cells_2_env_cells[i].swap(array);
     }
-    m_all_cells_envcells_span = mvis_span;
 
-    /*
-    std::cout << "mvis_span: " << std::endl;
-    for (decltype(mvis_span)::size_type i(0); i < mvis_span.size(); ++i) {
-      std::cout << "[" << i << "] -> ";
-      for (auto j : mvis_span[i]) {
-        std::cout << "(" << j.arrayIndex() << "," << j.valueIndex() << "), ";
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      for (auto i(0); i < (*ienv)->variableIndexer()->localIds().size(); ++i) {
+        auto id = (*ienv)->variableIndexer()->localIds()[i];
+        all_cells_2_env_cells[id].add(ComponentItemLocalId((*ienv)->variableIndexer()->matvarIndexes()[i]));
       }
-      std::cout << std::endl;
+    }
+
+    return all_cells_2_env_cells;
+  };
+  m_all_cells_2_env_cells = f_allCells2EnvCells();
+  Span<ComponentItemLocalId>* mvis = reinterpret_cast<Span<ComponentItemLocalId>*>(
+      platform::getDefaultDataAllocator()->allocate(sizeof(Span<ComponentItemLocalId>) * allCells().size()));
+  Span<Span<ComponentItemLocalId>> mvis_span(mvis, allCells().size());
+  for (decltype(mvis_span)::size_type i(0); i < mvis_span.size(); ++i) {
+    mvis_span[i] = m_all_cells_2_env_cells[i];
+  }
+  m_all_cells_envcells_span = mvis_span;
+
+  /*
+  std::cout << "mvis_span: " << std::endl;
+  for (decltype(mvis_span)::size_type i(0); i < mvis_span.size(); ++i) {
+    std::cout << "[" << i << "] -> ";
+    for (auto j : mvis_span[i]) {
+      std::cout << "(" << j.arrayIndex() << "," << j.valueIndex() << "), ";
     }
     std::cout << std::endl;
-    */
+  }
+  std::cout << std::endl;
+  */
 
-   m_all_cells_2_all_env_cells = new AllCell2AllEnvCell_P4GPU(m_mesh_material_mng, platform::getDefaultDataAllocator());
-   m_all_cells_2_all_env_cells_alter = new AllCell2AllEnvCellAlter(m_mesh_material_mng, platform::getDefaultDataAllocator());
+  m_all_cells_2_all_env_cells = reinterpret_cast<AllCell2AllEnvCell_P4GPU*>(
+    platform::getDefaultDataAllocator()->allocate(sizeof(AllCell2AllEnvCell_P4GPU)));
+  m_all_cells_2_all_env_cells->init(m_mesh_material_mng, platform::getDefaultDataAllocator());
 
-  Span<MatVarIndex>* mvis2 = reinterpret_cast<Span<MatVarIndex>*>(
-        platform::getDefaultDataAllocator()->allocate(sizeof(Span<MatVarIndex>) * allCells().size()));
-  Span<Span<MatVarIndex>> mvis_span2(mvis2, allCells().size());
+  /*
+  gpu_check_ptr(m_all_cells_2_all_env_cells,"root ptr");
+  for (auto i(0); i < m_mesh_material_mng->mesh()->allCells().size(); ++i) {
+    std::stringstream ss;
+    ss << "size: " << m_all_cells_2_all_env_cells->m_envcell_nb_env[i];
+    gpu_check_ptr(&m_all_cells_2_all_env_cells->m_envcell_nb_env[i],ss.str().c_str());
+    gpu_check_ptr(m_all_cells_2_all_env_cells->m_envcell_mvis[i],"mvis ptr");
+    for (auto j(0); j < m_all_cells_2_all_env_cells->m_envcell_nb_env[i]; ++j) {
+      gpu_check_ptr(&(m_all_cells_2_all_env_cells->m_envcell_mvis[i][j]),"elmt ptr");
+    }
+  }*/
+
+  /*
+  ENUMERATE_CELL(icell, allCells()) {
+    Int32 cid = icell->itemLocalId();
+    std::stringstream ss;
+    ss << "size: " << m_all_cells_2_all_env_cells->m_envcell_nb_env[cid];
+    gpu_check_ptr(&m_all_cells_2_all_env_cells->m_envcell_nb_env[cid],ss.str().c_str());
+  }*/
+
+
+  m_all_cells_2_all_env_cells_alter = new AllCell2AllEnvCellAlter(m_mesh_material_mng, platform::getDefaultDataAllocator());
+
+  Span<ComponentItemLocalId>* mvis2 = reinterpret_cast<Span<ComponentItemLocalId>*>(
+        platform::getDefaultDataAllocator()->allocate(sizeof(Span<ComponentItemLocalId>) * allCells().size()));
+  Span<Span<ComponentItemLocalId>> mvis_span2(mvis2, allCells().size());
   for (decltype(mvis_span2)::size_type i(0); i < mvis_span2.size(); ++i) {
-      mvis_span2[i] = Span<MatVarIndex>(m_all_cells_2_all_env_cells->m_envcell_mvis[i], m_all_cells_2_all_env_cells->m_envcell_nb_env[i]);
+      mvis_span2[i] = Span<ComponentItemLocalId>(m_all_cells_2_all_env_cells->m_envcell_mvis[i], m_all_cells_2_all_env_cells->m_envcell_nb_env[i]);
     }
   m_all_cells_envcells_span2 = mvis_span2;
 
-  AllCell2AllEnvCell::getInstance().init(m_mesh_material_mng, platform::getDefaultDataAllocator());
+//  AllCell2AllEnvCell::createInstance(m_mesh_material_mng, platform::getDefaultDataAllocator());
 
-  }
 
   // Sortie des variables multi-environnement pour la visu
   if (options()->visuMEnvVar()) {
@@ -505,8 +548,7 @@ partialOnly() {
 
     ENUMERATE_ENV(ienv, m_mesh_material_mng) {
       IMeshEnvironment* env = *ienv;
-       cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, env) {
-         auto [mvi, cid] = evi();
+       cmd << RUNCOMMAND_MAT_ENUMERATE(EnvCell, mvi, env) {
          out_menv_var1[mvi] = math::sqrt(in_menv_var2[mvi]/in_menv_var3[mvi]);
        };
     }
@@ -1028,22 +1070,25 @@ partialAndMean4() {
     auto in_menv_var3_g  = ax::viewIn(command, m_menv_var3.globalVariable());
     auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
 
+    auto all_cells_size(allCells().size());
+
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
 
+      //if ((threadIdx.x == 96) && (blockIdx.x == 0)) printf("cid = %d",(int)(cid));
+      Int32 size(m_all_cells_2_all_env_cells->m_envcell_nb_env[cid]);
+
       Real sum2=0.;
-      for (Int32 i(0); i < m_all_cells_2_all_env_cells->m_envcell_nb_env[cid]; ++i) {
+      for (Int32 i(0); i < size; ++i) {
         auto mvi(m_all_cells_2_all_env_cells->m_envcell_mvis[cid][i]);
         sum2 += in_menv_var2[mvi]/in_menv_var2_g[cid];
       }
-
       Real sum3=0.;
-      for (Int32 i(0); i < m_all_cells_2_all_env_cells->m_envcell_nb_env[cid]; ++i) {
+      for (Int32 i(0); i < size; ++i) {
         auto mvi(m_all_cells_2_all_env_cells->m_envcell_mvis[cid][i]);
         Real contrib2 = (in_menv_var2[mvi]/in_menv_var2_g[cid])*(sum2+1.);
         out_menv_var3[mvi] = contrib2 * in_menv_var3_g[cid];
         sum3 += contrib2;
       }
-
       out_menv_var1_g[cid] = sum3;
     };
   }
@@ -1092,29 +1137,30 @@ partialAndMean4() {
     auto in_menv_var3_g  = ax::viewIn(command, m_menv_var3.globalVariable());
     auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
 
-    //auto* ac2aec(&AllCell2AllEnvCell::getInstance());
+    //auto* ac2aec(AllCell2AllEnvCell::getInstance()->getAllCell2AllEnvCellTable());
+    gpu_check_ptr(AllCell2AllEnvCell::getInstance(),"getInstance() ptr");
 
     command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
 
       Real sum2=0.;
-      ENUMERATE_CELL_ALLENVCELL(iev, cid) {
-        sum2 += in_menv_var2[*iev]/in_menv_var2_g[cid];
+      //ENUMERATE_CELL_ALLENVCELL(iev, cid) {
+        //sum2 += in_menv_var2[*iev]/in_menv_var2_g[cid];
       // Le for est plus performant (en tout cas par rapport à l'ENUMERATE ci-dessus avec Arcane en mode CHECK
-      //for (Int32 i(0); i < ac2aec->getAllCell2AllEnvCellTable()[cid].size(); ++i) {
-      //  const auto& mvi(ac2aec->getAllCell2AllEnvCellTable()[cid][i]);
-      //  sum2 += in_menv_var2[mvi]/in_menv_var2_g[cid];
-      }
+      /*for (Int32 i(0); i < ac2aec[cid].size(); ++i) {
+        const auto& mvi(ac2aec[cid][i]);
+        sum2 += in_menv_var2[mvi]/in_menv_var2_g[cid];
+      }*/
 
       Real sum3=0.;
-      ENUMERATE_CELL_ALLENVCELL(iev, cid) {
-        Real contrib2 = (in_menv_var2[*iev]/in_menv_var2_g[cid])*(sum2+1.);
-        out_menv_var3[*iev] = contrib2 * in_menv_var3_g[cid];
-      //for (Int32 i(0); i < ac2aec->getAllCell2AllEnvCellTable()[cid].size(); ++i) {
-        //const auto& mvi(ac2aec->getAllCell2AllEnvCellTable()[cid][i]);
-        //Real contrib2 = (in_menv_var2[mvi]/in_menv_var2_g[cid])*(sum2+1.);
-        //out_menv_var3[mvi] = contrib2 * in_menv_var3_g[cid];
+      //ENUMERATE_CELL_ALLENVCELL(iev, cid) {
+        //Real contrib2 = (in_menv_var2[*iev]/in_menv_var2_g[cid])*(sum2+1.);
+        //out_menv_var3[*iev] = contrib2 * in_menv_var3_g[cid];
+      /*for (Int32 i(0); i < ac2aec[cid].size(); ++i) {
+        const auto& mvi(ac2aec[cid][i]);
+        Real contrib2 = (in_menv_var2[mvi]/in_menv_var2_g[cid])*(sum2+1.);
+        out_menv_var3[mvi] = contrib2 * in_menv_var3_g[cid];
         sum3 += contrib2;
-      }
+      }*/
 
       out_menv_var1_g[cid] = sum3;
     };
@@ -1356,7 +1402,7 @@ partialAndGlobal5() {
 
       // Boucle 1
       {
-        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+        cmd << RUNCOMMAND_MAT_ENUMERATE(EnvAndGlobalCell, evi, envcellsv) {
           auto [mvi, cid] = evi();
           inout_menv_var1[mvi] = in_frac_vol[mvi] * in_menv_var1[cid];
         };
@@ -1364,7 +1410,7 @@ partialAndGlobal5() {
 
       // Boucle 3
       {
-        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+        cmd << RUNCOMMAND_MAT_ENUMERATE(EnvAndGlobalCell, evi, envcellsv) {
           auto [mvi, cid] = evi();
           out_menv_var3[mvi] += inout_menv_var1[mvi] / in_menv_var2[cid];
         };
@@ -1394,7 +1440,7 @@ partialAndGlobal5() {
 
       // Boucle 1
       {
-        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+        cmd << RUNCOMMAND_MAT_ENUMERATE(EnvAndGlobalCell, evi, envcellsv) {
           auto [mvi, cid] = evi();
           inout_menv_var1[mvi] = in_frac_vol[mvi] * in_menv_var1[cid];
         };
@@ -1402,7 +1448,7 @@ partialAndGlobal5() {
 
       // Boucle 3
       {
-        cmd << RUNCOMMAND_ENUMERATE(EnvCell, evi, envcellsv) {
+        cmd << RUNCOMMAND_MAT_ENUMERATE(EnvAndGlobalCell, evi, envcellsv) {
           auto [mvi, cid] = evi();
           out_menv_var3[mvi] += inout_menv_var1[mvi] / in_menv_var2[cid];
         };

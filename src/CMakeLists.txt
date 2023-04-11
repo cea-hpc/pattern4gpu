@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_definitions(P4GPU_HAS_WARNING_INFO)
 
 add_executable(Pattern4GPU main.cc)
-target_link_libraries(Pattern4GPU PUBLIC libpattern4gpu arcane_core)
+target_link_libraries(Pattern4GPU PUBLIC libpattern4gpu)
 
 add_library(libpattern4gpu Pattern4GPUModule.cc
                            Pattern4GPUcomputeCqsAndVector.cc 
@@ -90,7 +90,7 @@ target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_COMM_DEVICE_AWARE)
 if(WANT_KOKKOS)
 target_compile_options(libpattern4gpu PUBLIC -fopenmp)
 endif()
-target_link_libraries(libpattern4gpu PUBLIC libgeomenv libcartesian libaccenv libmsgpass)
+target_link_libraries(libpattern4gpu PUBLIC arcane_materials libgeomenv libcartesian libaccenv libmsgpass)
 
 # Pour la gestion des accélérateurs et des sources à compiler avec le
 # compilateur pour accélérateur

@@ -309,28 +309,28 @@ class MultiEnvCellViewIn {
 // TEST
 // Structure pour gérer les all env cells sur gpu, à brancher dans Arcane
 struct AllCell2AllEnvCell_P4GPU {
-  explicit AllCell2AllEnvCell_P4GPU(IMeshMaterialMng* mm, IMemoryAllocator* alloc)
-  : m_envcell_mvis(nullptr), m_envcell_nb_env(nullptr)
+  ARCCORE_HOST_DEVICE AllCell2AllEnvCell_P4GPU() : m_envcell_mvis(nullptr), m_envcell_nb_env(nullptr) {}
+
+  void init(IMeshMaterialMng* mm, IMemoryAllocator* alloc)
   {
     Int32 nb_all_cells(mm->mesh()->allCells().size());
-    m_envcell_mvis = reinterpret_cast<MatVarIndex**>(alloc->allocate(sizeof(MatVarIndex*) * nb_all_cells));
+    m_envcell_mvis = reinterpret_cast<ComponentItemLocalId**>(alloc->allocate(sizeof(ComponentItemLocalId*) * nb_all_cells));
     m_envcell_nb_env = reinterpret_cast<Int32*>(alloc->allocate(sizeof(Int32) * nb_all_cells));
  
     CellToAllEnvCellConverter all_env_cell_converter(mm);
     ENUMERATE_CELL(icell, mm->mesh()->allCells())
     {
-      Cell cell = * icell;
-      Integer cid = cell.localId();
-      AllEnvCell all_env_cell = all_env_cell_converter[cell];
+      Int32 cid(icell->itemLocalId());
+      AllEnvCell all_env_cell(all_env_cell_converter[CellLocalId(cid)]);
       m_envcell_mvis[cid] = nullptr;
       Int32 nb_env(all_env_cell.nbEnvironment());
       m_envcell_nb_env[cid] = nb_env;
       if (nb_env) {
-        m_envcell_mvis[cid] = reinterpret_cast<MatVarIndex*>(alloc->allocate(sizeof(MatVarIndex) * nb_env));
+        m_envcell_mvis[cid] = reinterpret_cast<ComponentItemLocalId*>(alloc->allocate(sizeof(ComponentItemLocalId) * nb_env));
         Int32 i(0);
         ENUMERATE_CELL_ENVCELL(ienvcell,all_env_cell) {
           EnvCell ev = *ienvcell;
-          m_envcell_mvis[cid][i] = ev._varIndex();
+          m_envcell_mvis[cid][i] = ComponentItemLocalId(ev._varIndex());
           ++i;
         }
       }
@@ -347,8 +347,8 @@ struct AllCell2AllEnvCell_P4GPU {
     std::cout << std::endl;
     */
   }
-  MatVarIndex** m_envcell_mvis;
-  Int32*        m_envcell_nb_env;
+  ComponentItemLocalId** m_envcell_mvis;
+  Int32*                 m_envcell_nb_env;
 };
 
 // TEST
@@ -356,8 +356,8 @@ struct AllCell2AllEnvCell_P4GPU {
 struct AllCell2AllEnvCellAlter {
   struct AllCell2AllEnvCellAlterInternal {
     AllCell2AllEnvCellAlterInternal() : m_mvis(nullptr), m_size(0) {}
-    MatVarIndex* m_mvis;
-    Int32        m_size;
+    ComponentItemLocalId* m_mvis;
+    Int32                 m_size;
   };
 
   explicit AllCell2AllEnvCellAlter(IMeshMaterialMng* mm, IMemoryAllocator* alloc)
@@ -376,11 +376,11 @@ struct AllCell2AllEnvCellAlter {
       Int32 nb_env(all_env_cell.nbEnvironment());
       m_allcellenvcell[cid].m_size = nb_env;
       if (nb_env) {
-        m_allcellenvcell[cid].m_mvis = reinterpret_cast<MatVarIndex*>(alloc->allocate(sizeof(MatVarIndex) * nb_env));
+        m_allcellenvcell[cid].m_mvis = reinterpret_cast<ComponentItemLocalId*>(alloc->allocate(sizeof(ComponentItemLocalId) * nb_env));
         Int32 i(0);
         ENUMERATE_CELL_ENVCELL(ienvcell,all_env_cell) {
           EnvCell ev = *ienvcell;
-          m_allcellenvcell[cid].m_mvis[i] = ev._varIndex();
+          m_allcellenvcell[cid].m_mvis[i] = ComponentItemLocalId(ev._varIndex());
           ++i;
         }
       }
