@@ -165,14 +165,6 @@ class Pattern4GPUModule
 
   // TEST, pour amortir cout des allocs pour GPU
   BufAddrMng* m_buf_addr_mng=nullptr;
-
-  // TEST structure de connectivité all_cells->all_envcells
-  UniqueArray<UniqueArray<ComponentItemLocalId>> m_all_cells_2_env_cells;
-  Span<Span<ComponentItemLocalId>> m_all_cells_envcells_span;
-  
-  AllCell2AllEnvCell_P4GPU* m_all_cells_2_all_env_cells;
-  AllCell2AllEnvCellAlter* m_all_cells_2_all_env_cells_alter;
-  Span<Span<ComponentItemLocalId>> m_all_cells_envcells_span2;
 };
 
 #endif
