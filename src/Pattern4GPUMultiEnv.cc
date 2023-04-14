@@ -968,11 +968,6 @@ partialAndMean4() {
       ENUMERATE_CELL_ALLENVCELL(iev, cid, cell2allenvcell) {
         sum2 += in_menv_var2[*iev]/in_menv_var2_g[cid];
       }
-      // Le for est plus performant (en tout cas par rapport à l'ENUMERATE ci-dessus avec Arcane en mode CHECK
-      /*for (Int32 i(0); i < ac2aec[cid].size(); ++i) {
-        const auto& mvi(ac2aec[cid][i]);
-        sum2 += in_menv_var2[mvi]/in_menv_var2_g[cid];
-      }*/
 
       Real sum3=0.;
       ENUMERATE_CELL_ALLENVCELL(iev, cid, cell2allenvcell) {
@@ -980,13 +975,6 @@ partialAndMean4() {
         out_menv_var3[*iev] = contrib2 * in_menv_var3_g[cid];
         sum3 += contrib2;
       }
-      /*
-      for (Int32 i(0); i < ac2aec[cid].size(); ++i) {
-        const auto& mvi(ac2aec[cid][i]);
-        Real contrib2 = (in_menv_var2[mvi]/in_menv_var2_g[cid])*(sum2+1.);
-        out_menv_var3[mvi] = contrib2 * in_menv_var3_g[cid];
-        sum3 += contrib2;
-      }*/
 
       out_menv_var1_g[cid] = sum3;
     };
