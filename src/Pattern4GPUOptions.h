@@ -80,6 +80,13 @@ enum eComputeCqsVectorVersion {
   CCVV_kokkos //! Implémentation Kokkos
 };
 
+/*! \brief Définit les implémentations de ComputeAndPrintError
+ */
+enum eComputeAndPrintError {
+  CPEV_ori = 0, //! Version CPU d'origine
+  CPEV_arcgpu_v1 //! Implémentation API GPU Arcane version 1
+};
+
 /*! \brief Définit les implémentations de InitMEnvVar
  */
 enum eInitMEnvVar {
