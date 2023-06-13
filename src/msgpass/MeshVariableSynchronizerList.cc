@@ -210,7 +210,9 @@ MeshVariableSynchronizerList::~MeshVariableSynchronizerList() {
   for(auto v : m_vars) {
     delete v;
   }
-  m_buf_addr_mng->reset();
+  if (m_buf_addr_mng) {
+    m_buf_addr_mng->reset();
+  }
 }
 
 //! Add a multi-mat variable into the list of variables to synchronize
