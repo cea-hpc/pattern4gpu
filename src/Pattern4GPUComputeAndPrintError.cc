@@ -40,6 +40,29 @@ _computeAndPrintError_Vori()
 }
 
 /*---------------------------------------------------------------------------*/
+/* Implémentation API GPU Arcane version 0 (sans gestion d'erreur)           */
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+_computeAndPrintError_Varcgpu_v0() 
+{
+  PROF_ACC_BEGIN(__FUNCTION__);
+  
+  auto queue = m_acc_env->newQueue();
+  auto command = makeCommand(queue);
+
+  auto in_cell_arr2 = ax::viewIn(command, m_cell_arr2);
+  auto inout_cell_arr1 = ax::viewInOut(command, m_cell_arr1);
+
+  command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
+    inout_cell_arr1[cid] = inout_cell_arr1[cid] - in_cell_arr2[cid];
+  };
+  
+  PROF_ACC_END;
+}
+
+
+/*---------------------------------------------------------------------------*/
 /* Implémentation API GPU Arcane version 1                                   */
 /*---------------------------------------------------------------------------*/
 
@@ -91,6 +114,7 @@ computeAndPrintError() {
 
   switch (options()->getComputeAndPrintErrorVersion()) {
     case CPEV_ori: _computeAndPrintError_Vori(); break;
+    case CPEV_arcgpu_v0: _computeAndPrintError_Varcgpu_v0(); break;
     case CPEV_arcgpu_v1: _computeAndPrintError_Varcgpu_v1(); break;
     default: break;
   };

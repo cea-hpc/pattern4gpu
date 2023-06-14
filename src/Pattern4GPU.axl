@@ -336,6 +336,7 @@
   <enumeration name="compute-and-print-error-version" type="eComputeAndPrintError" default="ori">
     <description>Choix version implémentation ComputeAndPrintError </description>
     <enumvalue name="ori" genvalue="CPEV_ori" />
+    <enumvalue name="arcgpu_v0" genvalue="CPEV_arcgpu_v0" />
     <enumvalue name="arcgpu_v1" genvalue="CPEV_arcgpu_v1" />
   </enumeration>
 
