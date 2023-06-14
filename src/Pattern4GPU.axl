@@ -207,6 +207,7 @@
   <entry-point method-name="updateTensor" name="UpdateTensor" where="compute-loop" property="none" />
   <entry-point method-name="updateVectorFromTensor" name="UpdateVectorFromTensor" where="compute-loop" property="none" />
   <entry-point method-name="computeCqsAndVector" name="ComputeCqsAndVector" where="compute-loop" property="none" />
+  <entry-point method-name="computeAndPrintError" name="ComputeAndPrintError" where="compute-loop" property="none" />
   <entry-point method-name="testCartesian" name="TestCartesian" where="compute-loop" property="none" />
   <entry-point method-name="benchCartesian" name="BenchCartesian" where="compute-loop" property="none" />
   <entry-point method-name="computeVol" name="ComputeVol" where="compute-loop" property="none" />
@@ -224,6 +225,9 @@
 
   <!-- - - - - - visu-m-env-var - - - - -->
   <simple name="visu-m-env-var" type="bool" default="false"><description>Alloue et calcule <em>MEnvVar*Visu</em> pour la visualisation multi-env des variables MEnvVar{1|2|3}.</description></simple>
+
+  <!-- - - - - - threshold-error - - - - -->
+  <simple name="threshold-error" type="real" default="0."><description>Valeur seuil en deça une erreur est déclenchée</description></simple>
 
   <!-- - - - - init-tensor-version - - - - -->
   <enumeration name="init-tensor-version" type="eInitTensorVersion" default="ori">
@@ -326,6 +330,13 @@
     <enumvalue name="overlap_evqueue" genvalue="VS_overlap_evqueue" />
     <enumvalue name="overlap_evqueue_d" genvalue="VS_overlap_evqueue_d" />
     <enumvalue name="overlap_iqueue"  genvalue="VS_overlap_iqueue" />
+  </enumeration>
+
+  <!-- - - - - compute-and-print-error-version - - - - -->
+  <enumeration name="compute-and-print-error-version" type="eComputeAndPrintError" default="ori">
+    <description>Choix version implémentation ComputeAndPrintError </description>
+    <enumvalue name="ori" genvalue="CPEV_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="CPEV_arcgpu_v1" />
   </enumeration>
 
   <!-- - - - - init-menv-var-version - - - - -->

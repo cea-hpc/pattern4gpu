@@ -70,6 +70,7 @@ class Pattern4GPUModule
   void updateTensor() override; // UpdateTensor
   void updateVectorFromTensor() override; // UpdateVectorFromTensor
   void computeCqsAndVector() override; // ComputeCqsAndVector
+  void computeAndPrintError() override; // ComputeAndPrintError
 
   void testCartesian() override; // TestCartesian
   void benchCartesian() override; // BenchCartesian
@@ -95,6 +96,10 @@ class Pattern4GPUModule
   void _computeCqsAndVector_Varcgpu_v5();  // Arcane GPU optimisé par GG
   void _computeCqsAndVector_Vkokkos();
   void _dumpNumArrayCqs();
+
+  void _printError(VariableCellReal cell_arr, const Cell& cell, Real threshold_error);
+  void _computeAndPrintError_Vori();
+  void _computeAndPrintError_Varcgpu_v1();
 
   void _testCell2Cell();
   void _testNode2Node();

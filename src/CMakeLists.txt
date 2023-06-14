@@ -16,6 +16,7 @@ add_library(libpattern4gpu Pattern4GPUModule.cc
                            Pattern4GPUcomputeCqsAndVector.cc 
                            Pattern4GPUupdateVectorFromTensor.cc 
                            Pattern4GPUupdateTensor.cc 
+                           Pattern4GPUComputeAndPrintError.cc 
                            Pattern4GPUTestCartesian.cc 
                            Pattern4GPUBenchCartesian.cc 
                            Pattern4GPUCartesian.cc 
@@ -98,6 +99,7 @@ arcane_accelerator_add_source_files(Pattern4GPUModule.cc )
 arcane_accelerator_add_source_files(Pattern4GPUcomputeCqsAndVector.cc )
 arcane_accelerator_add_source_files(Pattern4GPUupdateVectorFromTensor.cc )
 arcane_accelerator_add_source_files(Pattern4GPUupdateTensor.cc )
+arcane_accelerator_add_source_files(Pattern4GPUComputeAndPrintError.cc )
 arcane_accelerator_add_source_files(Pattern4GPUTestCartesian.cc )
 arcane_accelerator_add_source_files(Pattern4GPUBenchCartesian.cc )
 arcane_accelerator_add_source_files(Pattern4GPUCartesian.cc )

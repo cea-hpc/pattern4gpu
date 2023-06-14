@@ -8,6 +8,7 @@ p4gpu_partial_impure_only        :  maj de valeurs partielles sur les mailles mi
 p4gpu_partial_mean               :  calculs valeurs partielles sur mailles pures et mixtes puis maj grandeur moyenne (1 seul pt d'entrée)
 p4gpu_partial_mean4              :  combinaison sommes grandeurs partielles pour maj grandeurs moyennes (1 seul pt d'entrée)
 p4gpu_partial_only               :  maj de valeurs partielles sur les mailles pures et mixtes (1 seul pt d'entrée)
+p4gpu_print_error                :  calcul et gestion d'une erreur (1 seul pt d'entrée)
 p4gpu_test_cartesian             :  tests sur des acces par stencil directionnel
 p4gpu_update_tensor              :  maj tenseur en multi-env (1 seul pt d'entrée)
 p4gpu_update_vector_from_tensor  :  utilisation du tenseur pour maj vecteur (1 seul pt d'entrée)
