@@ -99,6 +99,7 @@ class Pattern4GPUModule
 
   void _printError(VariableCellReal cell_arr, const Cell& cell, Real threshold_error);
   void _computeAndPrintError_Vori();
+  void _computeAndPrintError_Varcgpu_v0();
   void _computeAndPrintError_Varcgpu_v1();
 
   void _testCell2Cell();
