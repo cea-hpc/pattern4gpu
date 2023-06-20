@@ -65,6 +65,10 @@ accBuild()
 
   m_acc_env = SingletonIAccEnv::accEnv(subDomain());
 
+  // active la fonctionnalité des allenvcell pour les runcommand
+  // également possible de le faire via la variable d'environnement ARCANE_ALLENVCELL_FOR_RUNCOMMAND
+  m_mesh_material_mng->enableCellToAllEnvCellForRunCommand(true);
+
   PROF_ACC_END;
 }
 

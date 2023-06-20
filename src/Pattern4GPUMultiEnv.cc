@@ -733,14 +733,15 @@ partialAndMean() {
 void Pattern4GPUModule::
 partialAndMean4() {
   PROF_ACC_BEGIN(__FUNCTION__);
-
   if (options()->getPartialAndMean4Version() == PM4V_ori)
   {
     debug() << "PM4V_ori";
+
     Integer nb_env = m_mesh_material_mng->environments().size();
     RealUniqueArray all_part2(nb_env);
 
     CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
+
     ENUMERATE_CELL(icell, allCells()) {
       Cell cell = * icell;
       AllEnvCell all_env_cell = allenvcell_converter[cell];
@@ -961,9 +962,10 @@ partialAndMean4() {
     auto in_menv_var3_g  = ax::viewIn(command, m_menv_var3.globalVariable());
     auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
 
-    Cell2AllEnvCellAccessor cell2allenvcell(m_mesh_material_mng);
-
+    CellToAllEnvCellAccessor cell2allenvcell(m_mesh_material_mng);
+    
     command << RUNCOMMAND_ENUMERATE_CELL_ALLENVCELL(cell2allenvcell, cid, allCells()) {
+
       Real sum2=0.;
       ENUMERATE_CELL_ALLENVCELL(iev, cid, cell2allenvcell) {
         sum2 += in_menv_var2[*iev]/in_menv_var2_g[cid];
