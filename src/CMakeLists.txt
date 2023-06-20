@@ -51,8 +51,8 @@ add_library(libmsgpass msgpass/VarSyncMng.cc
                        msgpass/SyncBuffers.cc
                        msgpass/SyncEnvIndexes.cc
                        msgpass/MeshVariableSynchronizerList.cc
-	                     msgpass/Algo1SyncDataD.cc
-	                     msgpass/Algo1SyncDataDH.cc
+                       msgpass/Algo1SyncDataD.cc
+                       msgpass/Algo1SyncDataDH.cc
                        msgpass/VarSyncAlgo1.cc)
 target_include_directories(libmsgpass PUBLIC .)
 target_link_libraries(libmsgpass PUBLIC arcane_materials)
