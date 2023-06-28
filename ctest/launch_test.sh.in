@@ -1,0 +1,40 @@
+#!/bin/bash
+
+cpu_arc_file="@P4G_TESTS@/@TEST_DIR@/@CPU_TEST_NAME@.arc"
+cpu_log_file="@OUTPUT_DIR@/@CPU_TEST_NAME@.log"
+
+gpu_arc_file="@P4G_TESTS@/@TEST_DIR@/@CPU_TEST_NAME@.arc"
+gpu_log_file="@OUTPUT_DIR@/gpu_@GPU_TEST_NAME@.log"
+
+echo "Write CPU... (listing in $cpu_log_file)"
+STDENV_VERIF=WRITE @P4G_EXE@ -A,MaxIteration=@MAX_ITER@ "$cpu_arc_file" > "$cpu_log_file"
+if [ $? -ne 0 ]; then
+  return 1
+fi
+
+echo "Read GPU... (listing in $gpu_log_file)"
+STDENV_VERIF=READ @P4G_EXE@ -A,MaxIteration=@MAX_ITER@ -A,AcceleratorRuntime=cuda "$gpu_arc_file" > "$gpu_log_file"
+if [ $? -ne 0 ]; then
+  return 1
+fi
+
+vdiff_file="@OUTPUT_DIR@/vdiff.log"
+
+grep -nr "VDIFF: Variable" "$gpu_log_file" > "$vdiff_file"
+if [ $? -ne 0 ]; then
+  return 1
+fi
+
+aaa=$(cat "$vdiff_file")
+
+while IFS= read -r line; do
+  echo "Différence dans le listing : $line"
+  j=$(echo "$line" | grep -oP "[0-9]+\.+[0-9]+e?\-?[0-9]*$")
+  echo "Abs rdiff récupéré : $j"
+  r=$(awk -v a="$j" -v b="@EPSILON@" 'BEGIN{print (a>b)?1:0}')
+  echo "$j > @EPSILON@ ? : $r"
+  if [ $r -ne 0 ]; then
+    echo "Différence détectée"
+    return 1
+  fi
+done < "$vdiff_file"

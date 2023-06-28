@@ -1,0 +1,5 @@
+{
+  "cpu_vs_gpu_test_list" : [
+    { "test-dir" : "p4gpu_partial_mean4", "cpu-test-name" : "PartialMean410x10x10", "gpu-test-name" : "PartialMean410x10x10_arcgpu_v3", "max-iter" : "10", "epsilon" : "1.4567427561e-6"}
+  ]
+}
