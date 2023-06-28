@@ -22,21 +22,26 @@ set(OUTPUT_DIR "${ArcaneSamples_BINARY_DIR}/output")
 # Get test names and number of cores from JSON file
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/ctest/test_list.json" TESTLIST_JSON)
 
-string(JSON NB_TEST LENGTH "${TESTLIST_JSON}" "cpu_vs_gpu_test_list")
+string(JSON NB_TEST LENGTH "${TESTLIST_JSON}" "write_vs_read_test_list")
 math(EXPR NB_TEST "${NB_TEST} - 1")
 
 foreach(X RANGE ${NB_TEST})
-  string(JSON TEST_DIR GET "${TESTLIST_JSON}" "cpu_vs_gpu_test_list" ${X} "test-dir")
-  string(JSON CPU_TEST_NAME GET "${TESTLIST_JSON}" "cpu_vs_gpu_test_list" ${X} "cpu-test-name")
-  string(JSON GPU_TEST_NAME GET "${TESTLIST_JSON}" "cpu_vs_gpu_test_list" ${X} "gpu-test-name")
-  string(JSON MAX_ITER GET "${TESTLIST_JSON}" "cpu_vs_gpu_test_list" ${X} "max-iter")
-  string(JSON EPSILON GET "${TESTLIST_JSON}" "cpu_vs_gpu_test_list" ${X} "epsilon")
+  string(JSON TEST_DIR GET "${TESTLIST_JSON}" "write_vs_read_test_list" ${X} "test-dir")
 
-  set(TEST_NAME "${CPU_TEST_NAME}:CPU_write_and_GPU_read")
+  string(JSON WRITE_TEST_NAME GET "${TESTLIST_JSON}" "write_vs_read_test_list" ${X} "write-test-name")
+  string(JSON WRITE_ARCANE_PARAM GET "${TESTLIST_JSON}" "write_vs_read_test_list" ${X} "write-arcane-param")
 
-  message(STATUS "P4G -- CPU_VS_GPU: CPU_TEST_NAME=${CPU_TEST_NAME} GPU_TEST_NAME=${GPU_TEST_NAME} MAX_ITER=${MAX_ITER}")
+  string(JSON READ_TEST_NAME GET "${TESTLIST_JSON}" "write_vs_read_test_list" ${X} "read-test-name")
+  string(JSON READ_ARCANE_PARAM GET "${TESTLIST_JSON}" "write_vs_read_test_list" ${X} "read-arcane-param")
 
-  configure_file(ctest/launch_test.sh.in ${CMAKE_CURRENT_BINARY_DIR}/test_scripts/cpu_vs_gpu/launch_${CPU_TEST_NAME}.sh @ONLY)
-  add_test(NAME ${TEST_NAME} COMMAND /bin/sh ${CMAKE_CURRENT_BINARY_DIR}/test_scripts/cpu_vs_gpu/launch_${CPU_TEST_NAME}.sh)
+  string(JSON MAX_ITER GET "${TESTLIST_JSON}" "write_vs_read_test_list" ${X} "max-iter")
+  string(JSON EPSILON GET "${TESTLIST_JSON}" "write_vs_read_test_list" ${X} "epsilon")
+
+  set(TEST_NAME "${WRITE_TEST_NAME}:compare_WRITE_and_READ")
+
+  message(STATUS "P4G -- WRITE_VS_READ: WRITE_TEST_NAME=${WRITE_TEST_NAME} READ_TEST_NAME=${READ_TEST_NAME} MAX_ITER=${MAX_ITER}")
+
+  configure_file(ctest/launch_test.sh.in ${CMAKE_CURRENT_BINARY_DIR}/test_scripts/write_vs_read/launch_${WRITE_TEST_NAME}.sh @ONLY)
+  add_test(NAME ${TEST_NAME} COMMAND /bin/sh ${CMAKE_CURRENT_BINARY_DIR}/test_scripts/write_vs_read/launch_${WRITE_TEST_NAME}.sh)
 
 endforeach()

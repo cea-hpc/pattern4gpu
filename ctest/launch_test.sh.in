@@ -1,31 +1,32 @@
 #!/bin/bash
 
-cpu_arc_file="@P4G_TESTS@/@TEST_DIR@/@CPU_TEST_NAME@.arc"
-cpu_log_file="@OUTPUT_DIR@/@CPU_TEST_NAME@.log"
+write_arc_file="@P4G_TESTS@/@TEST_DIR@/@WRITE_TEST_NAME@.arc"
+write_log_file="@OUTPUT_DIR@/write_@WRITE_TEST_NAME@.log"
 
-gpu_arc_file="@P4G_TESTS@/@TEST_DIR@/@CPU_TEST_NAME@.arc"
-gpu_log_file="@OUTPUT_DIR@/gpu_@GPU_TEST_NAME@.log"
-
-echo "Write CPU... (listing in $cpu_log_file)"
-STDENV_VERIF=WRITE @P4G_EXE@ -A,MaxIteration=@MAX_ITER@ "$cpu_arc_file" > "$cpu_log_file"
-if [ $? -ne 0 ]; then
-  return 1
-fi
-
-echo "Read GPU... (listing in $gpu_log_file)"
-STDENV_VERIF=READ @P4G_EXE@ -A,MaxIteration=@MAX_ITER@ -A,AcceleratorRuntime=cuda "$gpu_arc_file" > "$gpu_log_file"
-if [ $? -ne 0 ]; then
-  return 1
-fi
+read_arc_file="@P4G_TESTS@/@TEST_DIR@/@READ_TEST_NAME@.arc"
+read_log_file="@OUTPUT_DIR@/read_@READ_TEST_NAME@.log"
 
 vdiff_file="@OUTPUT_DIR@/vdiff.log"
 
-grep -nr "VDIFF: Variable" "$gpu_log_file" > "$vdiff_file"
+mkdir -p "@OUTPUT_DIR@"
+
+echo "Write... (listing in $write_log_file)"
+STDENV_VERIF=WRITE @P4G_EXE@ -A,MaxIteration=@MAX_ITER@ @WRITE_ARCANE_PARAM@ "$write_arc_file" > "$write_log_file"
 if [ $? -ne 0 ]; then
   return 1
 fi
 
-aaa=$(cat "$vdiff_file")
+echo "Read... (listing in $read_log_file)"
+STDENV_VERIF=READ @P4G_EXE@ -A,MaxIteration=@MAX_ITER@ @READ_ARCANE_PARAM@ "$read_arc_file" > "$read_log_file"
+if [ $? -ne 0 ]; then
+  return 1
+fi
+
+grep -nr "VDIFF: Variable" "$read_log_file" > "$vdiff_file"
+if [ $? -ne 0 ]; then
+  echo "Pas de différences"
+  return 0
+fi
 
 while IFS= read -r line; do
   echo "Différence dans le listing : $line"
