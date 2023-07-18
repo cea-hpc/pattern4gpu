@@ -338,6 +338,8 @@
     <enumvalue name="ori" genvalue="CPEV_ori" />
     <enumvalue name="arcgpu_v0" genvalue="CPEV_arcgpu_v0" />
     <enumvalue name="arcgpu_v1" genvalue="CPEV_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2" genvalue="CPEV_arcgpu_v2" />
+    <enumvalue name="arcgpu_v3" genvalue="CPEV_arcgpu_v3" />
   </enumeration>
 
   <!-- - - - - init-menv-var-version - - - - -->

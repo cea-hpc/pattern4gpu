@@ -85,7 +85,9 @@ enum eComputeCqsVectorVersion {
 enum eComputeAndPrintError {
   CPEV_ori = 0, //! Version CPU d'origine
   CPEV_arcgpu_v0, //! Implémentation API GPU Arcane version 0 (sans gestion d'erreur)
-  CPEV_arcgpu_v1  //! Implémentation API GPU Arcane version 1
+  CPEV_arcgpu_v1,  //! Implémentation API GPU Arcane version 1
+  CPEV_arcgpu_v2,  //! Implémentation API GPU Arcane version 2
+  CPEV_arcgpu_v3  //! Implémentation API GPU Arcane version 3
 };
 
 /*! \brief Définit les implémentations de InitMEnvVar

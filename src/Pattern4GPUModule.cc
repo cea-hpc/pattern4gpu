@@ -40,7 +40,8 @@ Pattern4GPUModule(const ModuleBuildInfo& mbi)
   m_compyy(MaterialVariableBuildInfo(
         m_mesh_material_mng, "Compyy", IVariable::PTemporary | IVariable::PExecutionDepend)),
   m_tmp1(VariableBuildInfo(mesh(), "Tmp1", IVariable::PTemporary | IVariable::PExecutionDepend)),
-  m_kokkos_wrapper(nullptr)
+  m_kokkos_wrapper(nullptr),
+  min_cid_on_err(MemoryAllocationOptions(platform::getAcceleratorHostMemoryAllocator(),eMemoryLocationHint::MainlyHost),1) 
 {
 }
 
