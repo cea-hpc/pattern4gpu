@@ -101,6 +101,8 @@ class Pattern4GPUModule
   void _computeAndPrintError_Vori();
   void _computeAndPrintError_Varcgpu_v0();
   void _computeAndPrintError_Varcgpu_v1();
+  void _computeAndPrintError_Varcgpu_v2();
+  void _computeAndPrintError_Varcgpu_v3();
 
   void _testCell2Cell();
   void _testNode2Node();
@@ -165,6 +167,7 @@ class Pattern4GPUModule
 
   // TEST, pour amortir cout des allocs pour GPU
   BufAddrMng* m_buf_addr_mng=nullptr;
+  UniqueArray<Integer> min_cid_on_err;
 };
 
 #endif
