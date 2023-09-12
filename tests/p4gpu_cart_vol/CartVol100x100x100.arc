@@ -19,4 +19,17 @@
     </meshgenerator>
   </mesh>
 
+  <acc-env-default>
+    <acc-mem-advise>true</acc-mem-advise>
+  </acc-env-default>
+
+  <!-- Configuration du module Pattern4GPU -->
+  <pattern4-g-p-u>
+
+    <visu-m-env-var>false</visu-m-env-var>
+    <!-- <compute-vol-version>ori</compute-vol-version> -->
+    <!-- <compute-vol-version>arcgpu_v1</compute-vol-version> -->
+    <compute-vol-version>arcgpu_v2</compute-vol-version>
+  </pattern4-g-p-u>
+
 </case>

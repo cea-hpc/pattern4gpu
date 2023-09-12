@@ -11,6 +11,8 @@
 #include "cartesian/CartesianMeshT.h"
 #include "arcane/IParallelMng.h"
 
+#include "arcane/cartesianmesh/CellDirectionMng.h"
+
 #define P4GPU_PROFILING // Pour activer le profiling
 #include "P4GPUTimer.h"
 
@@ -33,6 +35,10 @@ initCartMesh() {
 
     m_cartesian_mesh = CartesianInterface::ICartesianMesh::getReference(mesh(), true);
     m_cartesian_mesh->computeDirections();
+
+    // On force l'implémentation Arcane::
+    m_arc_cartesian_mesh = Arcane::arcaneCreateCartesianMesh(mesh());
+    m_arc_cartesian_mesh->computeDirections();
 
   } else {
     info() << "Maillage non cartésien";
@@ -283,6 +289,173 @@ _computeVolDir(const Integer dir, const Real dt) {
   PROF_ACC_END;
 }
 
+void Pattern4GPUModule::
+_computeVol_Varcgpu_v2() 
+{
+  PROF_ACC_BEGIN(__FUNCTION__);
+  P4GPU_DECLARE_TIMER(subDomain(), Loop_Cell1); P4GPU_START_TIMER(Loop_Cell1);
+
+  Real dt=globalDeltaT();
+  auto rqueue = m_acc_env->refQueueAsync();
+
+  for(Integer dir=0 ; dir<mesh()->dimension() ; ++dir) 
+  {
+    auto cell_dm = m_arc_cartesian_mesh->cellDirection(dir);
+    auto fnc = m_acc_env->connectivityView().faceNode();
+
+    Integer dir_perp_0(1), dir_perp_1(2);
+    switch (dir) {
+      case 0: dir_perp_0 = 1; dir_perp_1 = 2; break;
+      case 1: dir_perp_0 = 0; dir_perp_1 = 2; break;
+      case 2: dir_perp_0 = 0; dir_perp_1 = 1; break;
+    }
+
+    const Integer nb_node_on_face = 1<<(mesh()->dimension()-1);
+    const Real nb_node_inverse = 1.0 / nb_node_on_face;
+
+    // Previous (left)
+    {
+      auto command = makeCommand(rqueue.get());
+
+      // Pour l'instant, on ne se préoccupe pas du rangement des données
+      auto in_cart_space_step = ax::viewIn(command, m_cart_space_step);
+      auto in_node_velocity   = ax::viewIn(command, m_node_velocity );
+      auto in_def_node_coord  = ax::viewIn(command, m_def_node_coord);
+      auto in_car_node_coord  = ax::viewIn(command, m_car_node_coord);
+
+      auto out_dir_trans_area_left  = ax::viewOut(command, m_dir_trans_area_left);
+      auto out_face_velocity_left   = ax::viewOut(command, m_face_velocity_left);
+      auto out_dir_def_coord_left   = ax::viewOut(command, m_dir_def_coord_left);
+      auto out_dir_car_coord_left   = ax::viewOut(command, m_dir_car_coord_left);
+      auto out_dir_vol1_left        = ax::viewOut(command, m_dir_vol1_left);
+      auto out_dir_vol2_left        = ax::viewOut(command, m_dir_vol2_left);
+
+      command.addKernelName("prev") << RUNCOMMAND_ENUMERATE(Cell, cid, cell_dm.allCells()) {
+
+	// calcul de l'aire transversale
+	// TODO : utiliser la vue par direction
+	const Real trans_area = in_cart_space_step[cid][dir_perp_0]
+	  * in_cart_space_step[cid][dir_perp_1];
+
+	out_dir_trans_area_left[cid] = trans_area;
+
+	// Modification de l'aire transversale
+	Real face_velocity = 0.;
+	Real def_coord = 0.;
+	Real car_coord = 0.;
+
+	// On boucle sur les noeuds de la face "previous" transverse
+	DirCellFaceLocalId cf(cell_dm.dirCellFaceId(cid));
+	FaceLocalId pfid(cf.previousId());
+	for(NodeLocalId nid : fnc.nodes(pfid)) {
+
+	  // TODO : utiliser la vue par direction
+	  face_velocity += in_node_velocity [nid][dir];
+	  def_coord     += in_def_node_coord[nid][dir];
+	  car_coord     += in_car_node_coord[nid][dir];
+	}
+	face_velocity *= nb_node_inverse;
+	def_coord *= nb_node_inverse;
+	car_coord *= nb_node_inverse;
+
+	out_face_velocity_left[cid] = face_velocity;
+	out_dir_def_coord_left[cid] = def_coord;
+	out_dir_car_coord_left[cid] = car_coord;
+
+	Real dir_vol1 = dt * face_velocity * trans_area;
+	out_dir_vol1_left[cid] = dir_vol1;
+	out_dir_vol2_left[cid] = dir_vol1;
+      };
+    }
+
+    // Next (right)
+    {
+      auto command = makeCommand(rqueue.get());
+
+      // Pour l'instant, on ne se préoccupe pas du rangement des données
+      auto in_cart_space_step = ax::viewIn(command, m_cart_space_step);
+      auto in_node_velocity   = ax::viewIn(command, m_node_velocity );
+      auto in_def_node_coord  = ax::viewIn(command, m_def_node_coord);
+      auto in_car_node_coord  = ax::viewIn(command, m_car_node_coord);
+
+      auto inout_dir_trans_area_left      = ax::viewInOut(command, m_dir_trans_area_left);
+      auto inout_dir_trans_area_right     = ax::viewInOut(command, m_dir_trans_area_right);
+      auto inout_face_velocity_left       = ax::viewInOut(command, m_face_velocity_left);
+      auto inout_face_velocity_right      = ax::viewInOut(command, m_face_velocity_right);
+      auto inout_dir_def_coord_left       = ax::viewInOut(command, m_dir_def_coord_left);
+      auto inout_dir_car_coord_left       = ax::viewInOut(command, m_dir_car_coord_left);
+      auto inout_dir_def_coord_right      = ax::viewInOut(command, m_dir_def_coord_right);
+      auto inout_dir_car_coord_right      = ax::viewInOut(command, m_dir_car_coord_right);
+      auto inout_dir_vol1_left            = ax::viewInOut(command, m_dir_vol1_left);
+      auto inout_dir_vol1_right           = ax::viewInOut(command, m_dir_vol1_right);
+      auto inout_dir_vol2_left            = ax::viewInOut(command, m_dir_vol2_left);
+      auto inout_dir_vol2_right           = ax::viewInOut(command, m_dir_vol2_right);
+
+      command.addKernelName("next") << RUNCOMMAND_ENUMERATE(Cell, cid, cell_dm.allCells()) {
+
+	DirCellLocalId cc(cell_dm.dirCellId(cid));
+	CellLocalId ncid{cc.next()}; // La maille apres la cellule courante
+
+	if (!ncid.isNull()) {
+	  // J'ai une maille a ma droite
+	  // J'affecte dans MA valeur de droite la valeur de gauche de ma maille de droite
+	  inout_dir_trans_area_right[cid] = inout_dir_trans_area_left[ncid];
+	  inout_face_velocity_right[cid] = inout_face_velocity_left[ncid];
+	  inout_dir_def_coord_right[cid] = inout_dir_def_coord_left[ncid];
+	  inout_dir_car_coord_right[cid] = inout_dir_car_coord_left[ncid];
+	  inout_dir_vol1_right[cid] = inout_dir_vol1_left[ncid];
+	  inout_dir_vol2_right[cid] = inout_dir_vol2_left[ncid];
+
+	} else {
+	  // Je suis sur la derniere rangee, je calcule
+	  // Acces "next" et grandeurs a droite
+	  // GROS COPIER-COLLER EN REMPLACANT LEFT PAR RIGHT ET EN METTANT +1 POUR NEXT
+	  //
+	  // calcul de l'aire transversale
+	  // TODO : utiliser la vue par direction
+	  const Real trans_area = in_cart_space_step[cid][dir_perp_0]
+	    * in_cart_space_step[cid][dir_perp_1];
+
+	  inout_dir_trans_area_right[cid] = trans_area;
+
+	  // Modification de l'aire transversale
+	  Real face_velocity = 0.;
+	  Real def_coord = 0.;
+	  Real car_coord = 0.;
+
+	  // On boucle sur les noeuds de la face "next" transverse
+	  DirCellFaceLocalId cf(cell_dm.dirCellFaceId(cid));
+	  FaceLocalId pfid(cf.nextId());
+	  for(NodeLocalId nid : fnc.nodes(pfid)) {
+
+	    // TODO : utiliser la vue par direction
+	    face_velocity += in_node_velocity [nid][dir];
+	    def_coord     += in_def_node_coord[nid][dir];
+	    car_coord     += in_car_node_coord[nid][dir];
+	  }
+	  face_velocity *= nb_node_inverse;
+	  def_coord *= nb_node_inverse;
+	  car_coord *= nb_node_inverse;
+
+	  inout_face_velocity_right[cid] = face_velocity;
+	  inout_dir_def_coord_right[cid] = def_coord;
+	  inout_dir_car_coord_right[cid] = car_coord;
+
+	  Real dir_vol1 = dt * face_velocity * trans_area;
+	  inout_dir_vol1_right[cid] = dir_vol1;
+	  inout_dir_vol2_right[cid] = dir_vol1;
+	}
+      };
+    }
+    rqueue->barrier();
+  }
+
+  //rqueue->barrier();
+
+  P4GPU_STOP_TIMER(Loop_Cell1);
+  PROF_ACC_END;
+}
+
 /*---------------------------------------------------------------------------*/
 /* Parcours toutes les directions et appele _computeVolDir                   */
 /*---------------------------------------------------------------------------*/
@@ -291,25 +464,205 @@ computeVol() {
   PROF_ACC_BEGIN(__FUNCTION__);
   Real dt=globalDeltaT();
 
+  if (options()->getComputeVolVersion() == CVOV_ori)
+  {
 //#define SOA
 #ifdef SOA
-  // On recupere les valeurs par direction
-  #define VIEW_IN_DIR_REAL ViewInDirReal_SoA
+    // On recupere les valeurs par direction
+#define VIEW_IN_DIR_REAL ViewInDirReal_SoA
 #else
-  // Vue sur les tableaux en Real3 (AoS)
-  #define VIEW_IN_DIR_REAL ViewInDirReal_AoS
+    // Vue sur les tableaux en Real3 (AoS)
+#define VIEW_IN_DIR_REAL ViewInDirReal_AoS
 #endif
-  Cartesian::FactCartDirectionMng fact_cart_dm(subDomain()->defaultMesh());
-  bool is_cartesian_mesh = fact_cart_dm.isPureCartesianMesh(); 
-  //bool is_cartesian_mesh = false; 
+    Cartesian::FactCartDirectionMng fact_cart_dm(subDomain()->defaultMesh());
+    bool is_cartesian_mesh = fact_cart_dm.isPureCartesianMesh(); 
+    //bool is_cartesian_mesh = false; 
 
-  for(Integer dir=0 ; dir<mesh()->dimension() ; ++dir) {
-    if (is_cartesian_mesh) {
-      _computeVolDir<CartCartesianMeshT, VIEW_IN_DIR_REAL>(dir, dt);
-    } else {
-      _computeVolDir<UnstructCartesianMeshT, VIEW_IN_DIR_REAL>(dir, dt);
+    for(Integer dir=0 ; dir<mesh()->dimension() ; ++dir) {
+      if (is_cartesian_mesh) {
+        _computeVolDir<CartCartesianMeshT, VIEW_IN_DIR_REAL>(dir, dt);
+      } else {
+        _computeVolDir<UnstructCartesianMeshT, VIEW_IN_DIR_REAL>(dir, dt);
+      }
     }
   }
+  else if (options()->getComputeVolVersion() == CVOV_arcgpu_v1)
+  {
+    auto queue = m_acc_env->newQueue();
+
+    using CartesianMeshT = CartCartesianMeshT;
+    using ConnectivityCellFaceNode = typename CartesianMeshT::ConnectivityCellFaceNode;
+
+    Cartesian::FactCartDirectionMng cartesian_mesh(mesh());
+    CartesianMeshT cart_mesh_t(m_cartesian_mesh);
+   
+    for(Integer dir=0 ; dir<mesh()->dimension() ; ++dir) 
+    {
+      auto cell_dm = cartesian_mesh.cellDirection(dir);
+      auto c2cid_stm = cell_dm.cell2CellIdStencil();
+      auto cell_group = cell_dm.allCells();
+
+      Integer dir_perp_0(1), dir_perp_1(2);
+      switch (dir) {
+        case 0: dir_perp_0 = 1; dir_perp_1 = 2; break;
+        case 1: dir_perp_0 = 0; dir_perp_1 = 2; break;
+        case 2: dir_perp_0 = 0; dir_perp_1 = 1; break;
+      }
+
+      ConnectivityCellFaceNode&& cart_conn_cfn = cart_mesh_t.connectivityCellFaceNode(dir);
+
+      const Integer nb_node_on_face = cart_conn_cfn.nbNode();
+      const Real nb_node_inverse = 1.0 / nb_node_on_face;
+
+      // Previous (left)
+      {
+        auto command = makeCommand(queue);
+
+        // Pour l'instant, on ne se préoccupe pas du rangement des données
+        auto in_cart_space_step = ax::viewIn(command, m_cart_space_step);
+        auto in_node_velocity   = ax::viewIn(command, m_node_velocity );
+        auto in_def_node_coord  = ax::viewIn(command, m_def_node_coord);
+        auto in_car_node_coord  = ax::viewIn(command, m_car_node_coord);
+
+        auto out_dir_trans_area_left  = ax::viewOut(command, m_dir_trans_area_left);
+        auto out_face_velocity_left   = ax::viewOut(command, m_face_velocity_left);
+        auto out_dir_def_coord_left   = ax::viewOut(command, m_dir_def_coord_left);
+        auto out_dir_car_coord_left   = ax::viewOut(command, m_dir_car_coord_left);
+        auto out_dir_vol1_left        = ax::viewOut(command, m_dir_vol1_left);
+        auto out_dir_vol2_left        = ax::viewOut(command, m_dir_vol2_left);
+
+        // Pour récupérer les noeuds sur la face "previous" orthogonale à dir sur GPU
+        auto cfn = cart_conn_cfn.cellFace2Node(MS_previous);
+
+        command.addKernelName("prev") << RUNCOMMAND_LOOP(iter, cell_group.loopRanges()) {
+          auto [cid, idx] = c2cid_stm.idIdx(iter);
+
+          // calcul de l'aire transversale
+          // TODO : utiliser la vue par direction
+          const Real trans_area = in_cart_space_step[cid][dir_perp_0]
+            * in_cart_space_step[cid][dir_perp_1];
+
+          out_dir_trans_area_left[cid] = trans_area;
+
+          // Modification de l'aire transversale
+          Real face_velocity = 0.;
+          Real def_coord = 0.;
+          Real car_coord = 0.;
+
+          // On boucle sur les noeuds de la face "previous" transverse
+          NodeLocalId bnid{cfn.baseNode(idx)};
+          for(Integer inode = 0 ; inode < nb_node_on_face ; inode++) {
+            NodeLocalId nid{cfn.node(bnid, inode)};
+
+            // TODO : utiliser la vue par direction
+            face_velocity += in_node_velocity [nid][dir];
+            def_coord     += in_def_node_coord[nid][dir];
+            car_coord     += in_car_node_coord[nid][dir];
+          }
+          face_velocity *= nb_node_inverse;
+          def_coord *= nb_node_inverse;
+          car_coord *= nb_node_inverse;
+
+          out_face_velocity_left[cid] = face_velocity;
+          out_dir_def_coord_left[cid] = def_coord;
+          out_dir_car_coord_left[cid] = car_coord;
+
+          Real dir_vol1 = dt * face_velocity * trans_area;
+          out_dir_vol1_left[cid] = dir_vol1;
+          out_dir_vol2_left[cid] = dir_vol1;
+        };
+      }
+
+      // Next (right)
+      {
+        auto command = makeCommand(queue);
+
+        // Pour l'instant, on ne se préoccupe pas du rangement des données
+        auto in_cart_space_step = ax::viewIn(command, m_cart_space_step);
+        auto in_node_velocity   = ax::viewIn(command, m_node_velocity );
+        auto in_def_node_coord  = ax::viewIn(command, m_def_node_coord);
+        auto in_car_node_coord  = ax::viewIn(command, m_car_node_coord);
+
+        auto inout_dir_trans_area_left      = ax::viewInOut(command, m_dir_trans_area_left);
+        auto inout_dir_trans_area_right     = ax::viewInOut(command, m_dir_trans_area_right);
+        auto inout_face_velocity_left       = ax::viewInOut(command, m_face_velocity_left);
+        auto inout_face_velocity_right      = ax::viewInOut(command, m_face_velocity_right);
+        auto inout_dir_def_coord_left       = ax::viewInOut(command, m_dir_def_coord_left);
+        auto inout_dir_car_coord_left       = ax::viewInOut(command, m_dir_car_coord_left);
+        auto inout_dir_def_coord_right      = ax::viewInOut(command, m_dir_def_coord_right);
+        auto inout_dir_car_coord_right      = ax::viewInOut(command, m_dir_car_coord_right);
+        auto inout_dir_vol1_left            = ax::viewInOut(command, m_dir_vol1_left);
+        auto inout_dir_vol1_right           = ax::viewInOut(command, m_dir_vol1_right);
+        auto inout_dir_vol2_left            = ax::viewInOut(command, m_dir_vol2_left);
+        auto inout_dir_vol2_right           = ax::viewInOut(command, m_dir_vol2_right);
+
+        // Pour récupérer les noeuds sur la face "next" orthogonale à dir sur GPU
+        auto cfn = cart_conn_cfn.cellFace2Node(MS_next);
+
+        command.addKernelName("next") << RUNCOMMAND_LOOP(iter, cell_group.loopRanges()) {
+          auto [cid, idx] = c2cid_stm.idIdx(iter);
+
+          CellLocalId ncid{c2cid_stm.cell(cid,idx).next()}; // La maille apres la cellule courante
+
+          if (!ItemId::null(ncid)) {
+            // J'ai une maille a ma droite
+            // J'affecte dans MA valeur de droite la valeur de gauche de ma maille de droite
+            inout_dir_trans_area_right[cid] = inout_dir_trans_area_left[ncid];
+            inout_face_velocity_right[cid] = inout_face_velocity_left[ncid];
+            inout_dir_def_coord_right[cid] = inout_dir_def_coord_left[ncid];
+            inout_dir_car_coord_right[cid] = inout_dir_car_coord_left[ncid];
+            inout_dir_vol1_right[cid] = inout_dir_vol1_left[ncid];
+            inout_dir_vol2_right[cid] = inout_dir_vol2_left[ncid];
+
+          } else {
+            // Je suis sur la derniere rangee, je calcule
+            // Acces "next" et grandeurs a droite
+            // GROS COPIER-COLLER EN REMPLACANT LEFT PAR RIGHT ET EN METTANT +1 POUR NEXT
+            //
+            // calcul de l'aire transversale
+            // TODO : utiliser la vue par direction
+            const Real trans_area = in_cart_space_step[cid][dir_perp_0]
+              * in_cart_space_step[cid][dir_perp_1];
+
+            inout_dir_trans_area_right[cid] = trans_area;
+
+            // Modification de l'aire transversale
+            Real face_velocity = 0.;
+            Real def_coord = 0.;
+            Real car_coord = 0.;
+
+            // On boucle sur les noeuds de la face "previous" transverse
+            // TODO : à encapsuler
+            NodeLocalId bnid{cfn.baseNode(idx)};
+            for(Integer inode = 0 ; inode < nb_node_on_face ; inode++) {
+              NodeLocalId nid{cfn.node(bnid, inode)};
+
+              // TODO : utiliser la vue par direction
+              face_velocity += in_node_velocity [nid][dir];
+              def_coord     += in_def_node_coord[nid][dir];
+              car_coord     += in_car_node_coord[nid][dir];
+            }
+            face_velocity *= nb_node_inverse;
+            def_coord *= nb_node_inverse;
+            car_coord *= nb_node_inverse;
+
+            inout_face_velocity_right[cid] = face_velocity;
+            inout_dir_def_coord_right[cid] = def_coord;
+            inout_dir_car_coord_right[cid] = car_coord;
+
+            Real dir_vol1 = dt * face_velocity * trans_area;
+            inout_dir_vol1_right[cid] = dir_vol1;
+            inout_dir_vol2_right[cid] = dir_vol1;
+          }
+        };
+      }
+    }
+  }
+  else if (options()->getComputeVolVersion() == CVOV_arcgpu_v2)
+  {
+    _computeVol_Varcgpu_v2();
+  }
+
   PROF_ACC_END;
 }
 

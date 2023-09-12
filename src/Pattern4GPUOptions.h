@@ -139,4 +139,12 @@ enum ePartialAndGlobal5Version {
   PG5V_arcgpu_v1  //! Implémentation API GPU Arcane version 1
 };
 
+/*! \brief Définit les implémentations de ComputeVol
+ */
+enum eComputeVolVersion {
+  CVOV_ori = 0, //! Version CPU d'origine
+  CVOV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
+  CVOV_arcgpu_v2  //! Implémentation API GPU Arcane version 2
+};
+
 #endif

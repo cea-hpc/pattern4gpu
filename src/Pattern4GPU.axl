@@ -411,5 +411,13 @@
     <enumvalue name="alter" genvalue="PG5V_alter" />
     <enumvalue name="arcgpu_v1" genvalue="PG5V_arcgpu_v1" />
   </enumeration>
+
+  <!-- - - - - compute-vol-version - - - - -->
+  <enumeration name="compute-vol-version" type="eComputeVolVersion" default="ori">
+    <description>Choix version implémentation ComputeVol </description>
+    <enumvalue name="ori" genvalue="CVOV_ori" />
+    <enumvalue name="arcgpu_v1" genvalue="CVOV_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2" genvalue="CVOV_arcgpu_v2" />
+  </enumeration>
 </options>
 </module>
