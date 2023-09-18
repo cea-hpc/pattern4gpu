@@ -300,11 +300,14 @@
   <enumeration name="compute-cqs-vector-version" type="eComputeCqsVectorVersion" default="ori">
     <description>Choix version implémentation ComputeCqsAndVector </description>
     <enumvalue name="ori" genvalue="CCVV_ori" />
+    <enumvalue name="nocqs" genvalue="CCVV_nocqs" />
     <enumvalue name="mt" genvalue="CCVV_mt" />
     <enumvalue name="mt_v2" genvalue="CCVV_mt_v2" />
     <enumvalue name="arcgpu_v1" genvalue="CCVV_arcgpu_v1" />
     <enumvalue name="arcgpu_v2" genvalue="CCVV_arcgpu_v2" />
     <enumvalue name="arcgpu_v5" genvalue="CCVV_arcgpu_v5" />
+    <enumvalue name="arcgpu_nocqs_v1" genvalue="CCVV_arcgpu_nocqs_v1" />
+    <enumvalue name="arcgpu_nocqs_v2" genvalue="CCVV_arcgpu_nocqs_v2" />
     <enumvalue name="kokkos" genvalue="CCVV_kokkos" />
   </enumeration>
 

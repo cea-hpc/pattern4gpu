@@ -500,6 +500,203 @@ _computeCqsAndVector_Varcgpu_v5()
 }
 
 /*---------------------------------------------------------------------------*/
+/* Implémentation no cqs origine                                             */
+/*---------------------------------------------------------------------------*/
+
+void Pattern4GPUModule::
+_computeCqsAndVector_nocqs() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+  debug() << "Dans _computeCqsAndVector_Vori";
+
+  constexpr Real k025 = 0.25;
+
+  CellGroup active_cells = defaultMesh()->cellFamily()->findGroup("active_cells");
+
+
+  P4GPU_DECLARE_TIMER(subDomain(), NodeVectorUpdate); P4GPU_START_TIMER(NodeVectorUpdate);
+  ENUMERATE_NODE (node_i, allNodes()) {
+    m_node_vector[node_i].assign(0., 0., 0.);
+  }
+
+  UniqueArray<Real3> pos(8);
+  UniqueArray<Real3> temp_cqs(8);
+  
+  ENUMERATE_CELL (cell_i, active_cells) {
+    for (Integer ii = 0; ii < 8; ++ii) {
+      pos[ii] = m_node_coord_bis[cell_i->node(ii)];
+    }
+
+  temp_cqs[0] = -k025*math::vecMul(pos[4]-pos[3], pos[1]-pos[3]);
+  temp_cqs[1] = -k025*math::vecMul(pos[0]-pos[2], pos[5]-pos[2]);
+  temp_cqs[2] = -k025*math::vecMul(pos[1]-pos[3], pos[6]-pos[3]);
+  temp_cqs[3] = -k025*math::vecMul(pos[7]-pos[2], pos[0]-pos[2]);
+  temp_cqs[4] = -k025*math::vecMul(pos[5]-pos[7], pos[0]-pos[7]);
+  temp_cqs[5] = -k025*math::vecMul(pos[1]-pos[6], pos[4]-pos[6]);
+  temp_cqs[6] = -k025*math::vecMul(pos[5]-pos[2], pos[7]-pos[2]);
+  temp_cqs[7] = -k025*math::vecMul(pos[6]-pos[3], pos[4]-pos[3]);
+    
+  // Calcul du gradient de pression
+  ENUMERATE_NODE (node_i, cell_i->nodes()) {
+      m_node_vector[node_i] += (m_cell_arr1[cell_i] + m_cell_arr2[cell_i]) *
+        temp_cqs[node_i.index()];
+    }
+  }
+
+  m_node_vector.synchronize();
+  P4GPU_STOP_TIMER(NodeVectorUpdate);
+
+  PROF_ACC_END;
+
+}
+
+
+/*---------------------------------------------------------------------------*/
+/* Implémentation GPU no cqs version 1                                       */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+_computeCqsAndVector_Varcgpu_nocqs_v1() {
+
+  PROF_ACC_BEGIN(__FUNCTION__);
+  debug() << "Dans _computeCqsAndVector_nocqs_v1";
+
+
+  constexpr Real k025 = 0.25;
+
+ 
+  const Integer ipos[8][4] = {
+    {4, 3, 1, 3},
+    {0, 2, 5, 2},
+    {1, 3, 6, 3},
+    {7, 2, 0, 2},
+    {5, 7, 0, 7},
+    {1, 6, 4, 6},
+    {5, 2, 7, 2},
+    {6, 3, 4, 3}
+  };
+  auto queue = m_acc_env->newQueue();
+  queue.setAsync(true);
+  {
+    auto command = makeCommand(queue);
+    auto out_node_vector = ax::viewOut(command, m_node_vector);
+    command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()){
+        out_node_vector[nid] = Real3::zero();
+    };
+  }
+  {
+    auto command = makeCommand(queue);
+    auto in_cell_arr1 = viewIn(command, m_cell_arr1);
+    auto in_cell_arr2 = viewIn(command, m_cell_arr2);
+    auto in_node_coord_bis = viewIn(command,m_node_coord_bis);
+    auto in_is_active_cell = ax::viewIn(command, m_acc_env->multiEnvMng()->isActiveCell());
+
+    auto out_node_vector = ax::viewOut(command, m_node_vector);
+
+    auto cnc = m_acc_env->connectivityView().cellNode();
+
+
+    for(Integer idx_node=0 ; idx_node<8 ; idx_node++) {
+
+        const Integer ip0 = ipos[idx_node][0];
+        const Integer ip1 = ipos[idx_node][1];
+        const Integer ip2 = ipos[idx_node][2];
+        const Integer ip3 = ipos[idx_node][3];
+      
+      
+      command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()){
+
+        if (in_is_active_cell[cid]) {
+          auto nodes = cnc.nodes(cid);
+        Int32 nid_as_int = nodes[idx_node];
+        NodeLocalId nid { nid_as_int };
+        const Real3& nd0 = in_node_coord_bis[nodes[ip0]];
+        const Real3& nd1 = in_node_coord_bis[nodes[ip1]];
+        const Real3& nd2 = in_node_coord_bis[nodes[ip2]];
+        const Real3& nd3 = in_node_coord_bis[nodes[ip3]];
+
+        Real3 cell_cqs = -k025*Arcane::math::cross(nd0-nd1, nd2-nd3);
+
+        out_node_vector[nid] += 
+          (in_cell_arr1[cid] + in_cell_arr2[cid]) * cell_cqs;
+       }
+    };
+    }
+      queue.barrier();
+  }
+
+  PROF_ACC_END;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Implémentation GPU no cqs version 2                                       */
+/*---------------------------------------------------------------------------*/
+void Pattern4GPUModule::
+_computeCqsAndVector_Varcgpu_nocqs_v2() {
+  PROF_ACC_BEGIN(__FUNCTION__);
+  debug() << "Dans _computeCqsAndVector_nocqs_v2";
+
+//  m_node_vector.fill(Real3::zero());
+
+  constexpr Real k025 = 0.25;
+
+
+  const Integer ipos[8][4] = {
+    {4, 3, 1, 3},
+    {0, 2, 5, 2},
+    {1, 3, 6, 3},
+    {7, 2, 0, 2},
+    {5, 7, 0, 7},
+    {1, 6, 4, 6},
+    {5, 2, 7, 2},
+    {6, 3, 4, 3}
+  };
+  auto queue = m_acc_env->newQueue();
+  queue.setAsync(true);
+  {
+    auto command = makeCommand(queue);
+    auto out_node_vector = ax::viewOut(command, m_node_vector);
+    auto in_cell_arr1 = viewIn(command, m_cell_arr1);
+    auto in_cell_arr2 = viewIn(command, m_cell_arr2);
+    auto in_node_coord_bis = viewIn(command,m_node_coord_bis);
+    auto in_is_active_cell = ax::viewIn(command, m_acc_env->multiEnvMng()->isActiveCell());
+
+
+    auto cnc = m_acc_env->connectivityView().cellNode();
+    auto nc_c = m_acc_env->connectivityView().nodeCell();
+    
+    auto node_index_in_cells = m_acc_env->nodeIndexInCells();
+    const Integer max_node_cell = m_acc_env->maxNodeCell();
+    
+    command << RUNCOMMAND_ENUMERATE(Node, nid, allNodes()){
+        Int32 first_pos = nid.localId() * max_node_cell;
+        auto cells = nc_c.cells(nid);
+        out_node_vector[nid] = Real3::zero();
+        for(Integer idx_cell=0 ; idx_cell<8 ; idx_cell++) {
+        Int32 cid_as_int = cells[idx_cell];
+        CellLocalId cid { cid_as_int };
+        if (idx_cell <= nc_c.nbCell(nid) && in_is_active_cell[cid]) { 
+        Int16 idx_node = node_index_in_cells[first_pos + idx_cell];
+          const Integer ip0 = ipos[idx_node][0];
+          const Integer ip1 = ipos[idx_node][1];
+          const Integer ip2 = ipos[idx_node][2];
+          const Integer ip3 = ipos[idx_node][3];
+        const Real3& nd0 = in_node_coord_bis[cnc.nodes(cid)[ip0]];
+        const Real3& nd1 = in_node_coord_bis[cnc.nodes(cid)[ip1]];
+        const Real3& nd2 = in_node_coord_bis[cnc.nodes(cid)[ip2]];
+        const Real3& nd3 = in_node_coord_bis[cnc.nodes(cid)[ip3]];
+        Real3 cell_cqs = -k025*math::vecMul(nd0-nd1, nd2-nd3);
+
+        out_node_vector[nid] += 
+          (in_cell_arr1[cid] + in_cell_arr2[cid]) * cell_cqs;
+        }
+
+    }
+    };
+    queue.barrier();
+  }
+
+  PROF_ACC_END;
+}
+/*---------------------------------------------------------------------------*/
 /* Implémentation Kokkos                                                     */
 /*---------------------------------------------------------------------------*/
 void Pattern4GPUModule::
@@ -531,6 +728,9 @@ computeCqsAndVector() {
     case CCVV_arcgpu_v1: _computeCqsAndVector_Varcgpu_v1(); break;
     case CCVV_arcgpu_v2: _computeCqsAndVector_Varcgpu_v2(); break;
     case CCVV_arcgpu_v5: _computeCqsAndVector_Varcgpu_v5(); break;
+    case CCVV_nocqs: _computeCqsAndVector_nocqs(); break;
+    case CCVV_arcgpu_nocqs_v1: _computeCqsAndVector_Varcgpu_nocqs_v1(); break;
+    case CCVV_arcgpu_nocqs_v2: _computeCqsAndVector_Varcgpu_nocqs_v2(); break;
     case CCVV_kokkos: _computeCqsAndVector_Vkokkos(); break;
     default: break;
   };

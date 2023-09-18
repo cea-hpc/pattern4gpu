@@ -72,11 +72,14 @@ enum eUpdateTensorVersion {
  */
 enum eComputeCqsVectorVersion {
   CCVV_ori = 0, //! Version CPU d'origine
+  CCVV_nocqs, //! Version CPU sans tableau cqs aux mailles
   CCVV_mt, //! Implémentation CPU Arcane multi-thread
   CCVV_mt_v2, //! Implémentation CPU Arcane multi-thread version 2
   CCVV_arcgpu_v1, //! Implémentation API GPU Arcane version 1
   CCVV_arcgpu_v2, //! Implémentation API GPU Arcane version 2 (avec NumArray pour CQS)
   CCVV_arcgpu_v5, //! Implémentation API GPU Arcane version 5 (GG)
+  CCVV_arcgpu_nocqs_v1, //! Implémentation API GPU Arcane sans tableau cqs aux mailles version 1
+  CCVV_arcgpu_nocqs_v2, //! Implémentation API GPU Arcane sans tableau cqs aux mailles version 2
   CCVV_kokkos //! Implémentation Kokkos
 };
 
