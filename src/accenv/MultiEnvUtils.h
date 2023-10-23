@@ -15,6 +15,8 @@
 #include "arcane/materials/IMeshEnvironment.h"
 #include "arcane/materials/MeshMaterialVariableRef.h"
 
+#include <arcane/materials/CellToAllEnvCellConverter.h>
+
 /*---------------------------------------------------------------------------*/
 /* Pour créer une vue sur les valeurs d'un environnement                     */
 /*---------------------------------------------------------------------------*/

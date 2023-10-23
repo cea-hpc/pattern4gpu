@@ -4,9 +4,33 @@
 #include <arcane/materials/MeshMaterialVariableSynchronizerList.h>
 #include <arcane/materials/EnvItemVector.h>
 #include <arcane/AcceleratorRuntimeInitialisationInfo.h>
+#include <arcane/materials/AllCellToAllEnvCellConverter.h>
 
 using namespace Arcane;
 using namespace Arcane::Materials;
+
+/*---------------------------------------------------------------------------*/
+/* Free functions de debug pour le gpu nvidia                                */
+/*---------------------------------------------------------------------------*/
+
+const char* cudaMemoryType2Str(const cudaMemoryType& ptr_attr_type)
+{
+  switch (ptr_attr_type)
+  {
+    case 0: return "Unregistered memory"; break;
+    case 1: return "Host memory"; break;
+    case 2: return "Device memory"; break;
+    case 3: return "Managed memory"; break;
+    default: return "ERROR: Unable to get memory type";break;
+  }
+}
+
+void gpu_check_ptr(void* ptr, const char* msg = "")
+{
+  cudaPointerAttributes ptr_attr;
+  cudaPointerGetAttributes (&ptr_attr, ptr);
+  printf("[GPU DEBUG %s] : ptr=%p pointer attribute type=%s\n", msg, ptr, cudaMemoryType2Str(ptr_attr.type));
+}
 
 /*---------------------------------------------------------------------------*/
 /* INITIALISATION DES VARIABLES MULTI-ENVIRONNMENT                           */
@@ -437,6 +461,25 @@ partialOnly() {
         options()->ponlyVar1SyncVersion()
         );
   }
+  /*
+   *  Test API Arcane MultiMat
+   */
+  else if (options()->getPartialOnlyVersion() == POV_arcgpu_v4)
+  {
+    auto queue = m_acc_env->newQueue();
+    auto cmd = makeCommand(queue);
+
+    auto out_menv_var1 = ax::viewOut(cmd, m_menv_var1);
+    auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2);
+    auto in_menv_var3 = ax::viewIn(cmd, m_menv_var3);
+
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+       cmd << RUNCOMMAND_MAT_ENUMERATE(EnvCell, mvi, env) {
+         out_menv_var1[mvi] = math::sqrt(in_menv_var2[mvi]/in_menv_var3[mvi]);
+       };
+    }
+  }
 
   _dumpVisuMEnvVar();
 
@@ -663,7 +706,6 @@ partialAndMean() {
   PROF_ACC_END;
 }
 
-
 /*---------------------------------------------------------------------------*/
 /*                               PATTERN 4                                   */
 /*---------------------------------------------------------------------------*/
@@ -691,14 +733,15 @@ partialAndMean() {
 void Pattern4GPUModule::
 partialAndMean4() {
   PROF_ACC_BEGIN(__FUNCTION__);
-
   if (options()->getPartialAndMean4Version() == PM4V_ori)
   {
     debug() << "PM4V_ori";
+
     Integer nb_env = m_mesh_material_mng->environments().size();
     RealUniqueArray all_part2(nb_env);
 
     CellToAllEnvCellConverter& allenvcell_converter=*m_allenvcell_converter;
+
     ENUMERATE_CELL(icell, allCells()) {
       Cell cell = * icell;
       AllEnvCell all_env_cell = allenvcell_converter[cell];
@@ -906,11 +949,45 @@ partialAndMean4() {
       out_menv_var1_g[cid] = sum3;
     };
   }
+  else if (options()->getPartialAndMean4Version() == PM4V_arcgpu_v3)
+  {
+    debug() << "PM4V_arcgpu_v3";
+
+    auto queue = m_acc_env->newQueue();
+    auto command = makeCommand(queue);
+
+    auto in_menv_var2    = ax::viewIn(command, m_menv_var2);
+    auto out_menv_var3   = ax::viewOut(command, m_menv_var3);
+    auto in_menv_var2_g  = ax::viewIn(command, m_menv_var2.globalVariable());
+    auto in_menv_var3_g  = ax::viewIn(command, m_menv_var3.globalVariable());
+    auto out_menv_var1_g = ax::viewOut(command, m_menv_var1.globalVariable());
+
+    CellToAllEnvCellAccessor cell2allenvcell(m_mesh_material_mng);
+    
+    command << RUNCOMMAND_ENUMERATE_CELL_ALLENVCELL(cell2allenvcell, cid, allCells()) {
+
+      Real sum2=0.;
+      ENUMERATE_CELL_ALLENVCELL(iev, cid, cell2allenvcell) {
+        sum2 += in_menv_var2[*iev]/in_menv_var2_g[cid];
+      }
+
+      Real sum3=0.;
+      ENUMERATE_CELL_ALLENVCELL(iev, cid, cell2allenvcell) {
+        Real contrib2 = (in_menv_var2[*iev]/in_menv_var2_g[cid])*(sum2+1.);
+        out_menv_var3[*iev] = contrib2 * in_menv_var3_g[cid];
+        sum3 += contrib2;
+      }
+
+      out_menv_var1_g[cid] = sum3;
+    };
+  }
 
   _dumpVisuMEnvVar();
 
   PROF_ACC_END;
 }
+
+/*---------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------*/
 /*                               PATTERN 5                                   */
@@ -1120,6 +1197,80 @@ partialAndGlobal5() {
       } // fin Boucle 3
     }
     menv_queue->waitAllQueues();
+  }
+    /*
+   *  Test API Arcane MultiMat
+   */
+  else if (options()->getPartialAndGlobal5Version() == PG5V_arcgpu_v2)
+  {
+    auto queue = m_acc_env->newQueue();
+    auto cmd = makeCommand(queue);
+
+    auto in_menv_var1 = ax::viewIn(cmd, m_menv_var1.globalVariable());
+    auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2.globalVariable());
+    auto in_frac_vol = ax::viewIn(cmd, m_frac_vol);
+    auto inout_menv_var1 = ax::viewInOut(cmd, m_menv_var1);
+    auto out_menv_var3 = ax::viewOut(cmd, m_menv_var3);
+
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+      EnvCellVectorView envcellsv = env->envView();
+
+      // Boucle 1
+      {
+        cmd << RUNCOMMAND_MAT_ENUMERATE(EnvAndGlobalCell, evi, envcellsv) {
+          auto [mvi, cid] = evi();
+          inout_menv_var1[mvi] = in_frac_vol[mvi] * in_menv_var1[cid];
+        };
+      }
+
+      // Boucle 3
+      {
+        cmd << RUNCOMMAND_MAT_ENUMERATE(EnvAndGlobalCell, evi, envcellsv) {
+          auto [mvi, cid] = evi();
+          out_menv_var3[mvi] += inout_menv_var1[mvi] / in_menv_var2[cid];
+        };
+      }
+    }
+  }
+  /*
+   *  Test API Arcane MultiMat + Asynchronous queues de pattern4gpu
+   */
+  else if (options()->getPartialAndGlobal5Version() == PG5V_arcgpu_v3)
+  {
+    auto async_queues = makeAsyncQueuePool(
+      m_acc_env->runner(),
+      m_mesh_material_mng->environments().size());
+
+    ENUMERATE_ENV(ienv, m_mesh_material_mng) {
+      IMeshEnvironment* env = *ienv;
+      EnvCellVectorView envcellsv = env->envView();
+
+      auto cmd = makeCommand(async_queues[env->id()]);
+      
+      auto in_menv_var1 = ax::viewIn(cmd, m_menv_var1.globalVariable());
+      auto in_menv_var2 = ax::viewIn(cmd, m_menv_var2.globalVariable());
+      auto in_frac_vol = ax::viewIn(cmd, m_frac_vol);
+      auto inout_menv_var1 = ax::viewInOut(cmd, m_menv_var1);
+      auto out_menv_var3 = ax::viewOut(cmd, m_menv_var3);
+
+      // Boucle 1
+      {
+        cmd << RUNCOMMAND_MAT_ENUMERATE(EnvAndGlobalCell, evi, envcellsv) {
+          auto [mvi, cid] = evi();
+          inout_menv_var1[mvi] = in_frac_vol[mvi] * in_menv_var1[cid];
+        };
+      }
+
+      // Boucle 3
+      {
+        cmd << RUNCOMMAND_MAT_ENUMERATE(EnvAndGlobalCell, evi, envcellsv) {
+          auto [mvi, cid] = evi();
+          out_menv_var3[mvi] += inout_menv_var1[mvi] / in_menv_var2[cid];
+        };
+      }
+    }
+    async_queues.waitAll();
   }
 
   _dumpVisuMEnvVar();

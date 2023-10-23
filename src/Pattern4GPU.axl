@@ -363,6 +363,7 @@
     <enumvalue name="arcgpu_v1" genvalue="POV_arcgpu_v1" />
     <enumvalue name="arcgpu_v2" genvalue="POV_arcgpu_v2" />
     <enumvalue name="arcgpu_v3" genvalue="POV_arcgpu_v3" />
+    <enumvalue name="arcgpu_v4" genvalue="POV_arcgpu_v4" />
   </enumeration>
 
   <!-- - - - - ponly-var1-sync-version - - - - -->
@@ -402,6 +403,10 @@
     <enumvalue name="ori_v2" genvalue="PM4V_ori_v2" />
     <enumvalue name="arcgpu_v1" genvalue="PM4V_arcgpu_v1" />
     <enumvalue name="arcgpu_v2" genvalue="PM4V_arcgpu_v2" />
+    <enumvalue name="arcgpu_v3" genvalue="PM4V_arcgpu_v3" />
+    <enumvalue name="arcgpu_v4" genvalue="PM4V_arcgpu_v4" />
+    <enumvalue name="arcgpu_v5" genvalue="PM4V_arcgpu_v5" />
+    <enumvalue name="arcgpu_v6" genvalue="PM4V_arcgpu_v6" />
   </enumeration>
 
   <!-- - - - - partial-and-global5-version - - - - -->
@@ -410,6 +415,8 @@
     <enumvalue name="ori" genvalue="PG5V_ori" />
     <enumvalue name="alter" genvalue="PG5V_alter" />
     <enumvalue name="arcgpu_v1" genvalue="PG5V_arcgpu_v1" />
+    <enumvalue name="arcgpu_v2" genvalue="PG5V_arcgpu_v2" />
+    <enumvalue name="arcgpu_v3" genvalue="PG5V_arcgpu_v3" />
   </enumeration>
 
   <!-- - - - - compute-vol-version - - - - -->

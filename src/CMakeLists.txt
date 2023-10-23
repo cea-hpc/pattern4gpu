@@ -4,13 +4,15 @@ include(../samples.common.cmake)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+#set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
+#set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-undefined")
 #set(CMAKE_CXX_FLAGS "-Werror -Wall -Wextra -pedantic -Wnon-virtual-dtor -g " CACHE STRING "" FORCE)
 
 # Pour avoir des #warning explicites
 add_compile_definitions(P4GPU_HAS_WARNING_INFO)
 
 add_executable(Pattern4GPU main.cc)
-target_link_libraries(Pattern4GPU PUBLIC libpattern4gpu arcane_core)
+target_link_libraries(Pattern4GPU PUBLIC libpattern4gpu)
 
 add_library(libpattern4gpu Pattern4GPUModule.cc
                            Pattern4GPUcomputeCqsAndVector.cc 
@@ -28,7 +30,7 @@ target_include_directories(libpattern4gpu PUBLIC . ${CMAKE_CURRENT_BINARY_DIR})
 # Module GeomEnv
 add_library(libgeomenv geomenv/GeomEnvModule.cc)
 target_include_directories(libgeomenv PUBLIC .)
-target_link_libraries(libgeomenv PUBLIC arcane_core)
+target_link_libraries(libgeomenv PUBLIC arcane_materials)
 
 # Cartesian
 add_library(libcartesian cartesian/CartesianConnectivity.cc
@@ -39,6 +41,35 @@ add_library(libcartesian cartesian/CartesianConnectivity.cc
                          cartesian/CartesianItemSorter.cc)
 target_include_directories(libcartesian PUBLIC .)
 target_link_libraries(libcartesian PUBLIC arcane_core)
+
+# Message Passing
+add_library(libmsgpass msgpass/VarSyncMng.cc 
+                       msgpass/IsCommDeviceAware.cc
+                       msgpass/MsgPassInit.cc
+                       msgpass/PackTransfer.cc
+                       msgpass/SyncItems.cc
+                       msgpass/SyncBuffers.cc
+                       msgpass/SyncEnvIndexes.cc
+                       msgpass/MeshVariableSynchronizerList.cc
+                       msgpass/Algo1SyncDataD.cc
+                       msgpass/Algo1SyncDataDH.cc
+                       msgpass/VarSyncAlgo1.cc)
+target_include_directories(libmsgpass PUBLIC .)
+target_link_libraries(libmsgpass PUBLIC arcane_materials)
+# Pour MPI
+#find_package(MPI)
+#if(MPI_FOUND)
+#  target_compile_definitions(libmsgpass PRIVATE OMPI_SKIP_MPICXX)
+#  target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI)
+#  target_include_directories(libmsgpass PRIVATE "${MPI_INCLUDE_PATH}")
+#  find_path(P4GPU_MPI_EXT NAMES "mpi-ext.h" PATHS "${MPI_C_HEADER_DIR}")
+#  if(P4GPU_MPI_EXT)
+#    target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI_EXT)
+#  endif()
+#endif()
+# On force is_comm_device_aware() == true
+target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_COMM_DEVICE_AWARE)
+# fin MPI
 
 # Services communs pour les accélérateurs
 add_library(libaccenv accenv/AccEnvDefaultService.cc
@@ -56,41 +87,12 @@ target_include_directories(libaccenv PUBLIC .)
 #  target_link_libraries(libaccenv PRIVATE cuda)
 #endif()
 ## fin HWLOC
-target_link_libraries(libaccenv PUBLIC arcane_core)
-
-# Message Passing
-add_library(libmsgpass msgpass/VarSyncMng.cc 
-                       msgpass/IsCommDeviceAware.cc
-                       msgpass/MsgPassInit.cc
-                       msgpass/PackTransfer.cc
-                       msgpass/SyncItems.cc
-                       msgpass/SyncBuffers.cc
-                       msgpass/SyncEnvIndexes.cc
-                       msgpass/MeshVariableSynchronizerList.cc
-	               msgpass/Algo1SyncDataD.cc
-	               msgpass/Algo1SyncDataDH.cc
-                       msgpass/VarSyncAlgo1.cc)
-target_include_directories(libmsgpass PUBLIC .)
-target_link_libraries(libmsgpass PUBLIC arcane_core)
-# Pour MPI
-#find_package(MPI)
-#if(MPI_FOUND)
-#  target_compile_definitions(libmsgpass PRIVATE OMPI_SKIP_MPICXX)
-#  target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI)
-#  target_include_directories(libmsgpass PRIVATE "${MPI_INCLUDE_PATH}")
-#  find_path(P4GPU_MPI_EXT NAMES "mpi-ext.h" PATHS "${MPI_C_HEADER_DIR}")
-#  if(P4GPU_MPI_EXT)
-#    target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_MPI_EXT)
-#  endif()
-#endif()
-# On force is_comm_device_aware() == true
-target_compile_definitions(libmsgpass PRIVATE MSG_PASS_HAS_COMM_DEVICE_AWARE)
-# fin MPI
+target_link_libraries(libaccenv PUBLIC libmsgpass arcane_core)
 
 if(WANT_KOKKOS)
 target_compile_options(libpattern4gpu PUBLIC -fopenmp)
 endif()
-target_link_libraries(libpattern4gpu PUBLIC libgeomenv libcartesian libaccenv libmsgpass)
+target_link_libraries(libpattern4gpu PUBLIC libgeomenv libcartesian libaccenv libmsgpass arcane_core arcane_cartesianmesh arcane_materials arcane_accelerator)
 
 # Pour la gestion des accélérateurs et des sources à compiler avec le
 # compilateur pour accélérateur

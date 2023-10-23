@@ -5,10 +5,13 @@
 #include "arcane/accelerator/Reduce.h"
 #include "arcane/accelerator/Runner.h"
 #include "arcane/accelerator/VariableViews.h"
+#include "arcane/accelerator/MaterialVariableViews.h"
 #include "arcane/accelerator/Accelerator.h"
 #include "arcane/accelerator/RunCommandLoop.h"
 #include "arcane/accelerator/RunCommandEnumerate.h"
+#include "arcane/accelerator/RunCommandMaterialEnumerate.h"
 #include "arcane/accelerator/core/RunQueueBuildInfo.h"
+#include "arcane/accelerator/AsyncRunQueuePool.h"
 #include <arcane/accelerator/core/Memory.h>
 
 #include "accenv/ProfAcc.h"
@@ -146,6 +149,23 @@ class AcceleratorUtils {
     // 0 = priorité par défaut
     // Plus la valeur de priorité est faible, plus la queue sera prioritaire
     // TODO : récupérer avec Arcane les valeurs [min,max] admissibles (et non plus utiliser +-10)
+
+/*
+ * Note(FL):
+ * Il n'y a rien dans Arcane pour l'instant qui encapsule ce range de valeur.
+ * Pour Cuda, il faut appeler :
+ * CUresult cuCtxGetStreamPriorityRange ( int* leastPriority, int* greatestPriority )
+    Returns numerical values that correspond to the least and greatest stream priorities.
+    Parameters
+
+    leastPriority
+        - Pointer to an int in which the numerical value for least stream priority is returned 
+    greatestPriority
+        - Pointer to an int in which the numerical value for greatest stream priority is returned
+
+*
+*/
+
     if (qp==QP_high) {
       bi.setPriority(-10); 
     } else if (qp==QP_low) {
