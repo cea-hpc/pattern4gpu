@@ -1,5 +1,5 @@
 #include "Pattern4GPUModule.h"
-
+#include "Pattern4GPUErrorHandler.h"
 using namespace Arcane;
 
 /*---------------------------------------------------------------------------*/
@@ -147,27 +147,24 @@ _computeAndPrintError_Varcgpu_v3()
   
   auto queue = m_acc_env->newQueue();
   auto command = makeCommand(queue);
-
-  int*out_min_cid_on_err = min_cid_on_err.data();
-  *out_min_cid_on_err = std::numeric_limits<Int32>::max();
-
+  
+  Pattern4GPUErrorHandlerView out_err_h(m_err_h);
+  
   auto in_cell_arr2 = ax::viewIn(command, m_cell_arr2);
   auto inout_cell_arr1 = ax::viewInOut(command, m_cell_arr1);
   Real threshold_error = options()->getThresholdError();
-
   // To get the id of a cell on error
-
   command << RUNCOMMAND_ENUMERATE(Cell, cid, allCells()) {
     inout_cell_arr1[cid] = inout_cell_arr1[cid] - in_cell_arr2[cid];
 
     if (inout_cell_arr1[cid] <= threshold_error) {
-      // Error: we would like to have the smallest cell id on error
-     *out_min_cid_on_err = cid.asInt32();
+      out_err_h.P4GPUThrowError(cid.asInt32());
     }
   };
-  if (*out_min_cid_on_err < std::numeric_limits<Int32>::max()) {
+
+  if (m_err_h.P4GPUIsError()) {
     // If here, it means it exists a cell on error, we get the smallest one
-    Cell cell_on_error(mesh()->itemsInternal(IK_Cell).data(), min_cid_on_err[0]);
+    Cell cell_on_error(mesh()->itemsInternal(IK_Cell).data(), m_err_h.P4GPUGetError());
     _printError(m_cell_arr1, cell_on_error, threshold_error);
   }
   
