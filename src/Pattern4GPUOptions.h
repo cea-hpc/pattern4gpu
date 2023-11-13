@@ -80,6 +80,7 @@ enum eComputeCqsVectorVersion {
   CCVV_arcgpu_v5, //! Implémentation API GPU Arcane version 5 (GG)
   CCVV_arcgpu_nocqs_v1, //! Implémentation API GPU Arcane sans tableau cqs aux mailles version 1
   CCVV_arcgpu_nocqs_v2, //! Implémentation API GPU Arcane sans tableau cqs aux mailles version 2
+  CCVV_arcgpu_nocqs_v3, //! Implémentation API GPU Arcane sans tableau cqs aux mailles version 3
   CCVV_kokkos //! Implémentation Kokkos
 };
 

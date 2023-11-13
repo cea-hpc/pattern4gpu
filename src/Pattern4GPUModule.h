@@ -23,6 +23,8 @@
 
 #include "Pattern4GPU4Kokkos.h"
 
+#include "Pattern4GPUErrorHandler.h"
+
 using namespace Arcane;
 using namespace Arcane::Materials;
 
@@ -97,6 +99,7 @@ class Pattern4GPUModule
   void _computeCqsAndVector_Varcgpu_v5();  // Arcane GPU optimisé par GG
   void _computeCqsAndVector_Varcgpu_nocqs_v1();
   void _computeCqsAndVector_Varcgpu_nocqs_v2();
+  void _computeCqsAndVector_Varcgpu_nocqs_v3();
   void _computeCqsAndVector_Vkokkos();
   void _dumpNumArrayCqs();
 
@@ -171,6 +174,7 @@ class Pattern4GPUModule
   // TEST, pour amortir cout des allocs pour GPU
   BufAddrMng* m_buf_addr_mng=nullptr;
   UniqueArray<Integer> min_cid_on_err;
+  Pattern4GPUErrorHandler m_err_h;
 };
 
 #endif

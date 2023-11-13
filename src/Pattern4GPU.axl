@@ -308,6 +308,7 @@
     <enumvalue name="arcgpu_v5" genvalue="CCVV_arcgpu_v5" />
     <enumvalue name="arcgpu_nocqs_v1" genvalue="CCVV_arcgpu_nocqs_v1" />
     <enumvalue name="arcgpu_nocqs_v2" genvalue="CCVV_arcgpu_nocqs_v2" />
+    <enumvalue name="arcgpu_nocqs_v3" genvalue="CCVV_arcgpu_nocqs_v3" />
     <enumvalue name="kokkos" genvalue="CCVV_kokkos" />
   </enumeration>
 
